@@ -8,7 +8,8 @@ LastEditTime: 2026-01-14
 -------------------------------------------------------------------------------
 Batch colorization using the SVDQuant FP4 model:
   svdq-fp4_r128-qwen-image-edit-2509-lightning-4steps-251115.safetensors
-
+  svdq-int4_r128-qwen-image-edit-2509-lightning-4steps-251115.safetensors
+  
 - Optimized for RTX 50 (Blackwell)
 - Uses Nunchaku SVDQuant (4-bit) for the transformer
 - Maintains FP16/BF16 for peripheral layers
@@ -16,7 +17,6 @@ Batch colorization using the SVDQuant FP4 model:
 """
 
 import os
-import argparse
 import time
 import math
 from pathlib import Path
@@ -36,7 +36,7 @@ def set_hf_cache_dir(hf_cache_dir: str):
 # Load SVDQuant FP4 pipeline
 # ----------------------------
 def load_nunchaku_pipeline(model_name: str, model_precision: str, model_rank, model_inference_steps,
-                           cache_dir: str, base_model_path: str="", full_model_path: str="", torch_compile=False, device="cuda"):
+                           cache_dir: str = "", base_model_path: str = "", full_model_path: str = "", torch_compile=False, device="cuda"):
 
     if model_name not in ('nunchaku-qwen'):
         return None
@@ -301,45 +301,3 @@ def process_image_pair(pipe, img1_path: Path, img2_path: Path, output_dir: Path,
 
     return t_end - t_start
 
-
-# ----------------------------
-# Main Execution
-# ----------------------------
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--input_dir", default="./clips/casablanca/ref_tht10")
-    parser.add_argument("--output_dir", default="./clips/casablanca/ref_qwen")
-    parser.add_argument("--model_path",
-                        default="./models/svdq-fp4_r128-qwen-image-edit-2509-lightning-4steps-251115.safetensors")
-    parser.add_argument("--cache_dir", default="./hf_cache")
-    parser.add_argument('--keep_ext', action='store_true', help='keep the input image format, otherwise is used the jpg format' )
-    parser.add_argument("--prompt", default="Colorize this photo, natural skin tones, vibrant environment. Maintain consistency and details.")
-    args = parser.parse_args()
-
-    Path(args.output_dir).mkdir(exist_ok=True, parents=True)
-
-    pipe = load_nunchaku_pipeline(
-        full_model_path=args.model_path,
-        cache_dir=args.cache_dir
-    )
-    keep_ext : bool = args.keep_ext
-    tot_time = 0
-    count = 0
-    extensions = {".jpg", ".jpeg", ".png", ".bmp", ".tiff"}
-    for img_file in sorted(Path(args.input_dir).iterdir()):
-        if img_file.suffix.lower() in extensions:
-            if keep_ext:
-                out_file = Path(args.output_dir) / img_file
-            else:
-                out_file = Path(args.output_dir) / (img_file.stem + ".jpg")
-            try:
-                count += 1
-                t_elapsed = process_image(img_file, out_file, pipe, args.prompt)
-                print(f"✅ {count}) {img_file} → {out_file} [{t_elapsed:.2f} sec.]")
-                tot_time += t_elapsed
-            except Exception as e:
-                print(f"❌ Failed on {img_file.name}: {e}")
-    print(f"✅ Colorized {count} images at average speed of {tot_time / count:.4f} image/sec.")
-
-if __name__ == "__main__":
-    main()

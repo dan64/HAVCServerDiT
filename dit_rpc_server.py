@@ -4,7 +4,7 @@ Author: Dan64
 Date: 2024-12-26
 LastEditTime: 2026-01-14
 -------------------------------------------------------------------------------
-HAVC Colorize RPC Server
+DiT Colorize RPC Server
 Exposes the colorization pipeline via XML-RPC.
 
 Start on the GPU machine:
@@ -38,7 +38,7 @@ from xmlrpc.server import SimpleXMLRPCServer, SimpleXMLRPCRequestHandler
 from socketserver import ThreadingMixIn
 from PIL import Image, ImageEnhance, ImageOps
 
-# Add the script directory to sys.path so that HAVC_colorize_main.py is
+# Add the script directory to sys.path so that dit_colorize_main.py is
 # discoverable regardless of how the process is launched (pythonw.exe, start, …).
 _script_dir = str(Path(__file__).parent.resolve())
 if _script_dir not in sys.path:
@@ -46,12 +46,12 @@ if _script_dir not in sys.path:
 
 # ---------------------------------------------------------------------------
 # Import the colorization module — same pattern as the original GUI:
-# sys.path is already updated above, so HAVC_colorize_main.py will be found
+# sys.path is already updated above, so dit_colorize_main.py will be found
 # if it lives in the same directory.  The try/except lets the server start
 # even when the module is missing (every RPC method will return an error).
 # ---------------------------------------------------------------------------
 try:
-    from HAVC_colorize_main import (
+    from dit_colorize_main import (
         load_nunchaku_pipeline,
         process_image,
         process_image_pair,
@@ -63,7 +63,7 @@ try:
         merge_two_images_with_gap,
         split_merged_output,
     )
-    _HAVC_MAIN_AVAILABLE = True
+    _DIT_MAIN_AVAILABLE = True
 except ImportError as _e:
     load_nunchaku_pipeline    = None
     process_image             = None
@@ -75,10 +75,10 @@ except ImportError as _e:
     upscale_with_lanczos      = None
     merge_two_images_with_gap = None
     split_merged_output       = None
-    _HAVC_MAIN_AVAILABLE      = False
+    _DIT_MAIN_AVAILABLE       = False
     import warnings
     warnings.warn(
-        f"HAVC_colorize_main not found ({_e}). "
+        f"dit_colorize_main not found ({_e}). "
         "All colorization methods will return an error."
     )
 
@@ -153,13 +153,17 @@ class ColorizeService:
         model_precision: str,
         model_rank: str,
         model_inference_steps: str,
-        cache_dir: str,
+        cache_dir: str = "",
         full_model_path: str = "",
     ) -> dict:
         """
         Load the Nunchaku/Qwen pipeline.
         Thread-safe: if two clients call this concurrently the second one
         waits for the first to finish.
+
+        cache_dir is optional: when empty or omitted it is not forwarded to
+        load_nunchaku_pipeline, which will then use the HuggingFace default
+        (~/.cache/huggingface).
         """
         with self._pipeline_lock:
             try:
@@ -167,14 +171,16 @@ class ColorizeService:
                     f"Loading pipeline: {model_name} {model_precision} "
                     f"r{model_rank} steps={model_inference_steps}"
                 )
-                pipe = load_nunchaku_pipeline(
+                kwargs = dict(
                     model_name=model_name,
                     model_precision=model_precision,
                     model_rank=model_rank,
                     model_inference_steps=model_inference_steps,
-                    cache_dir=cache_dir,
                     full_model_path=full_model_path,
                 )
+                if cache_dir and cache_dir.strip():
+                    kwargs["cache_dir"] = cache_dir.strip()
+                pipe = load_nunchaku_pipeline(**kwargs)
                 if pipe is None:
                     msg = f"Model '{model_name}' is not supported"
                     logging.warning(msg)
@@ -233,7 +239,7 @@ class ColorizeService:
         steps: int = 2,
     ) -> dict:
         """
-        Corresponds to process_image() in HAVC_colorize_main.py.
+        Corresponds to process_image() in dit_colorize_main.py.
 
         Parameters
         ----------
@@ -283,7 +289,7 @@ class ColorizeService:
         gap_px: int = 8,
     ) -> dict:
         """
-        Corresponds to process_image_pair() in HAVC_colorize_main.py.
+        Corresponds to process_image_pair() in dit_colorize_main.py.
         Runs a single inference pass on two side-by-side images.
 
         Returns
@@ -323,7 +329,7 @@ class ColorizeService:
         prompt: str,
     ) -> dict:
         """
-        Corresponds to process_single_image() in HAVC_colorize_main.py.
+        Corresponds to process_single_image() in dit_colorize_main.py.
         Used as fallback for the odd image at the end of a batch.
 
         Returns
@@ -527,9 +533,10 @@ def _load_pipeline_config(config_path: str) -> dict:
     """
     Read and validate the JSON pipeline configuration file.
 
-    Expected keys (all strings unless noted):
-        model_name, model_precision, model_rank, model_inference_steps,
-        cache_dir, full_model_path (optional, defaults to "")
+    Required keys: model_name, model_precision, model_rank, model_inference_steps
+    Optional keys:
+        cache_dir       — omit or set to "" to use the HuggingFace default cache
+        full_model_path — omit or set to "" when not needed
 
     Returns the config dict on success; raises SystemExit on any error.
     """
@@ -547,7 +554,7 @@ def _load_pipeline_config(config_path: str) -> dict:
 
     required_keys = {
         "model_name", "model_precision", "model_rank",
-        "model_inference_steps", "cache_dir",
+        "model_inference_steps",
     }
     missing = required_keys - cfg.keys()
     if missing:
@@ -556,13 +563,14 @@ def _load_pipeline_config(config_path: str) -> dict:
         )
         sys.exit(1)
 
+    cfg.setdefault("cache_dir", "")
     cfg.setdefault("full_model_path", "")
     return cfg
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="HAVC Colorize RPC Server",
+        description="DiT Colorize RPC Server",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("--host", default="127.0.0.1",
@@ -572,7 +580,7 @@ def main():
     parser.add_argument("--logfile", default="",
                         help="Optional path for a log file")
     parser.add_argument("--module-dir", default="",
-                        help="Directory containing HAVC_colorize_main.py "
+                        help="Directory containing dit_colorize_main.py "
                              "(default: same directory as this script)")
     parser.add_argument("--load-pipeline", action="store_true",
                         help="Load the colorization pipeline at startup using "
@@ -609,12 +617,12 @@ def main():
     if module_dir not in sys.path:
         sys.path.insert(0, module_dir)
 
-    main_module_path = os.path.join(module_dir, "HAVC_colorize_main.py")
+    main_module_path = os.path.join(module_dir, "dit_colorize_main.py")
     logging.info(f"module_dir             : {module_dir}")
-    logging.info(f"HAVC_colorize_main.py  : {'found' if os.path.exists(main_module_path) else 'NOT FOUND'}")
+    logging.info(f"dit_colorize_main.py   : {'found' if os.path.exists(main_module_path) else 'NOT FOUND'}")
     if not os.path.exists(main_module_path):
         logging.error(
-            f"HAVC_colorize_main.py not found in '{module_dir}'. "
+            f"dit_colorize_main.py not found in '{module_dir}'. "
             "Use --module-dir to point to the correct directory."
         )
         logging.debug(f"Full sys.path: {sys.path}")
@@ -652,7 +660,7 @@ def main():
     server.register_instance(service)
     server.register_introspection_functions()
 
-    logging.info(f"HAVC Colorize RPC Server listening on {args.host}:{args.port}")
+    logging.info(f"DiT Colorize RPC Server listening on {args.host}:{args.port}")
     logging.info("Press Ctrl+C to stop.")
 
     try:

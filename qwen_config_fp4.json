@@ -1,0 +1,8 @@
+{
+    "model_name":            "nunchaku-qwen",
+    "model_precision":       "fp4",
+    "model_rank":            "32",
+    "model_inference_steps": "2",
+    "cache_dir":             "",
+    "full_model_path":       ""
+}

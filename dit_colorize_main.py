@@ -145,7 +145,7 @@ def colorize_image(pipe, img: Image, prompt:str, steps: int = 2, seed: int=42) -
         output = pipe(
             image=img,
             prompt=prompt,
-            num_inference_steps=steps,  # Optimized for lightning model
+            num_inference_steps=steps,  # Optimized for colorization, 2 steps are enough
             true_cfg_scale=1.0,
             generator=generator,
         )

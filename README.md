@@ -20,13 +20,13 @@ Built on top of the [Nunchaku](https://github.com/mit-han-lab/nunchaku) SVDQuant
 
 ## 📋 Prerequisites
 
-| Requirement | Details |
-|---|---|
-| **OS** | Windows 10/11 or Linux |
-| **Python** | 3.12 or newer |
-| **GPU** | NVIDIA RTX 3090 / 4090 / 5070 Ti / 5090 (16 GB+ VRAM recommended) |
-| **CUDA** | 12.8 or newer |
-| **CUDA Toolkit** | Must match the PyTorch build (see below) |
+| Requirement      | Details                                                           |
+| ---------------- | ----------------------------------------------------------------- |
+| **OS**           | Windows 10/11 or Linux                                            |
+| **Python**       | 3.12 or newer                                                     |
+| **GPU**          | NVIDIA RTX 3090 / 4090 / 5070 Ti / 5090 (16 GB+ VRAM recommended) |
+| **CUDA**         | 12.8 or newer                                                     |
+| **CUDA Toolkit** | Must match the PyTorch build (see below)                          |
 
 > **RTX 50-Series (Blackwell / sm_120) users**: PyTorch Nightly is required.
 > Stable PyTorch releases do not yet include Blackwell CUDA kernels.
@@ -148,7 +148,7 @@ Two ready-to-use config files are provided. Pick the one that matches your GPU a
     "model_name":            "nunchaku-qwen",
     "model_precision":       "fp4",
     "model_rank":            "32",
-    "model_inference_steps": "2",
+    "model_inference_steps": "4",
     "cache_dir":             "",
     "full_model_path":       ""
 }
@@ -161,7 +161,7 @@ Two ready-to-use config files are provided. Pick the one that matches your GPU a
     "model_name":            "nunchaku-qwen",
     "model_precision":       "int4",
     "model_rank":            "32",
-    "model_inference_steps": "2",
+    "model_inference_steps": "4",
     "cache_dir":             "",
     "full_model_path":       ""
 }
@@ -172,14 +172,14 @@ Two ready-to-use config files are provided. Pick the one that matches your GPU a
 
 ### Key reference
 
-| Key | Required | Description |
-|---|---|---|
-| `model_name` | ✅ | Must be `"nunchaku-qwen"` |
-| `model_precision` | ✅ | `"fp4"` (RTX 50) or `"int4"` (RTX 30/40) |
-| `model_rank` | ✅ | SVD rank — `"32"` is a good default |
-| `model_inference_steps` | ✅ | Diffusion steps — `"2"` for lightning model |
-| `cache_dir` | ➖ | HuggingFace cache directory. Omit or set to `""` to use the default (`~/.cache/huggingface`) |
-| `full_model_path` | ➖ | Absolute path to a local `.safetensors` file. Omit or set to `""` to download from HuggingFace |
+| Key                     | Required | Description                                                                                    |
+| ----------------------- | -------- | ---------------------------------------------------------------------------------------------- |
+| `model_name`            | ✅        | Must be `"nunchaku-qwen"`                                                                      |
+| `model_precision`       | ✅        | `"fp4"` (RTX 50) or `"int4"` (RTX 30/40)                                                       |
+| `model_rank`            | ✅        | SVD rank — `"32"` is a good default                                                            |
+| `model_inference_steps` | ✅        | Diffusion steps — `"4"` for lightning model                                                    |
+| `cache_dir`             | ➖        | HuggingFace cache directory. Omit or set to `""` to use the default (`~/.cache/huggingface`)   |
+| `full_model_path`       | ➖        | Absolute path to a local `.safetensors` file. Omit or set to `""` to download from HuggingFace |
 
 ---
 
@@ -237,39 +237,39 @@ All methods return a `dict` with at least `{"ok": bool, "msg": str}`.
 
 ### Health
 
-| Method | Returns | Description |
-|---|---|---|
+| Method   | Returns  | Description        |
+| -------- | -------- | ------------------ |
 | `ping()` | `"pong"` | Connectivity check |
 
 ### Pipeline management
 
-| Method | Returns | Description |
-|---|---|---|
-| `load_pipeline(model_name, model_precision, model_rank, model_inference_steps, cache_dir="", full_model_path="")` | `{"ok", "msg"}` | Load the model into VRAM |
-| `is_pipeline_loaded()` | `bool` | True if the pipeline is ready |
-| `unload_pipeline()` | `{"ok", "msg"}` | Release VRAM |
+| Method                                                                                                            | Returns         | Description                   |
+| ----------------------------------------------------------------------------------------------------------------- | --------------- | ----------------------------- |
+| `load_pipeline(model_name, model_precision, model_rank, model_inference_steps, cache_dir="", full_model_path="")` | `{"ok", "msg"}` | Load the model into VRAM      |
+| `is_pipeline_loaded()`                                                                                            | `bool`          | True if the pipeline is ready |
+| `unload_pipeline()`                                                                                               | `{"ok", "msg"}` | Release VRAM                  |
 
 ### Stop control
 
-| Method | Returns | Description |
-|---|---|---|
-| `request_stop()` | `bool` | Ask the server to refuse new colorization calls |
-| `clear_stop()` | `bool` | Reset the stop flag before a new batch |
-| `is_stop_requested()` | `bool` | Check the current stop flag |
+| Method                | Returns | Description                                     |
+| --------------------- | ------- | ----------------------------------------------- |
+| `request_stop()`      | `bool`  | Ask the server to refuse new colorization calls |
+| `clear_stop()`        | `bool`  | Reset the stop flag before a new batch          |
+| `is_stop_requested()` | `bool`  | Check the current stop flag                     |
 
 ### Colorization — filesystem-based
 
-| Method | Returns | Description |
-|---|---|---|
-| `colorize_image(in_path, out_path, prompt, img_size=0, steps=2)` | `{"ok", "elapsed", "skipped", "msg"}` | Single image, paths on the server filesystem |
-| `colorize_image_pair(img1_path, img2_path, out_dir, prompt, gap_px=8)` | `{"ok", "elapsed", "msg"}` | Two images, single inference pass |
-| `colorize_single_image(img_path, out_dir, prompt)` | `{"ok", "elapsed", "msg"}` | Single image fallback (odd batch end) |
+| Method                                                                 | Returns                               | Description                                  |
+| ---------------------------------------------------------------------- | ------------------------------------- | -------------------------------------------- |
+| `colorize_image(in_path, out_path, prompt, img_size=0, steps=2)`       | `{"ok", "elapsed", "skipped", "msg"}` | Single image, paths on the server filesystem |
+| `colorize_image_pair(img1_path, img2_path, out_dir, prompt, gap_px=8)` | `{"ok", "elapsed", "msg"}`            | Two images, single inference pass            |
+| `colorize_single_image(img_path, out_dir, prompt)`                     | `{"ok", "elapsed", "msg"}`            | Single image fallback (odd batch end)        |
 
 ### Colorization — in-memory (PNG bytes over RPC)
 
-| Method | Returns | Description |
-|---|---|---|
-| `colorize_frame(img_data, prompt, img_size=0, steps=2)` | `{"ok", "data", "elapsed", "skipped", "msg"}` | Single frame as raw PNG bytes |
+| Method                                                        | Returns                                                              | Description                       |
+| ------------------------------------------------------------- | -------------------------------------------------------------------- | --------------------------------- |
+| `colorize_frame(img_data, prompt, img_size=0, steps=2)`       | `{"ok", "data", "elapsed", "skipped", "msg"}`                        | Single frame as raw PNG bytes     |
 | `colorize_frame_pair(img1_data, img2_data, prompt, gap_px=8)` | `{"ok", "data1", "data2", "elapsed", "skipped1", "skipped2", "msg"}` | Two frames, single inference pass |
 
 > `skipped=True` means the frame was too dark to colorize (average brightness < 9/255).

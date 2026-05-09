@@ -111,7 +111,7 @@ set CMD="%PYTHON_EXE%" "%CLIENT_SCRIPT%" ^
     --steps %STEPS%
 
 echo ============================================================
-echo  DiT Colorize RPC Client — example
+echo  DiT Colorize RPC Client example
 echo  Precision   : %PRECISION%
 echo  Config      : %CONFIG_PATH%
 echo  Server      : %HOST%:%PORT%

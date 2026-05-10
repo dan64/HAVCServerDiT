@@ -537,6 +537,220 @@ class ColorizeService:
             return {"ok": False, "data1": b"", "data2": b"",
                     "elapsed": 0.0, "skipped1": False, "skipped2": False, "msg": str(e)}
 
+    # ------------------------------------------------------------------
+    # Shared-memory colorization — same-host only, zero-copy transport
+    #
+    # The CLIENT owns and manages all SharedMemory segments (create/unlink).
+    # The server only attaches and detaches — no cleanup responsibility.
+    #
+    # Protocol:
+    #   1. Client creates shm_in  (h * w * 3 bytes, uint8 RGB)
+    #   2. Client creates shm_out (same size)
+    #   3. Client writes input pixels into shm_in
+    #   4. Client calls RPC → server reads shm_in, writes result to shm_out
+    #   5. Client reads shm_out, then unlinks both segments
+    # ------------------------------------------------------------------
+
+    def colorize_frame_shm(
+        self,
+        shm_in_name: str,
+        shm_out_name: str,
+        height: int,
+        width: int,
+        prompt: str,
+        img_size: int = 0,
+        steps: int = 2,
+    ) -> dict:
+        """
+        Shared-memory variant of colorize_frame().
+        Zero-copy transport: only metadata travels over RPC.
+        Only usable when client and server run on the same host.
+
+        Parameters
+        ----------
+        shm_in_name  : name of the input SharedMemory segment (client-created)
+        shm_out_name : name of the output SharedMemory segment (client-created)
+        height, width: image dimensions in pixels
+        prompt       : text prompt for the model
+        img_size     : max long side before inference (0 = original)
+        steps        : inference steps
+
+        Returns
+        -------
+        {"ok": bool, "elapsed": float, "skipped": bool, "msg": str}
+        """
+        if self._pipeline is None:
+            return {"ok": False, "elapsed": 0.0, "skipped": False,
+                    "msg": "Pipeline not loaded"}
+        if self._stop_event.is_set():
+            return {"ok": False, "elapsed": 0.0, "skipped": True,
+                    "msg": "Stop requested"}
+
+        try:
+            import numpy as np
+            from multiprocessing.shared_memory import SharedMemory
+
+            nbytes = height * width * 3
+            shm_in  = SharedMemory(name=shm_in_name,  create=False)
+            shm_out = SharedMemory(name=shm_out_name, create=False)
+
+            try:
+                arr_in = np.ndarray((height, width, 3), dtype=np.uint8,
+                                    buffer=shm_in.buf)
+                original = Image.fromarray(arr_in, mode="RGB")
+
+                if is_image_dark(original, threshold=9):
+                    arr_out = np.ndarray((height, width, 3), dtype=np.uint8,
+                                         buffer=shm_out.buf)
+                    arr_out[:] = arr_in
+                    logging.info("colorize_frame_shm: image too dark, skipped")
+                    return {"ok": True, "elapsed": 0.0, "skipped": True, "msg": ""}
+
+                bw        = ImageEnhance.Color(original).enhance(0.0)
+                orig_size = original.size
+                bw_in     = resize_long_side(bw, img_size) if img_size > 0 else bw
+
+                t0 = time.perf_counter()
+                colorized_lowres = _colorize_image(self._pipeline, bw_in, prompt, steps)
+                elapsed = time.perf_counter() - t0
+
+                result = upscale_with_lanczos(colorized_lowres, orig_size)
+                arr_out = np.ndarray((height, width, 3), dtype=np.uint8,
+                                     buffer=shm_out.buf)
+                arr_out[:] = np.array(result)
+
+                logging.info(f"colorize_frame_shm: {elapsed:.2f}s")
+                return {"ok": True, "elapsed": float(elapsed),
+                        "skipped": False, "msg": ""}
+            finally:
+                shm_in.close()
+                shm_out.close()
+
+        except Exception as e:
+            logging.exception("colorize_frame_shm failed")
+            return {"ok": False, "elapsed": 0.0, "skipped": False, "msg": str(e)}
+
+    def colorize_frame_pair_shm(
+        self,
+        shm_in1_name: str,
+        shm_out1_name: str,
+        height1: int,
+        width1: int,
+        shm_in2_name: str,
+        shm_out2_name: str,
+        height2: int,
+        width2: int,
+        prompt: str,
+        gap_px: int = 8,
+    ) -> dict:
+        """
+        Shared-memory variant of colorize_frame_pair().
+        Zero-copy transport: only metadata travels over RPC.
+        Only usable when client and server run on the same host.
+
+        Returns
+        -------
+        {"ok": bool, "elapsed": float, "skipped1": bool, "skipped2": bool, "msg": str}
+        """
+        if self._pipeline is None:
+            return {"ok": False, "elapsed": 0.0, "skipped1": False,
+                    "skipped2": False, "msg": "Pipeline not loaded"}
+        if self._stop_event.is_set():
+            return {"ok": False, "elapsed": 0.0, "skipped1": True,
+                    "skipped2": True, "msg": "Stop requested"}
+
+        try:
+            import numpy as np
+            from multiprocessing.shared_memory import SharedMemory
+
+            shm_in1  = SharedMemory(name=shm_in1_name,  create=False)
+            shm_out1 = SharedMemory(name=shm_out1_name, create=False)
+            shm_in2  = SharedMemory(name=shm_in2_name,  create=False)
+            shm_out2 = SharedMemory(name=shm_out2_name, create=False)
+
+            try:
+                arr_in1 = np.ndarray((height1, width1, 3), dtype=np.uint8,
+                                     buffer=shm_in1.buf)
+                arr_in2 = np.ndarray((height2, width2, 3), dtype=np.uint8,
+                                     buffer=shm_in2.buf)
+                orig1 = Image.fromarray(arr_in1, mode="RGB")
+                orig2 = Image.fromarray(arr_in2, mode="RGB")
+                orig_size1, orig_size2 = orig1.size, orig2.size
+
+                dark1 = is_image_dark(orig1, threshold=9)
+                dark2 = is_image_dark(orig2, threshold=9)
+
+                def _write_out(arr_in, shm_out, h, w):
+                    arr_out = np.ndarray((h, w, 3), dtype=np.uint8,
+                                         buffer=shm_out.buf)
+                    arr_out[:] = arr_in
+
+                if dark1 and dark2:
+                    _write_out(arr_in1, shm_out1, height1, width1)
+                    _write_out(arr_in2, shm_out2, height2, width2)
+                    return {"ok": True, "elapsed": 0.0,
+                            "skipped1": True, "skipped2": True, "msg": ""}
+
+                if dark1:
+                    _write_out(arr_in1, shm_out1, height1, width1)
+                    res = self.colorize_frame_shm(
+                        shm_in2_name, shm_out2_name, height2, width2, prompt)
+                    return {"ok": res["ok"], "elapsed": res["elapsed"],
+                            "skipped1": True, "skipped2": res["skipped"],
+                            "msg": res["msg"]}
+
+                if dark2:
+                    _write_out(arr_in2, shm_out2, height2, width2)
+                    res = self.colorize_frame_shm(
+                        shm_in1_name, shm_out1_name, height1, width1, prompt)
+                    return {"ok": res["ok"], "elapsed": res["elapsed"],
+                            "skipped1": res["skipped"], "skipped2": True,
+                            "msg": res["msg"]}
+
+                bw1  = ImageEnhance.Color(orig1).enhance(0.0)
+                bw2  = ImageEnhance.Color(orig2).enhance(0.0)
+                low1 = resize_long_side(bw1, 1024)
+                low2 = resize_long_side(bw2, 1024)
+
+                if low1.height != low2.height:
+                    target_h = max(low1.height, low2.height)
+                    low1 = ImageOps.pad(low1, (low1.width, target_h),
+                                        color=(127, 127, 127))
+                    low2 = ImageOps.pad(low2, (low2.width, target_h),
+                                        color=(127, 127, 127))
+
+                merged_input = merge_two_images_with_gap(low1, low2, gap_px=gap_px)
+
+                t0 = time.perf_counter()
+                colorized_merged = _colorize_image(self._pipeline, merged_input, prompt)
+                elapsed = time.perf_counter() - t0
+
+                resized = upscale_with_lanczos(colorized_merged, merged_input.size)
+                left, right = split_merged_output(resized, low1.width, gap_px=gap_px)
+                out1 = upscale_with_lanczos(left,  orig_size1)
+                out2 = upscale_with_lanczos(right, orig_size2)
+
+                arr_out1 = np.ndarray((height1, width1, 3), dtype=np.uint8,
+                                       buffer=shm_out1.buf)
+                arr_out2 = np.ndarray((height2, width2, 3), dtype=np.uint8,
+                                       buffer=shm_out2.buf)
+                arr_out1[:] = np.array(out1)
+                arr_out2[:] = np.array(out2)
+
+                logging.info(f"colorize_frame_pair_shm: {elapsed:.2f}s "
+                             f"({elapsed/2:.2f}s/frame)")
+                return {"ok": True, "elapsed": float(elapsed),
+                        "skipped1": False, "skipped2": False, "msg": ""}
+
+            finally:
+                shm_in1.close();  shm_out1.close()
+                shm_in2.close();  shm_out2.close()
+
+        except Exception as e:
+            logging.exception("colorize_frame_pair_shm failed")
+            return {"ok": False, "elapsed": 0.0,
+                    "skipped1": False, "skipped2": False, "msg": str(e)}
+
 
 # ---------------------------------------------------------------------------
 # Entry point

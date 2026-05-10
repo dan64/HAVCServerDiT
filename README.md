@@ -15,6 +15,7 @@ Built on top of the [Nunchaku](https://github.com/mit-han-lab/nunchaku) SVDQuant
 - ⚡ **4-step lightning model** — SVDQuant FP4 quantized transformer for maximum throughput
 - 🔒 **Thread-safe** — pipeline loading and stop control are protected by locks; every RPC call runs in its own thread
 - ⚙️ **Startup preload** — optional `--load-pipeline` flag loads the model at boot from a JSON config file
+- 🚀 **Shared memory transport** — zero-copy image transfer for same-host deployments (~23% faster than standard RPC)
 
 ---
 
@@ -331,24 +332,40 @@ All methods return a `dict` with at least `{"ok": bool, "msg": str}`.
 > `skipped=True` means the frame was too dark to colorize (average brightness < 9/255).
 > The returned `data` field contains the unchanged input in that case.
 
+### Colorization — shared memory (same-host only, zero-copy)
+
+| Method | Returns | Description |
+| --- | --- | --- |
+| `colorize_frame_shm(shm_in, shm_out, h, w, prompt, img_size=0, steps=2)` | `{"ok", "elapsed", "skipped", "msg"}` | Single frame via shared memory |
+| `colorize_frame_pair_shm(shm_in1, shm_out1, h1, w1, shm_in2, shm_out2, h2, w2, prompt, gap_px=8)` | `{"ok", "elapsed", "skipped1", "skipped2", "msg"}` | Two frames via shared memory, single inference pass |
+
+> See [Shared Memory Transport](#-shared-memory-transport-same-host-only) for usage details.
+
 ---
 
 ## 🧪 Example Clients
+
+Both clients support two transport modes selectable via `--use-shm`:
+
+| Mode | Flag | When to use | Measured speed (1480×1080 px pair) |
+|---|---|---|---|
+| Standard RPC | _(default)_ | Any deployment, including remote server | ~5.25s/image |
+| Shared memory | `--use-shm` | Server and client on the **same host** only | ~4.06s/image (**~23% faster**) |
 
 ### Single frame — `dit_client_example.py`
 
 Colorizes `assets/santa_bw.png` and saves the result as `assets/santa_colorized.png`.
 
 ```bash
-# pipeline already loaded on the server
-python dit_client_example.py
+# standard RPC — works with local and remote server
+python dit_client_example.py --pipeline-config qwen_config_fp4.json
 
-# let the client load the pipeline first
-python dit_client_example.py --pipeline-config qwen_config_fp4.json   # RTX 50
-python dit_client_example.py --pipeline-config qwen_config_int4.json  # RTX 30/40
+# shared memory — same-host only, lower latency
+python dit_client_example.py --pipeline-config qwen_config_fp4.json --use-shm
 ```
 
 Windows: `run_client_example.cmd [fp4|int4]`
+To enable shared memory edit `run_client_example.cmd` and set `USE_SHM=1`.
 
 ---
 
@@ -359,21 +376,27 @@ pass**, saving `assets/sample1_colorized.jpg` and `assets/sample2_colorized.jpg`
 
 Paired inference places the two images side-by-side and runs one inference instead of
 two, roughly halving the per-image cost (~5.25s/image vs ~11s standalone).
+Combined with shared memory transport this reaches ~4.06s/image.
 
 ```bash
-python dit_client_pair_example.py --pipeline-config qwen_config_fp4.json   # RTX 50
-python dit_client_pair_example.py --pipeline-config qwen_config_int4.json  # RTX 30/40
+# standard RPC
+python dit_client_pair_example.py --pipeline-config qwen_config_fp4.json
+
+# shared memory — same-host only
+python dit_client_pair_example.py --pipeline-config qwen_config_fp4.json --use-shm
 ```
 
 Windows: `run_client_pair_example.cmd [fp4|int4]`
+To enable shared memory edit `run_client_pair_example.cmd` and set `USE_SHM=1`.
 
 ### Full list of arguments (both clients)
 
 ```
   --host HOST                  Server host (default: 127.0.0.1)
   --port PORT                  Server port (default: 8765)
-  --pipeline-config CONFIG     Load pipeline before colorizing
+  --pipeline-config CONFIG     Load pipeline before colorizing (skipped if already loaded)
   --prompt PROMPT              Text prompt for the model
+  --use-shm                    Use shared memory transport (same-host only)
 ```
 
 Additional argument for the paired client:
@@ -381,6 +404,137 @@ Additional argument for the paired client:
 ```
   --gap-px N                   Separator width in pixels between the two
                                images in the merged input (default: 8)
+```
+
+---
+
+## 🚀 Shared Memory Transport (same-host only)
+
+### What it is
+
+The standard RPC transport serializes each image as a PNG byte stream, encodes it in
+Base64, sends it over a TCP socket, and decodes it on the other side. For a 1480×1080
+frame this is roughly 4–5 MB per round trip.
+
+The shared memory transport bypasses the network entirely. The client writes the raw
+pixel array directly into a shared memory segment; the server attaches to the same
+segment and reads the pixels without any copy. Only the metadata (segment name,
+dimensions, prompt) travels over the XML-RPC socket.
+
+### When you can use it
+
+**Requirement: server and client must run on the same machine.**
+
+If the server is on a dedicated GPU machine and the client is on a separate workstation,
+shared memory is not available — use the standard RPC transport instead (default).
+The clients detect this automatically: passing `--use-shm` when the host is not
+`127.0.0.1` / `localhost` prints a warning and falls back to standard RPC.
+
+### Performance
+
+Measured on a 1480×1080 pixel pair (RTX 5070 Ti, FP4, paired inference):
+
+| Transport | Per-image time | Round-trip overhead |
+|---|---|---|
+| Standard RPC (PNG) | ~5.25s | ~1.1s |
+| Shared memory | ~4.06s | ~0.16s |
+| **Gain** | **~23% faster** | **~7× less overhead** |
+
+The round-trip overhead with shared memory is essentially zero — the 0.16s gap between
+inference time and wall-clock time is just Python function call and numpy overhead.
+
+On a 100k-frame video processed as pairs (50k inference calls) the cumulative saving is:
+
+```
+(5.25 - 4.06) × 50,000 ≈ 16.5 hours
+```
+
+### How the protocol works
+
+The **client** owns and manages all shared memory segments. The server is fully
+stateless with respect to shared memory — it only attaches, reads/writes, and detaches.
+
+```
+Client                                     Server
+  │                                           │
+  │  create shm_in  (h × w × 3 bytes)         │
+  │  create shm_out (h × w × 3 bytes)         │
+  │  write raw RGB pixels → shm_in            │
+  │                                           │
+  │  RPC(shm_in_name, shm_out_name, h, w, …) ─►│
+  │                                           │  attach shm_in  → PIL Image
+  │                                           │  inference
+  │                                           │  result → shm_out
+  │◄─ return {elapsed, skipped, …} ───────────│
+  │                                           │  detach both segments
+  │  read shm_out → PIL Image                 │
+  │  unlink shm_in + shm_out                  │
+```
+
+### Enabling shared memory
+
+**From the command line:**
+
+```bash
+python dit_client_pair_example.py --pipeline-config qwen_config_fp4.json --use-shm
+python dit_client_example.py      --pipeline-config qwen_config_fp4.json --use-shm
+```
+
+**From the Windows `.cmd` launchers**, edit the user configuration block and set:
+
+```batch
+set USE_SHM=1
+```
+
+The banner will confirm the active transport:
+
+```
+Transport   : 1 (0=RPC 1=shared memory)
+```
+
+And the Python client will print:
+
+```
+[INFO] Transport: shared memory
+```
+
+### Implementing shared memory in your own client
+
+```python
+import uuid
+import numpy as np
+from multiprocessing.shared_memory import SharedMemory
+from PIL import Image
+
+def colorize_pair_shm(proxy, img1: Image.Image, img2: Image.Image, prompt: str):
+    arr1, arr2 = np.array(img1), np.array(img2)
+    h1, w1 = arr1.shape[:2]
+    h2, w2 = arr2.shape[:2]
+    uid = uuid.uuid4().hex[:12]
+
+    # Create all four segments (client owns them)
+    segs = {
+        tag: SharedMemory(name=f"dit_{tag}_{uid}", create=True, size=h*w*3)
+        for tag, h, w in [("in1",h1,w1),("out1",h1,w1),("in2",h2,w2),("out2",h2,w2)]
+    }
+    try:
+        np.ndarray((h1,w1,3), dtype=np.uint8, buffer=segs["in1"].buf)[:] = arr1
+        np.ndarray((h2,w2,3), dtype=np.uint8, buffer=segs["in2"].buf)[:] = arr2
+
+        result = proxy.colorize_frame_pair_shm(
+            segs["in1"].name, segs["out1"].name, h1, w1,
+            segs["in2"].name, segs["out2"].name, h2, w2,
+            prompt, 8,  # gap_px
+        )
+
+        out1 = Image.fromarray(
+            np.ndarray((h1,w1,3), dtype=np.uint8, buffer=segs["out1"].buf).copy())
+        out2 = Image.fromarray(
+            np.ndarray((h2,w2,3), dtype=np.uint8, buffer=segs["out2"].buf).copy())
+        return result, out1, out2
+    finally:
+        for shm in segs.values():
+            shm.close(); shm.unlink()
 ```
 
 ---

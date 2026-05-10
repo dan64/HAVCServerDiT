@@ -44,6 +44,10 @@ set IMG_SIZE=0
 :: Number of inference steps
 set STEPS=2
 
+:: Use shared memory transport instead of PNG bytes (same-host only, lower latency)
+:: Set to 1 to enable, 0 to use standard RPC
+set USE_SHM=0
+
 :: ---------------------------------------------------------------------------
 :: ARGUMENT PARSING — selects fp4 or int4 config
 :: ---------------------------------------------------------------------------
@@ -100,27 +104,24 @@ set PYTHON_EXE=python
 
 :run
 :: ---------------------------------------------------------------------------
-:: BUILD COMMAND AND LAUNCH
+:: LAUNCH
 :: ---------------------------------------------------------------------------
-set CMD="%PYTHON_EXE%" "%CLIENT_SCRIPT%" ^
-    --host %HOST% ^
-    --port %PORT% ^
-    --pipeline-config "%CONFIG_PATH%" ^
-    --prompt "%PROMPT%" ^
-    --img-size %IMG_SIZE% ^
-    --steps %STEPS%
-
 echo ============================================================
-echo  DiT Colorize RPC Client example
+echo  DiT Colorize RPC Client — example
 echo  Precision   : %PRECISION%
 echo  Config      : %CONFIG_PATH%
 echo  Server      : %HOST%:%PORT%
+echo  Transport   : %USE_SHM% (0=RPC 1=shared memory)
 echo  Input       : %CLIENT_DIR%\assets\santa_bw.png
 echo  Output      : %CLIENT_DIR%\assets\santa_colorized.png
 echo ============================================================
 echo.
 
-%CMD%
+if "%USE_SHM%"=="1" (
+    "%PYTHON_EXE%" "%CLIENT_SCRIPT%" --host %HOST% --port %PORT% --pipeline-config "%CONFIG_PATH%" --prompt "%PROMPT%" --img-size %IMG_SIZE% --steps %STEPS% --use-shm
+) else (
+    "%PYTHON_EXE%" "%CLIENT_SCRIPT%" --host %HOST% --port %PORT% --pipeline-config "%CONFIG_PATH%" --prompt "%PROMPT%" --img-size %IMG_SIZE% --steps %STEPS%
+)
 
 echo.
 if %errorlevel%==0 (

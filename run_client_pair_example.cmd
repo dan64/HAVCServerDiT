@@ -39,6 +39,10 @@ set PROMPT=Colorize this photo, natural skin tones, vibrant environment. Maintai
 :: Separator width in pixels between the two images in the merged input
 set GAP_PX=8
 
+:: Use shared memory transport instead of PNG bytes (same-host only, lower latency)
+:: Set to 1 to enable, 0 to use standard RPC
+set USE_SHM=0
+
 :: ---------------------------------------------------------------------------
 :: ARGUMENT PARSING — selects fp4 or int4 config
 :: ---------------------------------------------------------------------------
@@ -95,19 +99,13 @@ set PYTHON_EXE=python
 
 :run
 :: ---------------------------------------------------------------------------
-:: BUILD COMMAND AND LAUNCH
+:: LAUNCH
 :: ---------------------------------------------------------------------------
-set CMD="%PYTHON_EXE%" "%CLIENT_SCRIPT%" ^
-    --host %HOST% ^
-    --port %PORT% ^
-    --pipeline-config "%CONFIG_PATH%" ^
-    --prompt "%PROMPT%" ^
-    --gap-px %GAP_PX%
-
 echo ============================================================
 echo  DiT Colorize RPC Client — paired inference example
 echo  Precision   : %PRECISION%
 echo  Config      : %CONFIG_PATH%
+echo  Transport   : %USE_SHM% (0=RPC 1=shared memory)
 echo  Server      : %HOST%:%PORT%
 echo  Input 1     : %CLIENT_DIR%\assets\sample1_bw.jpg
 echo  Input 2     : %CLIENT_DIR%\assets\sample2_bw.jpg
@@ -116,7 +114,11 @@ echo  Output 2    : %CLIENT_DIR%\assets\sample2_colorized.jpg
 echo ============================================================
 echo.
 
-%CMD%
+if "%USE_SHM%"=="1" (
+    "%PYTHON_EXE%" "%CLIENT_SCRIPT%" --host %HOST% --port %PORT% --pipeline-config "%CONFIG_PATH%" --prompt "%PROMPT%" --gap-px %GAP_PX% --use-shm
+) else (
+    "%PYTHON_EXE%" "%CLIENT_SCRIPT%" --host %HOST% --port %PORT% --pipeline-config "%CONFIG_PATH%" --prompt "%PROMPT%" --gap-px %GAP_PX%
+)
 
 echo.
 if %errorlevel%==0 (

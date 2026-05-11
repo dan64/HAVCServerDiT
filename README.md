@@ -36,13 +36,19 @@ Built on top of the [Nunchaku](https://github.com/mit-han-lab/nunchaku) SVDQuant
 
 ## ⚙️ Environment Setup
 
-### 1 — Create a virtual environment
+### 1 — Clone the repository and create a virtual environment
 
-Before creating the virtual envornment is necessary to download this repository as a ZIP file and extract it, once the archive has been extracted: open a terminal, move into the project directory and create the venv there:
+Clone the repository with git — this ensures correct line endings for all files
+(`.gitattributes` is applied automatically at checkout):
 
 ```bash
-cd C:\path\to\DiTServerRPC-main
+git clone https://github.com/dan64/DiTServerRPC.git
+cd DiTServerRPC
+```
 
+Then create and activate the virtual environment inside the project directory:
+
+```bash
 python -m venv .venv
 # Windows
 .venv\Scripts\activate

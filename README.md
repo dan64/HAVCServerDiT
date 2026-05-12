@@ -34,6 +34,42 @@ Built on top of the [Nunchaku](https://github.com/mit-han-lab/nunchaku) SVDQuant
 
 ---
 
+## 🛠️ Installing Git and Python
+
+Before setting up the project environment, make sure both Git and Python 3.12 are installed on your system.
+
+### Git
+
+**Windows**: download and install [Git for Windows](https://git-scm.com/download/win).
+Accept the default options — in particular keep `core.autocrlf=true` (the default),
+which ensures correct line endings for `.cmd` files.
+
+**Linux**:
+```bash
+sudo apt install git        # Debian / Ubuntu
+sudo dnf install git        # Fedora / RHEL
+```
+
+Verify: `git --version`
+
+---
+
+### Python 3.12
+
+**Windows**: download the installer from [python.org/downloads](https://www.python.org/downloads/).
+During installation, check **"Add Python to PATH"** — without this, `python` will not be
+recognized in the terminal.
+
+**Linux**:
+```bash
+sudo apt install python3.12 python3.12-venv   # Debian / Ubuntu
+sudo dnf install python3.12                   # Fedora / RHEL
+```
+
+Verify: `python --version` (Windows) or `python3.12 --version` (Linux)
+
+---
+
 ## ⚙️ Environment Setup
 
 ### 1 — Clone the repository and create a virtual environment

@@ -21,13 +21,14 @@ Built on top of the [Nunchaku](https://github.com/mit-han-lab/nunchaku) SVDQuant
 
 ## 📋 Prerequisites
 
-| Requirement      | Details                                                           |
-| ---------------- | ----------------------------------------------------------------- |
-| **OS**           | Windows 10/11 or Linux                                            |
-| **Python**       | 3.12                                                              |
-| **GPU**          | NVIDIA RTX 3090 / 4090 / 5070 Ti / 5090 (16 GB+ VRAM recommended) |
-| **CUDA**         | 12.8 or newer                                                     |
-| **CUDA Toolkit** | Must match the PyTorch build (see below)                          |
+| Requirement      | Details                                                            |
+| ---------------- | ------------------------------------------------------------------ |
+| **OS**           | Windows 10/11 or Linux                                             |
+| **Python**       | 3.12                                                               |
+| **GPU**          | NVIDIA RTX 3070 / 4070 / 5070 or better  (12 GB+ VRAM recommended) |
+| **RAM**          | 48 GB+ RAM recommended                                             |
+| **CUDA**         | 12.8 or newer                                                      |
+| **CUDA Toolkit** | Must match the PyTorch build (see below)                           |
 
 > **RTX 40-Series and older**: use `"model_precision": "int4"` in the pipeline config file.
 > FP4 quantization requires Blackwell hardware; INT4 is the correct precision for Ampere (RTX 30) and Ada Lovelace (RTX 40) GPUs.
@@ -45,6 +46,7 @@ Accept the default options — in particular keep `core.autocrlf=true` (the defa
 which ensures correct line endings for `.cmd` files.
 
 **Linux**:
+
 ```bash
 sudo apt install git        # Debian / Ubuntu
 sudo dnf install git        # Fedora / RHEL
@@ -61,6 +63,7 @@ During installation, check **"Add Python to PATH"** — without this, `python` w
 recognized in the terminal.
 
 **Linux**:
+
 ```bash
 sudo apt install python3.12 python3.12-venv   # Debian / Ubuntu
 sudo dnf install python3.12                   # Fedora / RHEL

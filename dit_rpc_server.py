@@ -130,6 +130,26 @@ class ColorizeRequestHandler(SimpleXMLRPCRequestHandler):
 class ThreadedXMLRPCServer(ThreadingMixIn, SimpleXMLRPCServer):
     daemon_threads = True
 
+    # ------------------------------------------------------------------
+    # Clean client-disconnect logging — suppress the alarming traceback
+    # that socketserver prints by default when a client closes the
+    # connection unexpectedly (e.g. ConnectionResetError on Windows).
+    # ------------------------------------------------------------------
+    def handle_error(self, request, client_address):
+        """Override to log a clean message for client-initiated disconnects."""
+        exc_type, exc_value, _exc_tb = sys.exc_info()
+        if exc_type is not None and issubclass(exc_type, ConnectionError):
+            logging.info(
+                "Connection %s:%s closed by the client (%s: %s)",
+                client_address[0],
+                client_address[1],
+                exc_type.__name__,
+                exc_value,
+            )
+        else:
+            # Re-raise unexpected errors so the default handler can log them
+            super().handle_error(request, client_address)
+
 
 # ---------------------------------------------------------------------------
 # RPC service — all public methods (no leading underscore) are exposed

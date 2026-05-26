@@ -26,7 +26,7 @@ Built on top of the [Nunchaku](https://github.com/mit-han-lab/nunchaku) SVDQuant
 | **OS**           | Windows 10/11 or Linux                                             |
 | **Python**       | 3.12                                                               |
 | **GPU**          | NVIDIA RTX 3070 / 4070 / 5070 or better  (12 GB+ VRAM recommended) |
-| **RAM**          | 48 GB+ RAM recommended                                             |
+| **RAM**          | 64 GB+ RAM recommended                                             |
 | **CUDA**         | 12.8 or newer                                                      |
 | **CUDA Toolkit** | Must match the PyTorch build (see below)                           |
 

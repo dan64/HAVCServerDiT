@@ -29,7 +29,7 @@ set PROMPT=Colorize this photo, natural skin tones, vibrant environment. Maintai
 set GAP_PX=8
 
 :: Shared memory transport (same-host only)
-set USE_SHM=0
+set USE_SHM=1
 
 :: ---------------------------------------------------------------------------
 :: RESOLVE PATHS

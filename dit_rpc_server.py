@@ -186,8 +186,8 @@ class ColorizeService:
 
     def __init__(self):
         self._pipeline = None
+        self._pipeline_model_name = ""
         self._pipeline_lock = threading.Lock()   # guards pipeline loading
-        self._stop_event = threading.Event()     # signals stop to the client
 
     # ------------------------------------------------------------------
     # Health check
@@ -263,6 +263,7 @@ class ColorizeService:
                     return {"ok": False, "msg": msg}
 
                 self._pipeline = pipe
+                self._pipeline_model_name = model_name
                 logging.info("Pipeline loaded successfully.")
                 return {"ok": True, "msg": "Pipeline loaded successfully"}
 
@@ -274,6 +275,10 @@ class ColorizeService:
         """Return True if the pipeline is already in memory."""
         return self._pipeline is not None
 
+    def get_pipeline_model(self) -> str:
+        """Return the name of the currently loaded model, or empty string."""
+        return self._pipeline_model_name
+
     def unload_pipeline(self) -> dict:
         """Release the pipeline from VRAM (useful for debugging / reset)."""
         with self._pipeline_lock:
@@ -282,26 +287,16 @@ class ColorizeService:
             return {"ok": True, "msg": "Pipeline unloaded"}
 
     # ------------------------------------------------------------------
-    # Stop control
+    # Stop control  (no-ops — preserved for backward compatibility)
     # ------------------------------------------------------------------
     def request_stop(self) -> bool:
-        """
-        Signal the server to reject new colorization requests.
-        Note: any RPC call already in progress (atomic) will still complete.
-        The client is responsible for not sending further requests.
-        """
-        self._stop_event.set()
-        logging.info("Stop requested by client.")
         return True
 
     def clear_stop(self) -> bool:
-        """Reset the stop flag before starting a new batch."""
-        self._stop_event.clear()
-        logging.info("Stop flag cleared.")
         return True
 
     def is_stop_requested(self) -> bool:
-        return self._stop_event.is_set()
+        return False
 
     # ------------------------------------------------------------------
     # Colorization: single image (filesystem-based)
@@ -333,9 +328,6 @@ class ColorizeService:
         if self._pipeline is None:
             return {"ok": False, "elapsed": 0.0, "skipped": False,
                     "msg": "Pipeline not loaded"}
-        if self._stop_event.is_set():
-            return {"ok": False, "elapsed": 0.0, "skipped": True,
-                    "msg": "Stop requested"}
         try:
             elapsed = process_image(
                 input_path=Path(in_path),
@@ -376,8 +368,9 @@ class ColorizeService:
         """
         if self._pipeline is None:
             return {"ok": False, "elapsed": 0.0, "msg": "Pipeline not loaded"}
-        if self._stop_event.is_set():
-            return {"ok": False, "elapsed": 0.0, "msg": "Stop requested"}
+        # GGUF does not support paired inference: fall back to single-image processing
+        if self._pipeline_model_name == "gguf-qwen":
+            return self._colorize_pair_fallback_file(img1_path, img2_path, out_dir, prompt, gap_px, steps)
         try:
             elapsed = process_image_pair(
                 pipe=self._pipeline,
@@ -396,6 +389,17 @@ class ColorizeService:
         except Exception as e:
             logging.exception("colorize_image_pair failed")
             return {"ok": False, "elapsed": 0.0, "msg": str(e)}
+
+    def _colorize_pair_fallback_file(self, img1_path, img2_path, out_dir, prompt, gap_px, steps):
+        """GGUF fallback: process two images individually, return combined result."""
+        out1 = str(Path(out_dir) / (Path(img1_path).stem + ".jpg"))
+        out2 = str(Path(out_dir) / (Path(img2_path).stem + ".jpg"))
+        res1 = self.colorize_image(img1_path, out1, prompt, steps=steps)
+        res2 = self.colorize_image(img2_path, out2, prompt, steps=steps)
+        elapsed = (res1.get("elapsed", 0.0) or 0.0) + (res2.get("elapsed", 0.0) or 0.0)
+        ok = res1.get("ok", False) and res2.get("ok", False)
+        msg = res1.get("msg", "") or res2.get("msg", "")
+        return {"ok": ok, "elapsed": float(elapsed), "msg": msg}
 
     # ------------------------------------------------------------------
     # Colorization: single image fallback (filesystem-based)
@@ -417,8 +421,6 @@ class ColorizeService:
         """
         if self._pipeline is None:
             return {"ok": False, "elapsed": 0.0, "msg": "Pipeline not loaded"}
-        if self._stop_event.is_set():
-            return {"ok": False, "elapsed": 0.0, "msg": "Stop requested"}
         try:
             elapsed = process_single_image(
                 pipe=self._pipeline,
@@ -470,9 +472,6 @@ class ColorizeService:
         if self._pipeline is None:
             return {"ok": False, "data": b"", "elapsed": 0.0,
                     "skipped": False, "msg": "Pipeline not loaded"}
-        if self._stop_event.is_set():
-            return {"ok": False, "data": b"", "elapsed": 0.0,
-                    "skipped": True, "msg": "Stop requested"}
         try:
             original = _bytes_to_pil(img_data)
 
@@ -538,10 +537,9 @@ class ColorizeService:
             return {"ok": False, "data1": b"", "data2": b"",
                     "elapsed": 0.0, "skipped1": False, "skipped2": False,
                     "msg": "Pipeline not loaded"}
-        if self._stop_event.is_set():
-            return {"ok": False, "data1": b"", "data2": b"",
-                    "elapsed": 0.0, "skipped1": True, "skipped2": True,
-                    "msg": "Stop requested"}
+        # GGUF does not support paired inference: fall back to individual colorization
+        if self._pipeline_model_name == "gguf-qwen":
+            return self._colorize_pair_fallback_mem(img1_data, img2_data, prompt, steps)
         try:
             orig1 = _bytes_to_pil(img1_data)
             orig2 = _bytes_to_pil(img2_data)
@@ -606,6 +604,20 @@ class ColorizeService:
             return {"ok": False, "data1": b"", "data2": b"",
                     "elapsed": 0.0, "skipped1": False, "skipped2": False, "msg": str(e)}
 
+    def _colorize_pair_fallback_mem(self, img1_data, img2_data, prompt, steps):
+        """GGUF fallback: colorize two frames individually, return combined result."""
+        res1 = self.colorize_frame(img1_data, prompt, steps=steps)
+        res2 = self.colorize_frame(img2_data, prompt, steps=steps)
+        return {
+            "ok": res1.get("ok", False) and res2.get("ok", False),
+            "data1": res1.get("data", b""),
+            "data2": res2.get("data", b""),
+            "elapsed": float((res1.get("elapsed", 0.0) or 0.0) + (res2.get("elapsed", 0.0) or 0.0)),
+            "skipped1": res1.get("skipped", False),
+            "skipped2": res2.get("skipped", False),
+            "msg": res1.get("msg", "") or res2.get("msg", ""),
+        }
+
     # ------------------------------------------------------------------
     # Shared-memory colorization  :  same-host only, zero-copy transport
     #
@@ -651,9 +663,6 @@ class ColorizeService:
         if self._pipeline is None:
             return {"ok": False, "elapsed": 0.0, "skipped": False,
                     "msg": "Pipeline not loaded"}
-        if self._stop_event.is_set():
-            return {"ok": False, "elapsed": 0.0, "skipped": True,
-                    "msg": "Stop requested"}
 
         try:
             import numpy as np
@@ -725,9 +734,12 @@ class ColorizeService:
         if self._pipeline is None:
             return {"ok": False, "elapsed": 0.0, "skipped1": False,
                     "skipped2": False, "msg": "Pipeline not loaded"}
-        if self._stop_event.is_set():
-            return {"ok": False, "elapsed": 0.0, "skipped1": True,
-                    "skipped2": True, "msg": "Stop requested"}
+        # GGUF does not support paired inference: fall back to individual colorization
+        if self._pipeline_model_name == "gguf-qwen":
+            return self._colorize_pair_fallback_shm(
+                shm_in1_name, shm_out1_name, height1, width1,
+                shm_in2_name, shm_out2_name, height2, width2,
+                prompt, steps)
 
         try:
             import numpy as np
@@ -820,6 +832,19 @@ class ColorizeService:
             logging.exception("colorize_frame_pair_shm failed")
             return {"ok": False, "elapsed": 0.0,
                     "skipped1": False, "skipped2": False, "msg": str(e)}
+
+    def _colorize_pair_fallback_shm(self, shm_in1_name, shm_out1_name, h1, w1,
+                                     shm_in2_name, shm_out2_name, h2, w2, prompt, steps):
+        """GGUF fallback: colorize two frames individually via shared memory."""
+        res1 = self.colorize_frame_shm(shm_in1_name, shm_out1_name, h1, w1, prompt, steps=steps)
+        res2 = self.colorize_frame_shm(shm_in2_name, shm_out2_name, h2, w2, prompt, steps=steps)
+        return {
+            "ok": res1.get("ok", False) and res2.get("ok", False),
+            "elapsed": float((res1.get("elapsed", 0.0) or 0.0) + (res2.get("elapsed", 0.0) or 0.0)),
+            "skipped1": res1.get("skipped", False),
+            "skipped2": res2.get("skipped", False),
+            "msg": res1.get("msg", "") or res2.get("msg", ""),
+        }
 
 
 # ---------------------------------------------------------------------------

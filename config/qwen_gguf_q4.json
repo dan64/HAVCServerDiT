@@ -1,8 +1,8 @@
 {
     "model_name":       "gguf-qwen",
     "quant":            "q4",
-    "unet_gguf":        "models/unet/qwen-image-edit-2511-Q4_K_M.gguf",
-    "clip_gguf":        "models/clip/Qwen2.5-VL-7B-Instruct-Q4_K_M.gguf",
+    "unet_gguf":        "models/unet/qwen-image-edit-2511-Q4_K_S.gguf",
+    "clip_gguf":        "models/clip/Qwen2.5-VL-7B-Instruct-Q4_K_S.gguf",
     "mmproj_gguf":      "models/clip/Qwen2.5-VL-7B-Instruct-mmproj-BF16.gguf",
     "vae_name":         "qwen_image_vae.safetensors",
     "lora_path":        "models/loras/Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors",

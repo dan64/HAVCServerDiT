@@ -4,7 +4,7 @@ An XML-RPC server that exposes a GPU-accelerated colorization pipeline for black
 Two backends, one API : pick the one that fits your hardware:
 
 - **nunchaku-qwen**: SVDQuant FP4/INT4 transformer via [Nunchaku](https://github.com/nunchaku-ai/nunchaku) : **4 sec/frame**, requires RTX 30/40/50 (16 GB VRAM) & CUDA 12.8
-- **gguf-qwen**: ComfyUI-native GGUF pipeline (Q3_K_S, Q4_K_M, Q5_K_M, Q6_K, Q8_0) : **12 sec/frame**, runs on RTX 30/40/50 (12 GB VRAM), zero ComfyUI GUI dependency
+- **gguf-qwen**: ComfyUI-native GGUF pipeline (Q3_K_S, Q4_K_S, Q5_K_M, Q6_K, Q8_0) : **12 sec/frame**, runs on RTX 30/40/50 (12 GB VRAM), zero ComfyUI GUI dependency
 
 ---
 
@@ -45,7 +45,7 @@ Choose the backend that matches your hardware:
 | **RAM**     | 32 GB+                                 |
 | **CUDA**    | 12.8+ (or CPU-only: slower, zero VRAM) |
 
-> **Q3_K_S** fits in 12 GB VRAM. **Q4_K_M** (default) balances quality and VRAM.
+> **Q3_K_S** fits in 12 GB VRAM. **Q4_K_S** (default) balances quality and VRAM.
 > **Q5_K_M / Q6_K** improve fidelity at higher VRAM cost. **Q8_0** is near-lossless.
 > Uses ComfyUI-native code : no ComfyUI GUI installation needed.
 > Pre-made configs for all quantizations are in the `config/` folder.
@@ -317,7 +317,7 @@ Five quantization levels are available. All share the same structure with
 | Config file         | `quant` | UNet           | CLIP           |
 | ------------------- | ------- | -------------- | -------------- |
 | `qwen_gguf_q3.json` | `"q3"`  | `…Q3_K_S.gguf` | `…Q3_K_S.gguf` |
-| `qwen_gguf_q4.json` | `"q4"`  | `…Q4_K_M.gguf` | `…Q4_K_M.gguf` |
+| `qwen_gguf_q4.json` | `"q4"`  | `…Q4_K_S.gguf` | `…Q4_K_S.gguf` |
 | `qwen_gguf_q5.json` | `"q5"`  | `…Q5_K_M.gguf` | `…Q5_K_M.gguf` |
 | `qwen_gguf_q6.json` | `"q6"`  | `…Q6_K.gguf`   | `…Q6_K.gguf`   |
 | `qwen_gguf_q8.json` | `"q8"`  | `…Q8_0.gguf`   | `…Q8_0.gguf`   |
@@ -333,8 +333,8 @@ Config example (`config/qwen_gguf_q4.json`):
 {
     "model_name":       "gguf-qwen",
     "quant":            "q4",
-    "unet_gguf":        "models/unet/qwen-image-edit-2511-Q4_K_M.gguf",
-    "clip_gguf":        "models/clip/Qwen2.5-VL-7B-Instruct-Q4_K_M.gguf",
+    "unet_gguf":        "models/unet/qwen-image-edit-2511-Q4_K_S.gguf",
+    "clip_gguf":        "models/clip/Qwen2.5-VL-7B-Instruct-Q4_K_S.gguf",
     "mmproj_gguf":      "models/clip/Qwen2.5-VL-7B-Instruct-mmproj-BF16.gguf",
     "vae_name":         "qwen_image_vae.safetensors",
     "lora_path":        "models/loras/Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors",
@@ -689,16 +689,16 @@ start_server.cmd [q3|q4|q5|q6|q8|fp4|int4]
 
 | Argument | Backend  | Quantization | VRAM  |
 | -------- | -------- | ------------ | ----- |
-| _(none)_ | GGUF     | Q4_K_M       | 14 GB |
+| _(none)_ | GGUF     | Q4_K_S       | 12 GB |
 | `q3`     | GGUF     | Q3_K_S       | 12 GB |
-| `q4`     | GGUF     | Q4_K_M       | 14 GB |
+| `q4`     | GGUF     | Q4_K_S       | 12 GB |
 | `q5`     | GGUF     | Q5_K_M       | 16 GB |
 | `q6`     | GGUF     | Q6_K         | 18 GB |
 | `q8`     | GGUF     | Q8_0         | 22 GB |
 | `fp4`    | Nunchaku | FP4          | 16 GB |
 | `int4`   | Nunchaku | INT4         | 16 GB |
 
-If no argument is passed it defaults to `q4` (Q4_K_M). Use `int4` for RTX 30 / 40-Series Nunchaku:
+If no argument is passed it defaults to `q4` (Q4_K_S). Use `int4` for RTX 30 / 40-Series Nunchaku:
 
 ```
 start_server.cmd int4
@@ -727,7 +727,7 @@ python dit_rpc_server.py --module-dir /path/to/dit_colorize_main
 ```
 
 **`Model 'xxx' is not supported`**
-Supported values for `model_name` are `"nunchaku-qwen"` (FP4/INT4) and `"gguf-qwen"` (Q3_K_S, Q4_K_M, Q5_K_M, Q6_K, Q8_0). For `"gguf-qwen"`, the quantization is selected via the `quant` field in the config (e.g. `"q4"`).
+Supported values for `model_name` are `"nunchaku-qwen"` (FP4/INT4) and `"gguf-qwen"` (Q3_K_S, Q4_K_S, Q5_K_M, Q6_K, Q8_0). For `"gguf-qwen"`, the quantization is selected via the `quant` field in the config (e.g. `"q4"`).
 
 **Pipeline takes a long time to load**
 **Nunchaku**: on the first run the model weights (~15–30 GB) are downloaded from HuggingFace.

@@ -40,7 +40,6 @@ def load_gguf_pipeline(unet_path, clip_path, vae_name="qwen_image_vae.safetensor
     import comfy.samplers
     import comfy.utils
     import folder_paths
-
     # Suppress "Unknown file list already present"  :  we're intentionally overriding
     _prev_level = logging.getLogger().getEffectiveLevel()
     logging.getLogger().setLevel(logging.ERROR)

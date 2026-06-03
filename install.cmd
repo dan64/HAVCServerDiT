@@ -89,30 +89,44 @@ echo ============================================================
 echo.
 
 :: ---------------------------------------------------------------------------
-:: STEP 1 — PyTorch 2.9.1 + CUDA 12.8
+:: STEP 1 — PyTorch 2.10 + CUDA 13.0
 :: ---------------------------------------------------------------------------
-echo [1/5] Installing PyTorch 2.9.1 + CUDA 12.8 ...
+echo [1/6] Installing PyTorch 2.10 + CUDA 13.0 ...
 "%PYTHON_EXE%" -m pip install ^
-    torch==2.9.1+cu128 ^
-    torchvision==0.24.1+cu128 ^
-    torchaudio==2.9.1+cu128 ^
-    --index-url https://download.pytorch.org/whl/cu128
+    torch==2.10.0+cu130 ^
+    torchvision==0.25.0+cu130 ^
+    torchaudio==2.10.0+cu130 ^
+    --index-url https://download.pytorch.org/whl/cu130
 if %errorlevel% neq 0 ( echo [ERROR] PyTorch install failed. & pause & exit /b 1 )
 echo.
 
 :: ---------------------------------------------------------------------------
 :: STEP 2 — Nunchaku
 :: ---------------------------------------------------------------------------
-echo [2/5] Installing Nunchaku 1.2.1 ...
+echo [2/6] Installing Nunchaku 1.2.1 ...
+:: Nunchaku pulls torch>=2.0 via accelerate; the next step re-pins 2.10
 "%PYTHON_EXE%" -m pip install ^
-    https://github.com/nunchaku-ai/nunchaku/releases/download/v1.2.1/nunchaku-1.2.1+cu12.8torch2.9-cp312-cp312-win_amd64.whl
+    https://github.com/nunchaku-ai/nunchaku/releases/download/v1.2.1/nunchaku-1.2.1+cu13.0torch2.10-cp312-cp312-win_amd64.whl
 if %errorlevel% neq 0 ( echo [ERROR] Nunchaku install failed. & pause & exit /b 1 )
+echo.
+
+:: ---------------------------------------------------------------------------
+:: STEP 2b — Re-pin PyTorch 2.10 (nunchaku may have upgraded it to 2.12)
+:: ---------------------------------------------------------------------------
+echo [2b/6] Re-pinning PyTorch 2.10 ...
+"%PYTHON_EXE%" -m pip install ^
+    torch==2.10.0+cu130 ^
+    torchvision==0.25.0+cu130 ^
+    torchaudio==2.10.0+cu130 ^
+    --index-url https://download.pytorch.org/whl/cu130 ^
+    --force-reinstall
+if %errorlevel% neq 0 ( echo [ERROR] PyTorch re-pin failed. & pause & exit /b 1 )
 echo.
 
 :: ---------------------------------------------------------------------------
 :: STEP 3 — Patch Nunchaku
 :: ---------------------------------------------------------------------------
-echo [3/5] Applying Nunchaku compatibility patch ...
+echo [3/6] Applying Nunchaku compatibility patch ...
 "%PYTHON_EXE%" "%PATCH_SCRIPT%"
 if %errorlevel% neq 0 ( echo [ERROR] Nunchaku patch failed. & pause & exit /b 1 )
 echo.
@@ -120,7 +134,7 @@ echo.
 :: ---------------------------------------------------------------------------
 :: STEP 4 — Diffusers (local wheel)
 :: ---------------------------------------------------------------------------
-echo [4/5] Installing Diffusers 0.37.0.dev0 (local wheel) ...
+echo [4/6] Installing Diffusers 0.37.0.dev0 (local wheel) ...
 "%PYTHON_EXE%" -m pip install "%DIFFUSERS_WHEEL%"
 if %errorlevel% neq 0 ( echo [ERROR] Diffusers install failed. & pause & exit /b 1 )
 echo.
@@ -128,7 +142,7 @@ echo.
 :: ---------------------------------------------------------------------------
 :: STEP 5 — Remaining dependencies
 :: ---------------------------------------------------------------------------
-echo [5/5] Installing remaining dependencies ...
+echo [5/6] Installing remaining dependencies ...
 "%PYTHON_EXE%" -m pip install ^
     transformers==4.57.6 ^
     accelerate==1.12.0 ^

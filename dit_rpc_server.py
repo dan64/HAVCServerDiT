@@ -1,3 +1,8 @@
+# Enable cudaMallocAsync before any torch import (must be set before CUDA init)
+import os as _os
+if "PYTORCH_CUDA_ALLOC_CONF" not in _os.environ:
+    _os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "backend:cudaMallocAsync"
+
 """
 -------------------------------------------------------------------------------
 Author: Dan64

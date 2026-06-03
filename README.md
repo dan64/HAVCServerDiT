@@ -8,6 +8,45 @@ Two backends, one API : pick the one that fits your hardware:
 
 ---
 
+## 🔄 Upgrading from CUDA 12.8 to 13.0
+
+> If you already created the `.venv` with a previous version (CUDA 12.8,
+> PyTorch 2.9.1, Nunchaku cu12.8torch2.9), upgrade to get these benefits:
+
+| Improvement | Before (12.8) | After (13.0) |
+|---|---|---|
+| **CUDA allocator** | `native` (slower reallocation) | `cudaMallocAsync` (async, ~10 % faster memory ops) |
+| **comfy-kitchen CUDA** | `disabled: True` (fallback to eager) | `disabled: False` (native dequantization kernels) |
+| **Warning** | `You need pytorch with cu130 or higher` | gone (build matches Nunchaku) |
+
+**Upgrade steps:**
+
+```bash
+# 1) Deactivate and reactivate the venv to ensure a clean shell
+deactivate
+.venv\Scripts\activate
+
+# 2) Upgrade PyTorch to 2.10 + CUDA 13.0
+pip install torch==2.10.0+cu130 torchvision==0.25.0+cu130 torchaudio==2.10.0+cu130 \
+    --index-url https://download.pytorch.org/whl/cu130 --force-reinstall
+
+# 3) Upgrade Nunchaku (CUDA 13.0 + PyTorch 2.10 build)
+pip install https://github.com/nunchaku-ai/nunchaku/releases/download/v1.2.1/nunchaku-1.2.1+cu13.0torch2.10-cp312-cp312-win_amd64.whl --force-reinstall
+
+# 4) Re-pin PyTorch (Nunchaku may have upgraded it to 2.12)
+pip install torch==2.10.0+cu130 torchvision==0.25.0+cu130 torchaudio==2.10.0+cu130 \
+    --index-url https://download.pytorch.org/whl/cu130 --force-reinstall
+
+# 5) Re-apply the Nunchaku patch
+python patch_nunchaku.py
+
+# 6) Verify
+pip show torch       # Expected: 2.10.0+cu130
+pip show nunchaku    # Expected: 1.2.1+cu13.0torch2.10
+```
+
+---
+
 ## ✨ Features
 
 - 📦 **Two backends, one API** : nunchaku-qwen (FP4/INT4, 4 sec/frame) for speed, gguf-qwen (Q3_K_S … Q8_0, 12 sec/frame) for lower VRAM
@@ -31,7 +70,7 @@ Choose the backend that matches your hardware:
 | ---------------- | ---------------------------------- |
 | **GPU**          | NVIDIA RTX 30/40/50  (16 GB+ VRAM) |
 | **RAM**          | 64 GB+                             |
-| **CUDA**         | 12.8 or newer                      |
+| **CUDA**         | 13.0 or newer                      |
 | **CUDA Toolkit** | Must match the PyTorch build       |
 
 > **RTX 30/40-Series (Ampere / Ada)**: use `"model_precision": "int4"`. FP4 requires Blackwell (RTX 50).
@@ -43,7 +82,7 @@ Choose the backend that matches your hardware:
 | ----------- | -------------------------------------- |
 | **GPU**     | NVIDIA RTX 30/40/50  (12 GB+ VRAM)     |
 | **RAM**     | 32 GB+                                 |
-| **CUDA**    | 12.8+ (or CPU-only: slower, zero VRAM) |
+| **CUDA**    | 13.0+ (or CPU-only: slower, zero VRAM) |
 
 > **Q3_K_S** fits in 12 GB VRAM. **Q4_K_S** (default) balances quality and VRAM.
 > **Q5_K_M / Q6_K** improve fidelity at higher VRAM cost. **Q8_0** is near-lossless.
@@ -124,19 +163,20 @@ source .venv/bin/activate
 
 ---
 
-### 2 : Install PyTorch 2.9.1 + CUDA 12.8
+### 2 : Install PyTorch 2.10.0 + CUDA 13.0
 
 Use the **stable** build for all GPU generations (RTX 30 / 40 / 50):
 
 ```bash
-pip install torch==2.9.1+cu128 torchvision==0.24.1+cu128 torchaudio==2.9.1+cu128 \
-    --index-url https://download.pytorch.org/whl/cu128
+pip install torch==2.10.0+cu130 torchvision==0.25.0+cu130 torchaudio==2.10.0+cu130 \
+    --index-url https://download.pytorch.org/whl/cu130
 ```
 
 Verify the installation:
 
 ```bash
 python -c "import torch; print(torch.__version__); print(torch.cuda.is_available())"
+# Expected: 2.10.0+cu130, True
 ```
 
 ---
@@ -149,19 +189,29 @@ python -c "import torch; print(torch.__version__); print(torch.cuda.is_available
 Install the correct MIT Han Lab build directly from the GitHub release:
 
 ```bash
-# Windows / Python 3.12 / CUDA 12.8 / PyTorch 2.9
-pip install https://github.com/nunchaku-ai/nunchaku/releases/download/v1.2.1/nunchaku-1.2.1+cu12.8torch2.9-cp312-cp312-win_amd64.whl
+# Windows / Python 3.12 / CUDA 13.0 / PyTorch 2.10
+pip install https://github.com/nunchaku-ai/nunchaku/releases/download/v1.2.1/nunchaku-1.2.1+cu13.0torch2.10-cp312-cp312-win_amd64.whl
 ```
 
 For other platforms or Python versions, browse the full list of available wheels on the
 [Nunchaku releases page](https://github.com/nunchaku-ai/nunchaku/releases/tag/v1.2.1)
 and replace the filename accordingly.
 
-Verify the correct package is installed : the version string must contain the build tags:
+> **Nunchaku pulls `torch>=2.0` as a dependency (via `accelerate`) and may upgrade
+> PyTorch to a newer version.** After installing Nunchaku, re-pin PyTorch:
+
+```bash
+pip install torch==2.10.0+cu130 torchvision==0.25.0+cu130 torchaudio==2.10.0+cu130 \
+    --index-url https://download.pytorch.org/whl/cu130 --force-reinstall
+```
+
+Verify the correct package is installed :
 
 ```bash
 pip show nunchaku
-# Expected: Version: 1.2.1+cu12.8torch2.9
+# Version: 1.2.1+cu13.0torch2.10
+pip show torch
+# Version: 2.10.0+cu130
 ```
 
 ### 4 : Patch Nunchaku
@@ -244,8 +294,6 @@ pip install \
 > 
 > `scipy`, `av`, and `torchsde` are required by the diffusers pipeline.
 > `gguf`, `comfy-aimdo`, and `comfy-kitchen` are required by the GGUF backend.
-
----
 
 ## 📂 Project Structure
 

@@ -207,6 +207,8 @@ The GUI has four tabs plus a persistent status bar at the bottom.
 
 ### Dashboard
 
+![GUI Dashboard](https://github.com/dan64/DiTServerRPC/blob/main/GUI/assets/gui_page1.jpg)
+
 - **Task checkboxes**: enable/disable each pipeline step
 - **START PIPELINE**: runs the selected steps sequentially
 - **STOP**: gracefully interrupts the current step (sends stop signal to both
@@ -216,6 +218,8 @@ The GUI has four tabs plus a persistent status bar at the bottom.
 - **Shutdown PC when finished**: triggers `shutdown /s /t 60` after completion
 
 ### Tab 1 — Extraction
+
+![GUI Tab #1](https://github.com/dan64/DiTServerRPC/blob/main/GUI/assets/gui_page2.jpg)
 
 | Setting | Description |
 |---------|-------------|
@@ -233,6 +237,8 @@ resolution, FPS, frame count, and pixel format.
 
 ### Tab 2 — Colorization
 
+![GUI Tab #2](https://github.com/dan64/DiTServerRPC/blob/main/GUI/assets/gui_page3.jpg)
+
 | Setting | Description |
 |---------|-------------|
 | **RPC Host / Port** | Server address (default: `127.0.0.1:8765`) |
@@ -247,6 +253,8 @@ The two image panels show a live preview of the B&W input and the AI output
 as frames are processed.
 
 ### Tab 3 — Encode / Merge
+
+![GUI Tab #3](https://github.com/dan64/DiTServerRPC/blob/main/GUI/assets/gui_page4.jpg)
 
 | Setting | Description |
 |---------|-------------|

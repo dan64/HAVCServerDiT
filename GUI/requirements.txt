@@ -1,0 +1,5 @@
+Pillow
+tkinter_embed
+FreeSimpleGUI
+send2trash
+VapourSynth==74

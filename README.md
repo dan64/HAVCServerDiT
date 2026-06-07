@@ -59,6 +59,8 @@ It orchestrates the full video colorization pipeline from a single graphical int
 3. **Encode** the result as H.265 (x265 or NVEnc)
 4. **Merge** the AI output with an existing color clip (optional, luminance-guided chroma blend)
 
+![GUI Tab #2](https://github.com/dan64/DiTServerRPC/blob/main/GUI/assets/gui_page3.jpg)
+
 See [GUI/README_GUI.md](GUI/README_GUI.md) for installation, setup, and usage instructions.
 
 > **Prerequisite**: the DiT RPC Server must be running before the GUI can colorize frames.

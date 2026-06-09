@@ -166,7 +166,8 @@ The GUI relies on three command-line tools that must be present on disk
 ```powershell
 # Activate the venv first
 .venv\Scripts\activate
-python GUI\CMNET2_colorize_client_GUI.py
+cd GUI
+python CMNET2_colorize_client_GUI.py
 ```
 
 ### From the launcher (silent, no console)

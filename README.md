@@ -49,6 +49,10 @@ pip show nunchaku    # Expected: 1.2.1+cu13.0torch2.10
 
 ## 📢 What's New
 
+### 2026-06-09 — Improved GGUF
+
+Changed the GGUF configuration files. The pipeline Qwen-Image-Edit-2511 + Qwen-Image-Edit-2511-Lightning-4steps has substituted by the pipeline with  Qwen-Image-Edit-2509 + Qwen-Image-Edit-2511-Lightning-4steps. This change has removed the artifacts problem which affected the colored images with the GGUF models and improved the overall quality of the colored images. It should be noted that, despite these improvements, the Nunchaku model remains the best and is the one recommended for production use.  
+
 ### 2026-06-07 — Desktop GUI for Batch Video Processing
 
 A **FreeSimpleGUI desktop client** (`GUI/CMNET2_colorize_client_GUI.py`) has been added to the project.
@@ -393,7 +397,7 @@ Five quantization levels are available. All share the same structure with
 > **Q4 is the recommended default** : good quality/VRAM balance, but even Q3 is capable of delivering frames with acceptable colors.
 > All quants share the same VAE, mmproj, and LoRA files (auto-downloaded from HuggingFace).
 
-> **⚠️ The GGUF backend is experimental.** In some cases the colors may be faded or spurious artifacts may appear in the colorized output that are not present in the source image. For production use, prefer `nunchaku-qwen` (FP4/INT4) which is not affected by such problems.
+> **⚠️ The GGUF backend is experimental.** In some cases the frames colors may be faded or little colored. For production use, prefer `nunchaku-qwen` (FP4/INT4) which is not affected by such problems.
 
 Config example (`config/qwen_gguf_q4.json`):
 

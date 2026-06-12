@@ -62,6 +62,16 @@ It allows single-image colorization with seed control, drag-and-drop file loadin
 
 The Fix Image tab is independent of the batch video pipeline and does not require VapourSynth.
 
+> If you already created the `.venv` with a previous version
+> install the package tkinterDnD2 to add drag-and-drop support to tkinter
+
+```bash
+# Windows
+.venv\Scripts\activate
+(.venv) pip install tkinterDnD2
+```
+ 
+
 ### 2026-06-09 — Improved GGUF
 
 Changed the GGUF configuration files. The pipeline Qwen-Image-Edit-2511 + Qwen-Image-Edit-2511-Lightning-4steps has substituted by the pipeline with  Qwen-Image-Edit-2509 + Qwen-Image-Edit-2511-Lightning-4steps. This change has removed the artifacts problem which affected the colored images with the GGUF models and improved the overall quality of the colored images. It should be noted that, despite these improvements, the Nunchaku model remains the best and is the one recommended for production use.  

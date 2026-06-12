@@ -451,6 +451,8 @@ class ColorizeService:
         prompt: str,
         img_size: int = 0,
         steps: int = 2,
+        seed: int = 42,
+        skip_bw: bool = False,
     ) -> dict:
         """
         Colorize a single B&W frame passed as raw PNG bytes.
@@ -485,12 +487,15 @@ class ColorizeService:
                 return {"ok": True, "data": _pil_to_bytes(original),
                         "elapsed": 0.0, "skipped": True, "msg": ""}
 
-            bw        = ImageEnhance.Color(original).enhance(0.0)
+            if skip_bw:
+                img_in = original
+            else:
+                img_in = ImageEnhance.Color(original).enhance(0.0)
             orig_size = original.size
-            bw_in     = resize_long_side(bw, img_size) if img_size > 0 else bw
+            img_in = resize_long_side(img_in, img_size) if img_size > 0 else img_in
 
             t0 = time.perf_counter()
-            colorized_lowres = _colorize_image(self._pipeline, bw_in, prompt, steps)
+            colorized_lowres = _colorize_image(self._pipeline, img_in, prompt, steps, seed=seed)
             elapsed = time.perf_counter() - t0
 
             result = upscale_with_lanczos(colorized_lowres, orig_size)
@@ -646,6 +651,8 @@ class ColorizeService:
         prompt: str,
         img_size: int = 0,
         steps: int = 2,
+        seed: int = 42,
+        skip_bw: bool = False,
     ) -> dict:
         """
         Shared-memory variant of colorize_frame().
@@ -689,12 +696,15 @@ class ColorizeService:
                     logging.info("colorize_frame_shm: image too dark, skipped")
                     return {"ok": True, "elapsed": 0.0, "skipped": True, "msg": ""}
 
-                bw        = ImageEnhance.Color(original).enhance(0.0)
+                if skip_bw:
+                    img_in = original
+                else:
+                    img_in = ImageEnhance.Color(original).enhance(0.0)
                 orig_size = original.size
-                bw_in     = resize_long_side(bw, img_size) if img_size > 0 else bw
+                img_in = resize_long_side(img_in, img_size) if img_size > 0 else img_in
 
                 t0 = time.perf_counter()
-                colorized_lowres = _colorize_image(self._pipeline, bw_in, prompt, steps)
+                colorized_lowres = _colorize_image(self._pipeline, img_in, prompt, steps, seed=seed)
                 elapsed = time.perf_counter() - t0
 
                 result = upscale_with_lanczos(colorized_lowres, orig_size)

@@ -28,9 +28,13 @@ import io
 import time
 import shutil
 import xmlrpc.client
+import uuid
+import random
+import numpy as np
 from pathlib import Path
 from send2trash import send2trash
 from PIL import Image
+from multiprocessing.shared_memory import SharedMemory
 
 # ---------------------------------------------------------------------------
 # Ensure local module is found
@@ -158,6 +162,10 @@ def load_all_configs():
         "model_inference_steps":  "4",
         "steps":                  "2",
         "fast_pipe":              True,
+        # --- fix image ---
+        "fix_steps":              "2",
+        "fix_bw":                 True,
+        "fix_prompts":            ["Colorize this image, natural colors."],
         # --- encode ---
         "mkv_path":       r"",
         "hf_cache":       "",
@@ -329,6 +337,7 @@ state = {
     "rpc_connected":   False,
     "is_running":      False,
     "total_frames":    -1,
+    "fix_prompts":     [],
 }
 
 
@@ -1020,6 +1029,7 @@ def orchestrator(init_values, window):
 # GUI LAYOUT
 # ===========================================================================
 cfg = load_all_configs()
+state["fix_prompts"] = cfg.get("fix_prompts", ["Colorize this image, natural colors."])
 sg.theme("DarkBlue14")
 
 merge_values:      list[str] = [f"{x/100:.2f}" for x in range(30, 75, 5)]
@@ -1038,6 +1048,98 @@ sc_tht_values:  list[str] = [f"{x/1000:.3f}" for x in range(20, 155, 5)]
 sc_ssim_values: list[str] = [f"{x/100:.2f}"  for x in range(0, 100, 5)]
 sc_int_values:  list[str] = [f"{x}" for x in range(5, 55, 5)]
 sc_mult_values: list[str] = [f"{x}" for x in range(0, 26, 1)]
+
+# ---------------------------------------------------------------------------  
+# Fix Image helpers  
+# ---------------------------------------------------------------------------  
+def _shm_write_fix(img: Image.Image):  
+    """Write PIL Image to new SharedMemory, return (shm, height, width)."""  
+    arr = np.array(img.convert("RGB"), dtype=np.uint8)  
+    h, w = arr.shape[:2]  
+    shm = SharedMemory(name=f"fix_in_{uuid.uuid4().hex[:12]}", create=True, size=h * w * 3)  
+    shm_arr = np.ndarray((h, w, 3), dtype=np.uint8, buffer=shm.buf)  
+    shm_arr[:] = arr  
+    return shm, h, w  
+
+def _shm_read_fix(shm: SharedMemory, height: int, width: int) -> Image.Image:  
+    """Read SharedMemory segment back to PIL Image."""  
+    arr = np.ndarray((height, width, 3), dtype=np.uint8, buffer=shm.buf)  
+    return Image.fromarray(arr.copy(), mode="RGB")  
+
+def _is_local_host(host: str) -> bool:  
+    return host.strip() in ("127.0.0.1", "localhost", "::1")  
+
+def _fix_colorize_worker(values, window, seed):  
+    """Background thread: colorize and post result via event."""  
+    try:  
+        rpc = state.get("rpc_client")  
+        pil_in = state.get("fix_input")  
+
+        # Ensure pipeline loaded  
+        if not rpc.is_pipeline_loaded():  
+            window.write_event_value("-FIX_LOG-", "Loading pipeline...")  
+            result = rpc.load_pipeline(  
+                values["-MODEL_NAME-"],  
+                values["-MODEL_PRECISION-"],  
+                values["-MODEL_RANK-"],  
+                values["-MODEL_INF_STEPS-"],  
+                values["-CACHE_DIR-"],  
+            )  
+            if not result.get("ok"):  
+                window.write_event_value("-FIX_LOG-", f"⚠️ {result.get('msg')}")  
+                return  
+
+        prompt = values["-FIX_PROMPT-"]
+        # Register new prompt in the history list if not already present
+        if prompt and prompt not in state["fix_prompts"]:
+            state["fix_prompts"].append(prompt)
+        steps  = int(values["-FIX_STEPS-"])  
+        host   = values["-RPC_HOST-"].strip()
+        # Honor the "Convert in B&W" checkbox
+        skip_bw = not values.get("-FIX_BW-", True)
+        rpc.clear_stop()  
+
+        t0 = time.time()  
+        if _is_local_host(host):  
+            shm_in, h, w = _shm_write_fix(pil_in)  
+            try:  
+                shm_out = SharedMemory(name=f"fix_out_{uuid.uuid4().hex[:12]}", create=True, size=h * w * 3)  
+                res = rpc._proxy_slow.colorize_frame_shm(  
+                    shm_in.name, shm_out.name, h, w, prompt, 0, steps, seed, skip_bw)  
+                out = pil_in if res.get("skipped") else (_shm_read_fix(shm_out, h, w) if res.get("ok") else pil_in)  
+                shm_out.close()  
+                shm_out.unlink()  
+            finally:  
+                shm_in.close()  
+                shm_in.unlink()  
+        else:  
+            data = _pil_to_bytes(pil_in)  
+            res = rpc._proxy_slow.colorize_frame(data, prompt, 0, steps, seed, skip_bw)  
+            out = _bytes_to_pil(res.get("data", data)) if res.get("ok") else pil_in  
+
+        elapsed = time.time() - t0  
+        window.write_event_value("-FIX_DONE-", (out, elapsed, seed))  
+    except Exception as e:  
+        window.write_event_value("-FIX_LOG-", f"⚠️ {e}")  
+
+
+def do_fix_colorize(values, window, seed):  
+    """Launch colorization in a background thread (non-blocking)."""  
+    rpc = state.get("rpc_client")  
+    if rpc is None:  
+        sg.popup_error("Not connected to RPC server.")  
+        return  
+    if state.get("fix_input") is None:  
+        window["-FIX_STATUS-"].update("⚠️ No image loaded")  
+        return  
+
+    window["-FIX_STATUS-"].update("⏳ Colorizing...")  
+    window["-FIX_COLORIZE-"].update(disabled=True)  
+    window["-FIX_COLORIZE_RND-"].update(disabled=True)  
+    threading.Thread(target=_fix_colorize_worker,  
+                     args=(values, window, seed),  
+                     daemon=True).start()  
+
 
 # ---------------------------------------------------------------------------
 # TAB 1 — Dashboard
@@ -1194,6 +1296,41 @@ tab4_layout = [
 ]
 
 # ---------------------------------------------------------------------------
+# TAB 5 — Fix Image
+# ---------------------------------------------------------------------------
+tab5_layout = [
+    [sg.Text("Fix Image", font=("Any", 14, "bold"))],
+
+    [sg.Text("Colorization Steps:"),
+     sg.Combo(steps_values, default_value=cfg["fix_steps"], key="-FIX_STEPS-", readonly=True, size=(6,1)),
+     sg.Checkbox("Convert in B&W before colorization", key="-FIX_BW-", default=cfg.get("fix_bw", True))],
+    [sg.Text("Prompt:"),
+     sg.Combo(state["fix_prompts"], default_value=state["fix_prompts"][0],
+              key="-FIX_PROMPT-", expand_x=True, size=(40,1)),
+     sg.Button("Clear", key="-FIX_PROMPT_CLEAR-")],
+
+    [sg.Text("Drag & Drop a File into the TextBox below, or Browse:")],
+    [sg.Button("Load Image", key="-FIX_LOAD-"),
+     sg.Input("", key="-FIX_PATH-", disabled=True, expand_x=True),
+     sg.Button("Browse...", key="-FIX_BROWSE-")],
+
+    [sg.Column([
+        [sg.Text("Input")],
+        [sg.Image(data=b'', key="-FIX_IMG_BW-", size=(370, 350), background_color="black")],
+    ]),
+     sg.Column([
+        [sg.Text("Output")],
+        [sg.Image(data=b'', key="-FIX_IMG_CLR-", size=(370, 350), background_color="black")],
+    ])],
+
+    [sg.Button("Colorize", key="-FIX_COLORIZE-"),
+     sg.Button("Colorize (Random)", key="-FIX_COLORIZE_RND-"),
+     sg.Button("Save As...", key="-FIX_SAVE-"),
+     sg.Button("Swap Output → Input", key="-FIX_SWAP-")],
+    [sg.Text("", key="-FIX_STATUS-", size=(40,1))],
+]
+
+# ---------------------------------------------------------------------------
 # MAIN LAYOUT
 # ---------------------------------------------------------------------------
 layout = [
@@ -1201,7 +1338,8 @@ layout = [
         [sg.Tab("Dashboard",     tab1_layout),
          sg.Tab("1. Extraction", tab2_layout),
          sg.Tab("2. Colorization", tab3_layout),
-         sg.Tab("3. Encode/Merge", tab4_layout)]
+         sg.Tab("3. Encode/Merge", tab4_layout),
+         sg.Tab("4. Fix Image", tab5_layout)]
     ], expand_x=True, expand_y=True)],
     [sg.Button("Save Global Settings"),
      sg.Text("Status: OK", size=(70, 1), expand_x=True,
@@ -1214,6 +1352,35 @@ layout = [
 window = sg.Window("CMNET2 Master Suite", layout, finalize=True,
                    resizable=True, size=(cfg["window_w"], cfg["window_h"]))
 
+# ---- Drag‑and‑drop for Fix Image tab ----
+def _handle_drop(event):
+    """Callback for tkinterDnD drop — extract file path and trigger load."""
+    try:
+        data = event.data
+        if isinstance(data, str):
+            first = data.splitlines()[0] if data else ""
+        elif isinstance(data, (list, tuple)):
+            first = data[0] if data else ""
+        else:
+            first = str(data)
+        # strip braces that tk adds around paths with spaces
+        if first.startswith("{") and first.endswith("}"):
+            first = first[1:-1]
+        if first:
+            window["-FIX_PATH-"].update(first)
+            window.write_event_value("-FIX_LOAD-", None)
+    except Exception:
+        pass
+
+try:
+    from tkinterdnd2 import TkinterDnD, DND_FILES
+    TkinterDnD.require(window.TKroot)
+    window["-FIX_PATH-"].widget.drop_target_register(DND_FILES)
+    window["-FIX_PATH-"].widget.dnd_bind("<<Drop>>", _handle_drop)
+    print("[DnD] tkinterDnD initialized", flush=True)
+except Exception as _dnd_e:
+    print(f"[DnD] not available: {_dnd_e}", flush=True)
+
 # ===========================================================================
 # EVENT LOOP
 # ===========================================================================
@@ -1223,6 +1390,94 @@ while True:
         if state["current_process"]:
             state["current_process"].terminate()
         break
+
+    # ---- Fix Image tab ----
+    if event == "-FIX_LOAD-":
+        path = values["-FIX_PATH-"]
+        if path and os.path.isfile(path):
+            try:
+                img = Image.open(path).convert("RGB")
+                state["fix_input"] = img
+                # Scale for preview (fit within 370x350 maintaining aspect)
+                img.thumbnail((370, 350), Image.Resampling.LANCZOS)
+                buf = io.BytesIO()
+                img.save(buf, format="PNG")
+                window["-FIX_IMG_BW-"].update(data=buf.getvalue())
+                window["-FIX_STATUS-"].update(f"Loaded: {os.path.basename(path)}")
+            except Exception as e:
+                window["-FIX_STATUS-"].update(f"⚠️ {e}")
+
+    if event == "-FIX_BROWSE-":
+        # Launch load_image_DtD_GUI.py and wait for it to return the file path
+        _script = os.path.join(os.path.dirname(__file__), "load_image_DtD_GUI.py")
+        _proc = subprocess.run(
+            [sys.executable, _script],
+            capture_output=True, text=True, timeout=120)
+        _path = (_proc.stdout or "").strip()
+        if _path and os.path.isfile(_path):
+            window["-FIX_PATH-"].update(_path)
+            window.write_event_value("-FIX_LOAD-", None)
+        elif _path:
+            window["-FIX_STATUS-"].update(f"⚠️ Invalid: {_path}")
+
+    if event == "-FIX_SWAP-":
+        out = state.get("fix_output")
+        if out is None:
+            window["-FIX_STATUS-"].update("⚠️ No output to swap")
+        else:
+            state["fix_input"] = out.copy()
+            _preview = out.copy()
+            _preview.thumbnail((370, 350), Image.Resampling.LANCZOS)
+            buf = io.BytesIO()
+            _preview.save(buf, format="PNG")
+            window["-FIX_IMG_BW-"].update(data=buf.getvalue())
+            window["-FIX_PATH-"].update("[swapped from output]")
+            window["-FIX_STATUS-"].update("Swapped: output → input")
+
+    if event == "-FIX_PROMPT_CLEAR-":
+        state["fix_prompts"] = [cfg.get("fix_prompts", ["Colorize this image, natural colors."])[0]]
+        window["-FIX_PROMPT-"].update(values=state["fix_prompts"],
+                                     value=state["fix_prompts"][0])
+
+    if event == "-FIX_COLORIZE-":
+        do_fix_colorize(values, window, seed=42)
+
+    if event == "-FIX_COLORIZE_RND-":
+        do_fix_colorize(values, window, seed=random.randint(0, 2**31))
+
+    if event == "-FIX_SAVE-":
+        out = state.get("fix_output")
+        if out is None:
+            sg.popup_error("No output image to save.")
+        else:
+            src_path = values["-FIX_PATH-"]
+            default_dir  = os.path.dirname(src_path) if src_path else ""
+            _src_ext = os.path.splitext(src_path)[1] if src_path else ".png"
+            default_name = os.path.splitext(os.path.basename(src_path))[0] + "_colorized" + _src_ext if src_path else "colorized.png"
+            default_path = os.path.join(default_dir, default_name) if default_dir else default_name
+            dest = sg.popup_get_file("Save as", save_as=True,
+                                     default_path=default_path,
+                                     file_types=(("PNG", "*.png"), ("JPG", "*.jpg")))
+            if dest:
+                out.save(dest)
+                window["-FIX_STATUS-"].update(f"Saved: {os.path.basename(dest)}")
+
+    if event == "-FIX_DONE-":
+        out, elapsed, seed = values[event]
+        state["fix_output"] = out
+        _preview = out.copy()
+        _preview.thumbnail((370, 350), Image.Resampling.LANCZOS)
+        buf = io.BytesIO()
+        _preview.save(buf, format="PNG")
+        window["-FIX_IMG_CLR-"].update(data=buf.getvalue())
+        window["-FIX_STATUS-"].update(f"✅ Done ({elapsed:.1f}s, seed={seed})")
+        window["-FIX_COLORIZE-"].update(disabled=False)
+        window["-FIX_COLORIZE_RND-"].update(disabled=False)
+
+    if event == "-FIX_LOG-":
+        window["-FIX_STATUS-"].update(values[event])
+        window["-FIX_COLORIZE-"].update(disabled=False)
+        window["-FIX_COLORIZE_RND-"].update(disabled=False)
 
     # ---- RPC server connection ----
     if event == "-CONNECT-":
@@ -1294,6 +1549,9 @@ while True:
             "model_inference_steps": values["-MODEL_INF_STEPS-"],
             "steps":                 values["-STEPS-"],
             "fast_pipe":             values["-FAST_PIPE-"],
+            "fix_steps":              values["-FIX_STEPS-"],
+            "fix_bw":                 values["-FIX_BW-"],
+            "fix_prompts":            state["fix_prompts"],
             "mkv_path":              values["-MKV_PATH-"],
             "hf_cache":              values["-CACHE_DIR-"],
             "prompt":                values["-PROMPT-"],

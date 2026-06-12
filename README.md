@@ -49,6 +49,19 @@ pip show nunchaku    # Expected: 1.2.1+cu13.0torch2.10
 
 ## 📢 What's New
 
+### 2026-06-12 — Fix Image Tab (GUI)
+
+A standalone **Fix Image** tab (`Tab 4`) has been added to the desktop GUI (`GUI/CMNET2_colorize_client_GUI.py`).
+It allows single-image colorization with seed control, drag-and-drop file loading, and preview:
+
+![GUI Tab #4](https://github.com/dan64/DiTServerRPC/blob/main/GUI/assets/gui_page5.jpg)
+
+1. **Load** a B&W image via drag-and-drop (`GUI/load_image_DtD_GUI.py`) or the Browse button
+2. **Colorize** with fixed seed (42) or random seed for variation
+3. **Save** the colorized result as PNG / JPG
+
+The Fix Image tab is independent of the batch video pipeline and does not require VapourSynth.
+
 ### 2026-06-09 — Improved GGUF
 
 Changed the GGUF configuration files. The pipeline Qwen-Image-Edit-2511 + Qwen-Image-Edit-2511-Lightning-4steps has substituted by the pipeline with  Qwen-Image-Edit-2509 + Qwen-Image-Edit-2511-Lightning-4steps. This change has removed the artifacts problem which affected the colored images with the GGUF models and improved the overall quality of the colored images. It should be noted that, despite these improvements, the Nunchaku model remains the best and is the one recommended for production use.  

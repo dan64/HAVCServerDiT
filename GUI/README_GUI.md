@@ -166,8 +166,7 @@ The GUI relies on three command-line tools that must be present on disk
 ```powershell
 # Activate the venv first
 .venv\Scripts\activate
-cd GUI
-python CMNET2_colorize_client_GUI.py
+python GUI\CMNET2_colorize_client_GUI.py
 ```
 
 ### From the launcher (silent, no console)
@@ -287,6 +286,28 @@ as frames are processed.
 | **Merge Weight** | Blend ratio for Step 4 (0.30 = 30% original, 0.75 = 75% original) |
 | **VBR Quality** | NVEnc quality target (lower = better) |
 | **NVEnc Sharpness** | Enables `--vpp-unsharp --vpp-edgelevel` on NVEnc |
+
+### Tab 4 — Fix Image
+
+![GUI Tab #4](https://github.com/dan64/DiTServerRPC/blob/main/GUI/assets/gui_page5.jpg)
+
+A standalone image colorization tab independent of the video pipeline.
+Supports both SHM (same-host) and PNG-over-RPC (remote server) transport.
+
+| Control | Description |
+|---------|-------------|
+| **Colorization Steps** | Inference steps (default: 2) |
+| **Convert in B&W before colorization** | Check/Unchek if you want to colorize/fix an image already colorized |
+| **Prompt** | Text prompt for the model |
+| **Load Image** | Load image from drag-and-drop or Browser button (via `load_image_DtD_GUI.py`) |
+| **Colorize** | Run colorization with fixed seed (42) |
+| **Colorize (Random)** | Run colorization with random seed for variation |
+| **Save As...** | Save the colorized result (PNG / JPG) |
+
+The input image is previewed scaled to 370×350 pixels; the full-resolution
+output is stored in memory and saved to disk via the **Save As...** button.
+
+> **Prerequisite**: the DiT RPC Server must be connected (Tab 2 — Connect).
 
 ---
 

@@ -1,10 +1,10 @@
 {
-    "vspipe_path": "D:/PProjects/DiTServerRPC/.venv/Scripts/vspipe.exe",
-    "x265_path": "D:/PProjects/DiTServerRPC/GUI/tools/x265/x265.exe",
-    "script_dir": "D:/PProjects/DiTServerRPC/GUI/scripts",
+    "vspipe_path": "C:/DiTServerRPC/.venv/Scripts/vspipe.exe",
+    "x265_path": "C:/DiTServerRPC/GUI/tools/x265/x265.exe",
+    "script_dir": "C:/DiTServerRPC/GUI/scripts",
     "extract_script": "extract_refs_edge.vpy",
     "encode_script": "encode_cmnet2.vpy",
-    "base_dir": "D:/PProjects/DiTServerRPC/GUI/samples",
+    "base_dir": "C:/DiTServerRPC/GUI/samples",
     "model_name": "nunchaku-qwen",
     "model_precision": "fp4",
     "model_rank": "32",
@@ -17,7 +17,7 @@
     "fix_prompts": [
         "Colorize this image, natural colors."
     ],
-    "mkv_path": "D:/PProjects/DiTServerRPC/GUI/tools/MKVToolNix/mkvmerge.exe",
+    "mkv_path": "C:/DiTServerRPC/GUI/tools/MKVToolNix/mkvmerge.exe",
     "hf_cache": "",
     "prompt": "Colorize this image, natural colors. Strictly preserve all shapes, edges and background details.",
     "shutdown_on_complete": false,

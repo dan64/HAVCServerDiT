@@ -11,7 +11,7 @@
     "model_inference_steps": "4",
     "steps": "2",
     "fast_pipe": true,
-    "fix_steps": "4",
+    "fix_steps": "2",
     "fix_bw": false,
     "fix_prompt_max": "30",
     "fix_prompts": [

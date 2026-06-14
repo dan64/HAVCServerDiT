@@ -1033,7 +1033,7 @@ cfg = load_all_configs()
 state["fix_prompts"] = cfg.get("fix_prompts", ["Colorize this image, natural colors."])
 sg.theme("DarkBlue14")
 
-merge_values:      list[str] = [f"{x/100:.2f}" for x in range(30, 75, 5)]
+merge_values:      list[str] = [f"{x/100:.2f}" for x in range(20, 75, 5)]
 x265_crf_values:   list[str] = [f"{x/10:.2f}" for x in range(180, 285, 5)]
 nvenc_cq_values:   list[str] = [f"{x/10:.2f}" for x in range(220, 305, 5)]
 encoder_values:    list[str] = ['x265', 'Nvenc']

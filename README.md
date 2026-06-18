@@ -8,6 +8,37 @@ Two backends, one API : pick the one that fits your hardware:
 
 ---
 
+## 📦 Quick Update (existing installation)
+
+> If you already have the `.venv` with CUDA 13.0 and just need to update
+> the project to the latest version, follow these steps:
+
+```powershell
+# 1) Pull the latest code
+git pull
+
+# 2) Activate the virtual environment
+.venv\Scripts\activate
+
+# 3) Install / update the GUI dependencies (if new packages were added)
+pip install -r GUI\requirements.txt
+
+# 4) Update vscmnet2 (if a newer wheel is available in packages/)
+pip install packages\vscmnet2-1.0.3-py3-none-any.whl
+
+# 5) Re-apply the Nunchaku patch
+python patch_nunchaku.py
+
+# 6) Verify everything is up-to-date
+pip show torch       # Expected: 2.10.0+cu130
+pip show nunchaku    # Expected: 1.2.1+cu13.0torch2.10
+```
+
+> **Note**: steps 4–5 are only needed if `packages/` or `patch_nunchaku.py`
+> have changed. Check `git log --oneline -5` to see what was updated.
+
+---
+
 ## 🔄 Upgrading from CUDA 12.8 to 13.0
 
 > If you already created the `.venv` with a previous version (CUDA 12.8,

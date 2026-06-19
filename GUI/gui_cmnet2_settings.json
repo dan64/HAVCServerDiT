@@ -1,10 +1,10 @@
 {
-    "vspipe_path": "C:/DiTServerRPC/.venv/Scripts/vspipe.exe",
-    "x265_path": "C:/DiTServerRPC/GUI/tools/x265/x265.exe",
-    "script_dir": "C:/DiTServerRPC/GUI/scripts",
+    "vspipe_path": "C:/HAVCServerDiT/.venv/Scripts/vspipe.exe",
+    "x265_path": "C:/HAVCServerDiT/GUI/tools/x265/x265.exe",
+    "script_dir": "C:/HAVCServerDiT/GUI/scripts",
     "extract_script": "extract_refs_edge.vpy",
     "encode_script": "encode_cmnet2.vpy",
-    "base_dir": "C:/DiTServerRPC/GUI/samples",
+    "base_dir": "C:/HAVCServerDiT/GUI/samples",
     "model_name": "nunchaku-qwen",
     "model_precision": "fp4",
     "model_rank": "32",
@@ -17,7 +17,7 @@
     "fix_prompts": [
         "Colorize this image, natural colors."
     ],
-    "fixv_base_dir": "C:/DiTServerRPC_dev/GUI/samples",
+    "fixv_base_dir": "C:/HAVCServerDiT/GUI/samples",
     "fixv_video": "",
     "fixv_first_ref": "",
     "fixv_last_ref": "",
@@ -26,7 +26,7 @@
     "fixv_vbr_quality": "25.00",
     "fixv_memory_frames": "20",
     "fixv_render_speed": "auto",
-    "mkv_path": "C:/DiTServerRPC/GUI/tools/MKVToolNix/mkvmerge.exe",
+    "mkv_path": "C:/HAVCServerDiT/GUI/tools/MKVToolNix/mkvmerge.exe",
     "hf_cache": "",
     "prompt": "Colorize this image, natural colors. Strictly preserve all shapes, edges and background details.",
     "shutdown_on_complete": false,

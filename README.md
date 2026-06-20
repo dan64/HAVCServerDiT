@@ -58,15 +58,13 @@ deactivate
 .venv\Scripts\activate
 
 # 2) Upgrade PyTorch to 2.10 + CUDA 13.0
-pip install torch==2.10.0+cu130 torchvision==0.25.0+cu130 torchaudio==2.10.0+cu130 \
-    --index-url https://download.pytorch.org/whl/cu130 --force-reinstall
+pip install torch==2.10.0+cu130 torchvision==0.25.0+cu130 torchaudio==2.10.0+cu130 --index-url https://download.pytorch.org/whl/cu130 --force-reinstall
 
 # 3) Upgrade Nunchaku (CUDA 13.0 + PyTorch 2.10 build)
 pip install https://github.com/nunchaku-ai/nunchaku/releases/download/v1.2.1/nunchaku-1.2.1+cu13.0torch2.10-cp312-cp312-win_amd64.whl --force-reinstall
 
 # 4) Re-pin PyTorch (Nunchaku may have upgraded it to 2.12)
-pip install torch==2.10.0+cu130 torchvision==0.25.0+cu130 torchaudio==2.10.0+cu130 \
-    --index-url https://download.pytorch.org/whl/cu130 --force-reinstall
+pip install torch==2.10.0+cu130 torchvision==0.25.0+cu130 torchaudio==2.10.0+cu130 --index-url https://download.pytorch.org/whl/cu130 --force-reinstall
 
 # 5) Re-apply the Nunchaku patch
 python patch_nunchaku.py
@@ -80,12 +78,37 @@ pip show nunchaku    # Expected: 1.2.1+cu13.0torch2.10
 
 ## 📢 What's New
 
-### 2026-06-17 — Fix Video Tab (GUI)
+### 2026-06-20 — Fix Colors Tab (GUI)
 
-A standalone **Fix Video** tab (`Tab 5`) has been added to the desktop GUI (`GUI/CMNET2_colorize_client_GUI.py`).
-It runs a VapourSynth + NVEnc pipeline to recolor a video using two reference images:
+A standalone **Fix Colors** tab (`Tab 5`) has been added to the desktop GUI (`GUI/CMNET2_colorize_client_GUI.py`).
 
 ![GUI Tab #5](https://github.com/dan64/HAVCServerDiT/blob/main/GUI/assets/gui_page6.jpg)
+
+It colorizes a B&W target image using a color reference image via the local **CMNET2** model
+(exemplar-based color propagation) — no RPC server required:
+
+1. **Load** a color reference image (drag & drop or Browse)
+2. **Load** a B&W target image (drag & drop or Browse)
+3. **Colorize** — runs `vscmnet2.pil_cmnet2_colorize()` in a background thread
+
+Key features:
+
+- **Three preview panels**: reference, target, and output side‑by‑side
+- **Copy → Fix Image**: sends the output directly to Tab 4 (Fix Image) for a two‑stage pipeline (CMNET2 → DiT RPC)
+- **Save / Overwrite**: save the colorized result as PNG/JPG or overwrite the original target file
+- **Full-resolution preservation**: images are always kept at original resolution in memory; resizing only applies to previews
+- **Delayed import**: `vscmnet2` is imported only when Colorize is clicked (does not block GUI startup)
+
+> **Prerequisite**: `vscmnet2` must be installed with model weights and checkpoints present (see [GUI README](GUI/README_GUI.md#3-install-vscmnet2)). No RPC connection needed.
+
+The tab order has been updated: **1.** Extraction → **2.** Colorization → **3.** Encode/Merge → **4.** Fix Image → **5.** Fix Colors → **6.** Fix Video.
+
+### 2026-06-17 — Fix Video Tab (GUI)
+
+A standalone **Fix Video** tab (`Tab 6`) has been added to the desktop GUI (`GUI/CMNET2_colorize_client_GUI.py`).
+It runs a VapourSynth + NVEnc pipeline to recolor a video using two reference images:
+
+![GUI Tab #6](https://github.com/dan64/HAVCServerDiT/blob/main/GUI/assets/gui_page7.jpg)
 
 1. **Select** a video and an encode VPY script
 2. **Load** two reference images (First / Last) via drag-and-drop or Browse
@@ -304,8 +327,7 @@ and replace the filename accordingly.
 > PyTorch to a newer version.** After installing Nunchaku, re-pin PyTorch:
 
 ```bash
-pip install torch==2.10.0+cu130 torchvision==0.25.0+cu130 torchaudio==2.10.0+cu130 \
-    --index-url https://download.pytorch.org/whl/cu130 --force-reinstall
+pip install torch==2.10.0+cu130 torchvision==0.25.0+cu130 torchaudio==2.10.0+cu130 --index-url https://download.pytorch.org/whl/cu130 --force-reinstall
 ```
 
 Verify the correct package is installed :

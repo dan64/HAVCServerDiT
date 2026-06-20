@@ -177,6 +177,9 @@ def load_all_configs():
         "fixv_vbr_quality":  "27.00",
         "fixv_memory_frames": "20",
         "fixv_render_speed":  "auto",
+        # --- fix colors ---
+        "fixc_ref_path":    r"",
+        "fixc_target_path": r"",
         # --- encode ---
         "mkv_path":       r"",
         "hf_cache":       "",
@@ -355,6 +358,12 @@ state = {
     "fixv_last_input":         None,   # PIL Image
     "fixv_last_original_path":  "",
     "fixv_is_running":          False,
+    # --- fix colors ---
+    "fixc_ref_input":            None,   # PIL Image
+    "fixc_ref_original_path":    "",
+    "fixc_target_input":         None,   # PIL Image
+    "fixc_target_original_path": "",
+    "fixc_output":               None,   # PIL Image
 }
 
 
@@ -1424,6 +1433,51 @@ tab6_layout = [
 ]
 
 # ---------------------------------------------------------------------------
+# TAB 7 — Fix Colors
+# ---------------------------------------------------------------------------
+tab7_layout = [
+    [sg.Text("Fix Colors", font=("Any", 14, "bold"))],
+
+    # Reference Image
+    [sg.Text("Reference Image (Color)", font=("Any", 12, "bold")),
+     sg.Text("(drag & drop)", font=("Any", 8))],
+    [sg.Button("Load Image", key="-FIXC_REF_LOAD-"),
+     sg.Input(cfg.get("fixc_ref_path", ""), key="-FIXC_REF_PATH-", disabled=True, expand_x=True),
+     sg.Button("Browse...", key="-FIXC_REF_BROWSE-")],
+
+    [sg.HorizontalSeparator()],
+
+    # Target Image
+    [sg.Text("Target Image (B&W)", font=("Any", 12, "bold")),
+     sg.Text("(drag & drop)", font=("Any", 8))],
+    [sg.Button("Load Image", key="-FIXC_TARGET_LOAD-"),
+     sg.Input(cfg.get("fixc_target_path", ""), key="-FIXC_TARGET_PATH-", disabled=True, expand_x=True),
+     sg.Button("Browse...", key="-FIXC_TARGET_BROWSE-")],
+
+    [sg.HorizontalSeparator()],
+
+    # Three previews side by side
+    [sg.Column([
+        [sg.Text("Reference")],
+        [sg.Image(data=b'', key="-FIXC_REF_IMG-", size=(250, 240), background_color="black")],
+    ]),
+     sg.Column([
+        [sg.Text("Target")],
+        [sg.Image(data=b'', key="-FIXC_TARGET_IMG-", size=(250, 240), background_color="black")],
+    ]),
+     sg.Column([
+        [sg.Text("Output")],
+        [sg.Image(data=b'', key="-FIXC_OUT_IMG-", size=(250, 240), background_color="black")],
+    ])],
+
+    [sg.Button("Colorize", key="-FIXC_COLORIZE-", size=(16, 2), button_color=("white", "#1a6b1a")),
+     sg.Button("Overwrite", key="-FIXC_OVERWRITE-"),
+     sg.Button("Save As...", key="-FIXC_SAVE-"),
+     sg.Button("Copy → Fix Image", key="-FIXC_COPY_TO_FIX-")],
+    [sg.Text("", key="-FIXC_STATUS-", size=(60, 1))],
+]
+
+# ---------------------------------------------------------------------------
 # MAIN LAYOUT
 # ---------------------------------------------------------------------------
 layout = [
@@ -1433,7 +1487,8 @@ layout = [
          sg.Tab("2. Colorization", tab3_layout),
          sg.Tab("3. Encode/Merge", tab4_layout),
          sg.Tab("4. Fix Image", tab5_layout),
-          sg.Tab("5. Fix Video", tab6_layout)]
+          sg.Tab("5. Fix Colors", tab7_layout),
+          sg.Tab("6. Fix Video", tab6_layout)]
     ], expand_x=True, expand_y=True)],
     [sg.Button("Save Global Settings"),
      sg.Text("Status: OK", size=(70, 1), expand_x=True,
@@ -1503,6 +1558,43 @@ def _handle_drop_fixv_last(event):
     except Exception:
         pass
 
+# ---- Drag‑and‑drop for Fix Colors tab ----
+def _handle_drop_fixc_ref(event):
+    """Callback for tkinterDnD drop on Fix Colors Reference field."""
+    try:
+        data = event.data
+        if isinstance(data, str):
+            first = data.splitlines()[0] if data else ""
+        elif isinstance(data, (list, tuple)):
+            first = data[0] if data else ""
+        else:
+            first = str(data)
+        if first.startswith("{") and first.endswith("}"):
+            first = first[1:-1]
+        if first:
+            window["-FIXC_REF_PATH-"].update(first)
+            window.write_event_value("-FIXC_REF_LOAD-", None)
+    except Exception:
+        pass
+
+def _handle_drop_fixc_target(event):
+    """Callback for tkinterDnD drop on Fix Colors Target field."""
+    try:
+        data = event.data
+        if isinstance(data, str):
+            first = data.splitlines()[0] if data else ""
+        elif isinstance(data, (list, tuple)):
+            first = data[0] if data else ""
+        else:
+            first = str(data)
+        if first.startswith("{") and first.endswith("}"):
+            first = first[1:-1]
+        if first:
+            window["-FIXC_TARGET_PATH-"].update(first)
+            window.write_event_value("-FIXC_TARGET_LOAD-", None)
+    except Exception:
+        pass
+
 try:
     from tkinterdnd2 import TkinterDnD, DND_FILES
     TkinterDnD.require(window.TKroot)
@@ -1515,21 +1607,76 @@ try:
     # Fix Video tab — Last Reference
     window["-FIXV_LAST_PATH-"].widget.drop_target_register(DND_FILES)
     window["-FIXV_LAST_PATH-"].widget.dnd_bind("<<Drop>>", _handle_drop_fixv_last)
+    # Fix Colors tab — Reference
+    window["-FIXC_REF_PATH-"].widget.drop_target_register(DND_FILES)
+    window["-FIXC_REF_PATH-"].widget.dnd_bind("<<Drop>>", _handle_drop_fixc_ref)
+    # Fix Colors tab — Target
+    window["-FIXC_TARGET_PATH-"].widget.drop_target_register(DND_FILES)
+    window["-FIXC_TARGET_PATH-"].widget.dnd_bind("<<Drop>>", _handle_drop_fixc_target)
     print("[DnD] tkinterDnD initialized", flush=True)
 except Exception as _dnd_e:
     print(f"[DnD] not available: {_dnd_e}", flush=True)
+
+# ---------------------------------------------------------------------------
+# FIX COLORS — Colorize worker (local CMNET2, non-RPC)
+# ---------------------------------------------------------------------------
+def _fixc_colorize_worker(values, window):
+    """Background thread: colorize via CMNET2 and post result via event."""
+    import vscmnet2  # delayed import
+    from vscmnet2 import pil_cmnet2_colorize
+    # project_dir must point to the colormnet2 subdir because the render
+    # joins it with '../weights/...' to reach vscmnet2/weights/
+    _project_dir = os.path.join(os.path.dirname(vscmnet2.__file__), 'colormnet2')
+    try:
+        ref_img = state.get("fixc_ref_input")
+        target_img = state.get("fixc_target_input")
+
+        if ref_img is None or target_img is None:
+            window.write_event_value("-FIXC_LOG-", "⚠️ Both reference and target images must be loaded.")
+            return
+
+        window.write_event_value("-LOG-", "[Fix Colors] Colorizing...")
+        t0 = time.time()
+        out = pil_cmnet2_colorize(ref_img, target_img, project_dir=_project_dir)
+        elapsed = time.time() - t0
+
+        window.write_event_value("-LOG-", f"[Fix Colors] Done ({elapsed:.1f}s)")
+        window.write_event_value("-FIXC_DONE-", (out, elapsed))
+    except Exception as e:
+        window.write_event_value("-LOG-", f"[Fix Colors] Error: {e}")
+        window.write_event_value("-FIXC_LOG-", f"⚠️ {e}")
+
+
+def do_fixc_colorize(values, window):
+    """Launch CMNET2 colorization in a background thread (non-blocking)."""
+    if state.get("fixc_ref_input") is None:
+        window["-FIXC_STATUS-"].update("⚠️ No reference image loaded")
+        return
+    if state.get("fixc_target_input") is None:
+        window["-FIXC_STATUS-"].update("⚠️ No target image loaded")
+        return
+
+    window["-FIXC_STATUS-"].update("⏳ Colorizing...")
+    window["-FIXC_COLORIZE-"].update(disabled=True)
+    threading.Thread(target=_fixc_colorize_worker,
+                     args=(values, window),
+                     daemon=True).start()
+
 
 # ---------------------------------------------------------------------------
 # FIX VIDEO — Recolor thread
 # ---------------------------------------------------------------------------
 def _fixv_recolor_thread(values, window):
     """Background thread: re-encode video with colorization via NVEnc."""
+    log_file = None
     try:
         state["fixv_is_running"] = True
         state["stop_requested"] = False
 
         def _log(msg):
             window.write_event_value("-LOG-", f"[Recolor] {msg}")
+            if log_file:
+                print(f"[{time.strftime('%H:%M:%S')}] {msg}", file=log_file, flush=True)
 
         base_dir    = values["-FIXV_BASE_DIR-"].strip()
         video_name  = values["-FIXV_VIDEO_DROPDOWN-"]
@@ -1569,6 +1716,14 @@ def _fixv_recolor_thread(values, window):
         video_base_path = os.path.splitext(video_name)[0]
         sfx = "_dt-recolor.h265" if "cmnet2" in video_base_path else "_cmnet2_dt-recolor.h265"
         out_video_file = os.path.join(base_dir, video_base_path + sfx)
+
+        # Open log file
+        log_sfx = "_dt-recolor_log.txt" if "cmnet2" in video_base_path else "_cmnet2_dt-recolor_log.txt"
+        log_path = os.path.join(base_dir, video_base_path + log_sfx)
+        log_file = open(log_path, "a", encoding="utf-8")
+        _log(f"--- RECOLOR SESSION STARTED: {time.strftime('%Y-%m-%d %H:%M:%S')} ---")
+        _log(f"Video: {orig_video_path}")
+        _log(f"Output: {out_video_file}")
 
         # Build VapourSynth command
         encode_vpy_path = os.path.join(values["-SCRIPT_DIR-"], encode_vpy)
@@ -1658,6 +1813,11 @@ def _fixv_recolor_thread(values, window):
         window.write_event_value("-LOG-", f"[Recolor] Fatal error: {e}")
         window.write_event_value("-FIXV_DONE-", False)
     finally:
+        if log_file:
+            status = "STOPPED" if state["stop_requested"] else "COMPLETED"
+            print(f"--- RECOLOR SESSION {status}: {time.strftime('%Y-%m-%d %H:%M:%S')} ---\n",
+                  file=log_file, flush=True)
+            log_file.close()
         state["fixv_is_running"] = False
         state["current_process"] = None
 
@@ -1885,6 +2045,120 @@ while True:
             except Exception:
                 pass
 
+    # ---- Fix Colors tab ----
+    if event == "-FIXC_REF_LOAD-":
+        path = values["-FIXC_REF_PATH-"]
+        if path and os.path.isfile(path):
+            try:
+                img = Image.open(path).convert("RGB")
+                state["fixc_ref_input"] = img.copy()
+                state["fixc_ref_original_path"] = path
+                img.thumbnail((250, 240), Image.Resampling.LANCZOS)
+                buf = io.BytesIO()
+                img.save(buf, format="PNG")
+                window["-FIXC_REF_IMG-"].update(data=buf.getvalue())
+                window["-FIXC_STATUS-"].update(f"Ref: {os.path.basename(path)}")
+            except Exception as e:
+                window["-FIXC_STATUS-"].update(f"⚠️ {e}")
+
+    if event == "-FIXC_REF_BROWSE-":
+        _script = os.path.join(os.path.dirname(__file__), "load_image_DtD_GUI.py")
+        _proc = subprocess.run(
+            [sys.executable, _script],
+            capture_output=True, text=True, timeout=120)
+        _path = (_proc.stdout or "").strip()
+        if _path and os.path.isfile(_path):
+            window["-FIXC_REF_PATH-"].update(_path)
+            window.write_event_value("-FIXC_REF_LOAD-", None)
+
+    if event == "-FIXC_TARGET_LOAD-":
+        path = values["-FIXC_TARGET_PATH-"]
+        if path and os.path.isfile(path):
+            try:
+                img = Image.open(path).convert("RGB")
+                state["fixc_target_input"] = img.copy()
+                state["fixc_target_original_path"] = path
+                img.thumbnail((250, 240), Image.Resampling.LANCZOS)
+                buf = io.BytesIO()
+                img.save(buf, format="PNG")
+                window["-FIXC_TARGET_IMG-"].update(data=buf.getvalue())
+                window["-FIXC_STATUS-"].update(f"Target: {os.path.basename(path)}")
+            except Exception as e:
+                window["-FIXC_STATUS-"].update(f"⚠️ {e}")
+
+    if event == "-FIXC_TARGET_BROWSE-":
+        _script = os.path.join(os.path.dirname(__file__), "load_image_DtD_GUI.py")
+        _proc = subprocess.run(
+            [sys.executable, _script],
+            capture_output=True, text=True, timeout=120)
+        _path = (_proc.stdout or "").strip()
+        if _path and os.path.isfile(_path):
+            window["-FIXC_TARGET_PATH-"].update(_path)
+            window.write_event_value("-FIXC_TARGET_LOAD-", None)
+
+    if event == "-FIXC_COLORIZE-":
+        do_fixc_colorize(values, window)
+
+    if event == "-FIXC_DONE-":
+        out, elapsed = values["-FIXC_DONE-"]
+        state["fixc_output"] = out
+        _preview = out.copy()
+        _preview.thumbnail((250, 240), Image.Resampling.LANCZOS)
+        buf = io.BytesIO()
+        _preview.save(buf, format="PNG")
+        window["-FIXC_OUT_IMG-"].update(data=buf.getvalue())
+        window["-FIXC_STATUS-"].update(f"✅ Done ({elapsed:.1f}s)")
+        window["-FIXC_COLORIZE-"].update(disabled=False)
+
+    if event == "-FIXC_LOG-":
+        window["-LOG_BOX-"].print(values[event])
+        window["-FIXC_STATUS-"].update(values[event])
+        window["-FIXC_COLORIZE-"].update(disabled=False)
+
+    if event == "-FIXC_OVERWRITE-":
+        out = state.get("fixc_output")
+        orig = state.get("fixc_target_original_path", "")
+        if out is None:
+            sg.popup_error("No output image to save.")
+        elif not orig or not os.path.isfile(orig):
+            sg.popup_error("Original target file no longer available.")
+        else:
+            out.save(orig)
+            window["-FIXC_STATUS-"].update(f"Overwritten: {os.path.basename(orig)}")
+
+    if event == "-FIXC_SAVE-":
+        out = state.get("fixc_output")
+        if out is None:
+            sg.popup_error("No output image to save.")
+        else:
+            src_path = state.get("fixc_target_original_path", "") or values["-FIXC_TARGET_PATH-"]
+            default_dir  = os.path.dirname(src_path) if src_path else ""
+            _src_ext = os.path.splitext(src_path)[1] if src_path else ".png"
+            default_name = os.path.splitext(os.path.basename(src_path))[0] + "_colorized" + _src_ext if src_path else "colorized.png"
+            default_path = os.path.join(default_dir, default_name) if default_dir else default_name
+            dest = sg.popup_get_file("Save as", save_as=True,
+                                     default_path=default_path,
+                                     file_types=(("PNG", "*.png"), ("JPG", "*.jpg")))
+            if dest:
+                out.save(dest)
+                window["-FIXC_STATUS-"].update(f"Saved: {os.path.basename(dest)}")
+
+    if event == "-FIXC_COPY_TO_FIX-":
+        out = state.get("fixc_output")
+        if out is None:
+            window["-FIXC_STATUS-"].update("⚠️ No output to copy")
+        else:
+            state["fix_input"] = out.copy()
+            state["fix_original_path"] = "[from Fix Colors output]"
+            _preview = out.copy()
+            _preview.thumbnail((370, 350), Image.Resampling.LANCZOS)
+            buf = io.BytesIO()
+            _preview.save(buf, format="PNG")
+            window["-FIX_IMG_BW-"].update(data=buf.getvalue())
+            window["-FIX_PATH-"].update("[from Fix Colors output]")
+            window["-FIX_STATUS-"].update("Loaded: from Fix Colors output")
+            window["-FIXC_STATUS-"].update("Copied output → Fix Image")
+
     # ---- RPC server connection ----
     if event == "-CONNECT-":
         host = values["-RPC_HOST-"].strip()
@@ -1971,6 +2245,9 @@ while True:
             "fixv_vbr_quality":        values["-FIXV_VBR_QUALITY-"],
             "fixv_memory_frames":      values["-FIXV_MEMORY_FRAMES-"],
             "fixv_render_speed":       values["-FIXV_RENDER_SPEED-"],
+            # fix colors
+            "fixc_ref_path":          values["-FIXC_REF_PATH-"],
+            "fixc_target_path":       values["-FIXC_TARGET_PATH-"],
             "mkv_path":              values["-MKV_PATH-"],
             "hf_cache":              values["-CACHE_DIR-"],
             "prompt":                values["-PROMPT-"],

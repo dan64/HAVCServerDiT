@@ -22,7 +22,8 @@ and orchestrates a full video colorization pipeline: extraction → AI colorizat
   - [Tab 2 — Colorization](#tab-2--colorization)
   - [Tab 3 — Encode / Merge](#tab-3--encode--merge)
   - [Tab 4 — Fix Image](#tab-4--fix-image)
-  - [Tab 5 — Fix Video](#tab-5--fix-video)
+  - [Tab 5 — Fix Colors](#tab-5--fix-colors)
+  - [Tab 6 — Fix Video](#tab-6--fix-video)
 - [Workflow: Step by Step](#workflow-step-by-step)
   - [Step 1: Extract Reference Frames](#step-1-extract-reference-frames)
   - [Step 2: Colorize Frames (AI)](#step-2-colorize-frames-ai)
@@ -222,7 +223,7 @@ set PYTHON_EXE=C:\Users\YourName\.conda\envs\my-env\python.exe
 
 ## Interface Guide
 
-The GUI has six tabs plus a persistent status bar at the bottom.
+The GUI has seven tabs plus a persistent status bar at the bottom.
 
 ### Dashboard
 
@@ -316,9 +317,34 @@ output is stored in memory and saved to disk via the **Save As...** button.
 
 > **Prerequisite**: the HAVC DiT Server must be connected (Tab 2 — Connect).
 
-### Tab 5 — Fix Video
+### Tab 5 — Fix Colors
 
 ![GUI Tab #5](https://github.com/dan64/HAVCServerDiT/blob/main/GUI/assets/gui_page6.jpg)
+
+A standalone image colorization tab that uses the local **CMNET2** model
+(exemplar-based color propagation) instead of the DiT RPC server. It
+colorizes a B&W target image using a color reference image as context.
+
+| Control | Description |
+|---------|-------------|
+| **Reference Image (Color)** | Load a color reference image (drag & drop or Browse) that provides the color palette |
+| **Target Image (B&W)** | Load the B&W image to colorize (drag & drop or Browse) |
+| **Colorize** | Run CMNET2 colorization in a background thread. The first call loads the model (~5–10 s); subsequent calls reuse it (~1–2 s) |
+| **Overwrite** | Overwrite the original target file with the colorized result |
+| **Save As...** | Save the colorized result to a new file (PNG / JPG) |
+| **Copy → Fix Image** | Copy the colorized output as the input image for Tab 4 (Fix Image), enabling a two‑stage pipeline: CMNET2 → DiT RPC |
+
+Three preview panels show the reference, target, and colorized output
+side‑by‑side (250×240 px each). Full‑resolution images are always preserved
+in memory; resizing only applies to the previews.
+
+> **Prerequisite**: `vscmnet2` must be installed and model weights/checkpoints
+> must be present (see [Installation](#3-install-vscmnet2)).
+> No RPC connection required — CMNET2 runs entirely on the local GPU.
+
+### Tab 6 — Fix Video
+
+![GUI Tab #6](https://github.com/dan64/HAVCServerDiT/blob/main/GUI/assets/gui_page7.jpg)
 
 A standalone video recoloring tab that runs a VapourSynth + NVEnc pipeline
 using the selected video, encode script, and two reference images.
@@ -347,7 +373,9 @@ missing, an error popup instructs the user to install NVEncC in `tools\NVEncC`.
 
 The output file is named `[video]_cmnet2_dt-recolor.mkv` and is saved in the
 video directory. The `.h265` intermediate is automatically converted to `.mkv`
-via mkvmerge and deleted.
+via mkvmerge and deleted. A log file `[video]_dt-recolor_log.txt` (or
+`_cmnet2_dt-recolor_log.txt`) is also written to the same directory with the
+full session output.
 
 > **Important**: this tab uses **NVEnc only** — the x265 software encoder is
 > not available here. NVEncC64.exe must be installed.
@@ -455,6 +483,7 @@ startup and includes:
 - Extraction parameters
 - Encoding parameters (CRF, FPS, encoder choice)
 - Merge weight and VBR quality
+- Fix Colors reference/target image paths
 - RPC host and port
 - Window size
 

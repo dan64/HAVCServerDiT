@@ -84,12 +84,12 @@ A standalone **Fix Colors** tab (`Tab 5`) has been added to the desktop GUI (`GU
 
 ![GUI Tab #5](https://github.com/dan64/HAVCServerDiT/blob/main/GUI/assets/gui_page6.jpg)
 
-It colorizes a B&W target image using a color reference image via the local **CMNET2** model
+It colorizes a B&W or colorized target image using a color reference image via the local **CMNET2** model
 (exemplar-based color propagation) — no RPC server required:
 
 1. **Load** a color reference image (drag & drop or Browse)
 2. **Load** a B&W target image (drag & drop or Browse)
-3. **Colorize** — runs `vscmnet2.pil_cmnet2_colorize()` in a background thread
+3. **Colorize** — runs `vscmnet2.pil_cmnet2_colorize()` in a background thread. It allows to propagate the reference colors to target image.
 
 Key features:
 

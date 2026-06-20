@@ -24,7 +24,7 @@ git pull
 pip install -r GUI\requirements.txt
 
 # 4) Update vscmnet2 (if a newer wheel is available in packages/)
-pip install packages\vscmnet2-1.0.3-py3-none-any.whl
+pip install packages\vscmnet2-1.0.5-py3-none-any.whl
 
 # 5) Re-apply the Nunchaku patch
 python patch_nunchaku.py

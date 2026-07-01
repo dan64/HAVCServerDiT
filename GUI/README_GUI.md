@@ -297,23 +297,38 @@ as frames are processed.
 A standalone image colorization tab independent of the video pipeline.
 Supports both SHM (same-host) and PNG-over-RPC (remote server) transport.
 
+**Single‑image mode** (default):
+
 | Control | Description |
 |---------|-------------|
 | **Colorization Steps** | Inference steps (default: 2) |
-| **Convert in B&W before colorization** | Check/Unchek if you want to colorize/fix an image already colorized |
-| **Prompt** | Text prompt for the model |
-| **Max** | Max prompts history size |
-| **Delete** | Delete current prompt from history list |
-| **Clear** | Clear the prompt's history list |
-| **Load Image** | Load image from drag-and-drop or Browser button (via `load_image_DtD_GUI.py`) |
+| **Convert in B&W** | Convert the input to grayscale before colorization (useful for re‑colorizing) |
+| **Prompt** | Text prompt for the model (combo with history) |
+| **Max / Delete / Clear** | Prompt history management |
+| **Load Image** | Load image via the ComboBox, drag‑and‑drop, or Browse |
 | **Colorize** | Run colorization with fixed seed (42) |
 | **Colorize (Random)** | Run colorization with random seed for variation |
-| **Overwrite** | Overwrite the last loaded image with last colorized image | 
+| **Overwrite** | Overwrite the original loaded image with the colorized result |
 | **Save As...** | Save the colorized result (PNG / JPG) |
-| **Swap Output** | Copy the output image as input image for the next colorization |
+| **Swap Output → Input** | Copy the output image as input for the next colorization |
 
-The input image is previewed scaled to 370×350 pixels; the full-resolution
-output is stored in memory and saved to disk via the **Save As...** button.
+**Batch processing** (`Enable batch processing` checkbox):
+
+| Control | Description |
+|---------|-------------|
+| **Enable batch processing** | Toggle between single‑image and batch mode |
+| **Clear** | Remove all images from the batch list |
+| **ComboBox** | Shows all loaded images (by basename); select one to preview |
+| **Overwrite** | Overwrites **all** original files with their colorized versions |
+| **Save As...** | Shows a mask dialog (`*_colorized.png`); `*` is replaced with each filename |
+| **Swap Output** | Disabled in batch mode |
+
+In batch mode, each loaded image (drag‑and‑drop or Browse) is appended to the
+list. Pressing **Colorize** processes all images sequentially: the current
+input is shown in the preview, the output updates live, and the status bar
+shows progress (`✅ 3/7`). Outputs are kept in memory — files are written to
+disk only on **Overwrite** or **Save As**. Errors on individual images are
+skipped automatically.
 
 > **Prerequisite**: the HAVC DiT Server must be connected (Tab 2 — Connect).
 
@@ -323,16 +338,35 @@ output is stored in memory and saved to disk via the **Save As...** button.
 
 A standalone image colorization tab that uses the local **CMNET2** model
 (exemplar-based color propagation) instead of the DiT RPC server. It
-colorizes a B&W/Colorized target image using a color reference image as context.
+colorizes a B&W target image using a color reference image as context.
+
+**Single‑image mode** (default):
 
 | Control | Description |
 |---------|-------------|
 | **Reference Image (Color)** | Load a color reference image (drag & drop or Browse) that provides the color palette |
-| **Target Image (B&W)** | Load the B&W image to colorize (drag & drop or Browse) |
-| **Colorize** | Run CMNET2 colorization in a background thread. It allows to propagate the reference colors to target image. The first call loads the model (~10–20 s); subsequent calls reuse it (~5–7 s) |
+| **Target Image (B&W)** | Load the B&W image to colorize via ComboBox, drag & drop, or Browse |
+| **Colorize** | Run CMNET2 colorization in a background thread. The first call loads the model (~5–10 s); subsequent calls reuse it (~1–2 s) |
 | **Overwrite** | Overwrite the original target file with the colorized result |
 | **Save As...** | Save the colorized result to a new file (PNG / JPG) |
 | **Copy → Fix Image** | Copy the colorized output as the input image for Tab 4 (Fix Image), enabling a two‑stage pipeline: CMNET2 → DiT RPC |
+
+**Batch processing** (`Enable batch processing` on the Target Image):
+
+| Control | Description |
+|---------|-------------|
+| **Enable batch processing** | Toggle batch mode for the Target Image |
+| **Clear** | Remove all target images from the batch list |
+| **ComboBox** | Shows all loaded target images; select one to preview |
+| **Overwrite** | Overwrites **all** original target files with their colorized versions |
+| **Save As...** | Mask dialog (`*_colorized.png`); `*` replaced with each filename |
+| **Copy → Fix Image** | Disabled in batch mode |
+
+In batch mode, a single reference image colorizes **multiple target images**
+sequentially. Each target is added via drag‑and‑drop or Browse. **Colorize**
+processes all targets against the same reference, showing progress
+(`✅ 3/7`). Outputs stay in memory until **Overwrite** or **Save As** is
+clicked.
 
 Three preview panels show the reference, target, and colorized output
 side‑by‑side (250×240 px each). Full‑resolution images are always preserved

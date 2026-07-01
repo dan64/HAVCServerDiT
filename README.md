@@ -78,6 +78,29 @@ pip show nunchaku    # Expected: 1.2.1+cu13.0torch2.10
 
 ## 📢 What's New
 
+### 2026-07-01 — Batch Processing for Fix Image & Fix Colors (GUI)
+
+The **Fix Image** (Tab 4) and **Fix Colors** (Tab 5) tabs now support batch
+processing of multiple images:
+
+**Fix Image (Tab 4):**
+- New **Enable batch processing** checkbox — toggles between single-image and batch mode
+- The image field is now a **ComboBox** showing all loaded images (drag & drop / Browse appends)
+- **Colorize** processes all images sequentially against the DiT RPC server
+- **Overwrite** overwrites all originals; **Save As** proposes a `*_colorized` wildcard mask
+- Outputs are kept in memory until explicitly saved; errors on single images are skipped
+- **Swap Output** is automatically disabled in batch mode
+
+**Fix Colors (Tab 5):**
+- Same batch logic on the **Target Image** field — multiple targets against one color reference
+- ComboBox, Clear, sequential colorization via local CMNET2, wildcard save
+- **Copy → Fix Image** disabled in batch mode
+
+Both tabs share the same interaction pattern for batch mode — ComboBox list,
+sequential processing with progress counter, wildcard `*` save mask, memory-only
+outputs until explicit save — while each tab uses its own backend (DiT RPC for
+Fix Image, local CMNET2 for Fix Colors).
+
 ### 2026-06-20 — Fix Colors Tab (GUI)
 
 A standalone **Fix Colors** tab (`Tab 5`) has been added to the desktop GUI (`GUI/CMNET2_colorize_client_GUI.py`).

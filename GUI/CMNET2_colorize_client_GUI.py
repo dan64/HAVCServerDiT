@@ -165,6 +165,7 @@ def load_all_configs():
         # --- fix image ---
         "fix_steps":              "2",
         "fix_bw":                 True,
+        "fix_batch":              False,
         "fix_prompt_max":         "30",
         "fix_prompts":            ["color this image, natural colors."],
         # --- fix video ---
@@ -180,6 +181,7 @@ def load_all_configs():
         # --- fix colors ---
         "fixc_ref_path":    r"",
         "fixc_target_path": r"",
+        "fixc_batch":        False,
         # --- encode ---
         "mkv_path":       r"",
         "hf_cache":       "",
@@ -352,6 +354,9 @@ state = {
     "is_running":      False,
     "total_frames":    -1,
     "fix_prompts":     [],
+    "fix_batch_paths": [],         # list of full paths for batch processing
+    "fix_batch_index": -1,        # current index during batch colorization
+    "fix_batch_outputs": [],      # list of (orig_path, PIL_image) tuples during batch
     # --- fix video ---
     "fixv_first_input":        None,   # PIL Image
     "fixv_first_original_path": "",
@@ -364,6 +369,9 @@ state = {
     "fixc_target_input":         None,   # PIL Image
     "fixc_target_original_path": "",
     "fixc_output":               None,   # PIL Image
+    "fixc_batch_paths":          [],     # list of target paths for batch
+    "fixc_batch_index":          -1,     # current index during batch colorization
+    "fixc_batch_outputs":        [],     # list of (orig_path, PIL_image) tuples
 }
 
 
@@ -1095,11 +1103,30 @@ def _shm_read_fix(shm: SharedMemory, height: int, width: int) -> Image.Image:
 def _is_local_host(host: str) -> bool:  
     return host.strip() in ("127.0.0.1", "localhost", "::1")  
 
-def _fix_colorize_worker(values, window, seed):  
-    """Background thread: colorize and post result via event."""  
+def _fix_batch_add_path(path: str, window) -> str:
+    """Add a path to the batch list and update the combo.
+    In single mode, replaces the single entry. In batch mode, appends.
+    Returns the display name for the combo default_value."""
+    name = os.path.basename(path)
+    batch_on = window["-FIX_BATCH-"].get()
+    if batch_on:
+        if path not in state["fix_batch_paths"]:
+            state["fix_batch_paths"].append(path)
+        window["-FIX_CLEAR-"].update(disabled=False)
+    else:
+        state["fix_batch_paths"] = [path]
+    # Build combo list
+    display = [os.path.basename(p) for p in state["fix_batch_paths"]]
+    window["-FIX_PATH-"].update(values=display, value=name)
+    return name
+
+def _fix_colorize_worker(values, window, seed, pil_in=None):  
+    """Background thread: colorize and post result via event.
+    If pil_in is None, uses state["fix_input"]."""  
     try:  
         rpc = state.get("rpc_client")  
-        pil_in = state.get("fix_input")  
+        if pil_in is None:
+            pil_in = state.get("fix_input")
 
         # Ensure pipeline loaded  
         if not rpc.is_pipeline_loaded():  
@@ -1150,27 +1177,82 @@ def _fix_colorize_worker(values, window, seed):
             res = rpc._proxy_slow.colorize_frame(data, prompt, 0, steps, seed, skip_bw)  
             out = _bytes_to_pil(res.get("data", data)) if res.get("ok") else pil_in  
 
-        elapsed = time.time() - t0  
+        elapsed = time.time() - t0
+
+        # Batch mode: store output in memory (saved to disk only on Overwrite/Save As)
+        batch_on = window["-FIX_BATCH-"].get()
+        if batch_on:
+            orig_path = state.get("fix_original_path", "")
+            state["fix_batch_outputs"].append((orig_path, out.copy()))
+
         window.write_event_value("-FIX_DONE-", (out, elapsed, seed, prompt))  
     except Exception as e:  
         window.write_event_value("-FIX_LOG-", f"⚠️ {e}")  
 
 
 def do_fix_colorize(values, window, seed):  
-    """Launch colorization in a background thread (non-blocking)."""  
+    """Launch colorization in a background thread (non-blocking).
+    In batch mode, processes images sequentially from fix_batch_paths."""  
     rpc = state.get("rpc_client")  
     if rpc is None:  
         sg.popup_error("Not connected to RPC server.")  
         return  
-    if state.get("fix_input") is None:  
-        window["-FIX_STATUS-"].update("⚠️ No image loaded")  
-        return  
 
-    window["-FIX_STATUS-"].update("⏳ Colorizing...")  
-    window["-FIX_COLORIZE-"].update(disabled=True)  
-    window["-FIX_COLORIZE_RND-"].update(disabled=True)  
-    threading.Thread(target=_fix_colorize_worker,  
-                     args=(values, window, seed),  
+    batch_on = window["-FIX_BATCH-"].get()
+    if batch_on and state["fix_batch_paths"]:
+        if not state["fix_batch_paths"]:
+            window["-FIX_STATUS-"].update("⚠️ No images in batch list")
+            return
+        # Start batch processing at index 0
+        state["fix_batch_index"] = 0
+        state["fix_batch_outputs"] = []
+        _start_batch_image(values, window, seed)
+    else:
+        if state.get("fix_input") is None:  
+            window["-FIX_STATUS-"].update("⚠️ No image loaded")  
+            return  
+        window["-FIX_STATUS-"].update("⏳ Colorizing...")  
+        window["-FIX_COLORIZE-"].update(disabled=True)  
+        window["-FIX_COLORIZE_RND-"].update(disabled=True)  
+        threading.Thread(target=_fix_colorize_worker,  
+                         args=(values, window, seed),  
+                         daemon=True).start()
+
+
+def _start_batch_image(values, window, seed):
+    """Load and colorize the next image in the batch list."""
+    idx = state.get("fix_batch_index", 0)
+    paths = state["fix_batch_paths"]
+    if idx >= len(paths):
+        window["-FIX_STATUS-"].update(f"✅ Batch done ({len(paths)} images)")
+        window["-FIX_COLORIZE-"].update(disabled=False)
+        window["-FIX_COLORIZE_RND-"].update(disabled=False)
+        state["fix_batch_index"] = -1
+        return
+
+    path = paths[idx]
+    try:
+        img = Image.open(path).convert("RGB")
+        state["fix_input"] = img.copy()
+        state["fix_original_path"] = path
+        # Show preview of current image
+        _prev = img.copy()
+        _prev.thumbnail((370, 350), Image.Resampling.LANCZOS)
+        buf = io.BytesIO()
+        _prev.save(buf, format="PNG")
+        window["-FIX_IMG_BW-"].update(data=buf.getvalue())
+    except Exception as e:
+        window.write_event_value("-FIX_LOG-", f"⚠️ Batch load error [{os.path.basename(path)}]: {e}")
+        state["fix_batch_index"] += 1
+        _start_batch_image(values, window, seed)
+        return
+
+    total = len(paths)
+    window["-FIX_STATUS-"].update(f"⏳ Colorizing {idx+1}/{total}...")
+    window["-FIX_COLORIZE-"].update(disabled=True)
+    window["-FIX_COLORIZE_RND-"].update(disabled=True)
+    threading.Thread(target=_fix_colorize_worker,
+                     args=(values, window, seed),
                      daemon=True).start()  
 
 
@@ -1344,9 +1426,13 @@ tab5_layout = [
      sg.Button("Delete", key="-FIX_PROMPT_DEL-"),
      sg.Text("Max:"), sg.Input(cfg.get("fix_prompt_max", "30"), key="-FIX_PROMPT_MAX-", size=(4,1))],
 
-    [sg.Text("Drag & Drop a File into the TextBox below, or Browse:")],
+    [sg.Checkbox("Enable batch processing", key="-FIX_BATCH-", default=False,
+                 enable_events=True),
+     sg.Button("Clear", key="-FIX_CLEAR-", disabled=True)],
+    [sg.Text("Drag & Drop a File into the ComboBox below, or Browse:")],
     [sg.Button("Load Image", key="-FIX_LOAD-"),
-     sg.Input("", key="-FIX_PATH-", disabled=True, expand_x=True),
+     sg.Combo([], key="-FIX_PATH-", expand_x=True, readonly=True, enable_events=True,
+              default_value=""),
      sg.Button("Browse...", key="-FIX_BROWSE-")],
 
     [sg.Column([
@@ -1450,8 +1536,12 @@ tab7_layout = [
     # Target Image
     [sg.Text("Target Image (B&W)", font=("Any", 12, "bold")),
      sg.Text("(drag & drop)", font=("Any", 8))],
+    [sg.Checkbox("Enable batch processing", key="-FIXC_BATCH-", default=False,
+                 enable_events=True),
+     sg.Button("Clear", key="-FIXC_CLEAR-", disabled=True)],
     [sg.Button("Load Image", key="-FIXC_TARGET_LOAD-"),
-     sg.Input(cfg.get("fixc_target_path", ""), key="-FIXC_TARGET_PATH-", disabled=True, expand_x=True),
+     sg.Combo([], key="-FIXC_TARGET_PATH-", expand_x=True, readonly=True, enable_events=True,
+              default_value=""),
      sg.Button("Browse...", key="-FIXC_TARGET_BROWSE-")],
 
     [sg.HorizontalSeparator()],
@@ -1516,7 +1606,7 @@ def _handle_drop(event):
         if first.startswith("{") and first.endswith("}"):
             first = first[1:-1]
         if first:
-            window["-FIX_PATH-"].update(first)
+            _fix_batch_add_path(first, window)
             window.write_event_value("-FIX_LOAD-", None)
     except Exception:
         pass
@@ -1590,7 +1680,7 @@ def _handle_drop_fixc_target(event):
         if first.startswith("{") and first.endswith("}"):
             first = first[1:-1]
         if first:
-            window["-FIXC_TARGET_PATH-"].update(first)
+            _fixc_batch_add_path(first, window)
             window.write_event_value("-FIXC_TARGET_LOAD-", None)
     except Exception:
         pass
@@ -1620,6 +1710,21 @@ except Exception as _dnd_e:
 # ---------------------------------------------------------------------------
 # FIX COLORS — Colorize worker (local CMNET2, non-RPC)
 # ---------------------------------------------------------------------------
+def _fixc_batch_add_path(path: str, window) -> str:
+    """Add a path to the Fix Colors target batch list and update the combo."""
+    name = os.path.basename(path)
+    batch_on = window["-FIXC_BATCH-"].get()
+    if batch_on:
+        if path not in state["fixc_batch_paths"]:
+            state["fixc_batch_paths"].append(path)
+        window["-FIXC_CLEAR-"].update(disabled=False)
+    else:
+        state["fixc_batch_paths"] = [path]
+    display = [os.path.basename(p) for p in state["fixc_batch_paths"]]
+    window["-FIXC_TARGET_PATH-"].update(values=display, value=name)
+    return name
+
+
 def _fixc_colorize_worker(values, window):
     """Background thread: colorize via CMNET2 and post result via event."""
     import vscmnet2  # delayed import
@@ -1640,6 +1745,12 @@ def _fixc_colorize_worker(values, window):
         out = pil_cmnet2_colorize(ref_img, target_img, project_dir=_project_dir)
         elapsed = time.time() - t0
 
+        # Batch mode: store output in memory
+        batch_on = window["-FIXC_BATCH-"].get()
+        if batch_on:
+            orig_path = state.get("fixc_target_original_path", "")
+            state["fixc_batch_outputs"].append((orig_path, out.copy()))
+
         window.write_event_value("-LOG-", f"[Fix Colors] Done ({elapsed:.1f}s)")
         window.write_event_value("-FIXC_DONE-", (out, elapsed))
     except Exception as e:
@@ -1647,20 +1758,65 @@ def _fixc_colorize_worker(values, window):
         window.write_event_value("-FIXC_LOG-", f"⚠️ {e}")
 
 
-def do_fixc_colorize(values, window):
-    """Launch CMNET2 colorization in a background thread (non-blocking)."""
-    if state.get("fixc_ref_input") is None:
-        window["-FIXC_STATUS-"].update("⚠️ No reference image loaded")
-        return
-    if state.get("fixc_target_input") is None:
-        window["-FIXC_STATUS-"].update("⚠️ No target image loaded")
+def _start_fixc_batch_image(values, window):
+    """Load and colorize the next target image in the batch list."""
+    idx = state.get("fixc_batch_index", 0)
+    paths = state["fixc_batch_paths"]
+    if idx >= len(paths):
+        window["-FIXC_STATUS-"].update(f"✅ Batch done ({len(paths)} images)")
+        window["-FIXC_COLORIZE-"].update(disabled=False)
+        state["fixc_batch_index"] = -1
         return
 
-    window["-FIXC_STATUS-"].update("⏳ Colorizing...")
+    path = paths[idx]
+    try:
+        img = Image.open(path).convert("RGB")
+        state["fixc_target_input"] = img.copy()
+        state["fixc_target_original_path"] = path
+        _prev = img.copy()
+        _prev.thumbnail((250, 240), Image.Resampling.LANCZOS)
+        buf = io.BytesIO()
+        _prev.save(buf, format="PNG")
+        window["-FIXC_TARGET_IMG-"].update(data=buf.getvalue())
+    except Exception as e:
+        window.write_event_value("-FIXC_LOG-", f"⚠️ Batch load error [{os.path.basename(path)}]: {e}")
+        state["fixc_batch_index"] += 1
+        _start_fixc_batch_image(values, window)
+        return
+
+    total = len(paths)
+    window["-FIXC_STATUS-"].update(f"⏳ Colorizing {idx+1}/{total}...")
     window["-FIXC_COLORIZE-"].update(disabled=True)
     threading.Thread(target=_fixc_colorize_worker,
                      args=(values, window),
                      daemon=True).start()
+
+
+def do_fixc_colorize(values, window):
+    """Launch CMNET2 colorization in a background thread (non-blocking).
+    In batch mode, processes all target images against the same reference."""
+    ref_img = state.get("fixc_ref_input")
+    if ref_img is None:
+        window["-FIXC_STATUS-"].update("⚠️ No reference image loaded")
+        return
+
+    batch_on = window["-FIXC_BATCH-"].get()
+    if batch_on and state["fixc_batch_paths"]:
+        if not state["fixc_batch_paths"]:
+            window["-FIXC_STATUS-"].update("⚠️ No images in batch list")
+            return
+        state["fixc_batch_index"] = 0
+        state["fixc_batch_outputs"] = []
+        _start_fixc_batch_image(values, window)
+    else:
+        if state.get("fixc_target_input") is None:
+            window["-FIXC_STATUS-"].update("⚠️ No target image loaded")
+            return
+        window["-FIXC_STATUS-"].update("⏳ Colorizing...")
+        window["-FIXC_COLORIZE-"].update(disabled=True)
+        threading.Thread(target=_fixc_colorize_worker,
+                         args=(values, window),
+                         daemon=True).start()
 
 
 # ---------------------------------------------------------------------------
@@ -1833,7 +1989,15 @@ while True:
 
     # ---- Fix Image tab ----
     if event == "-FIX_LOAD-":
-        path = values["-FIX_PATH-"]
+        name = values["-FIX_PATH-"]  # this is the basename from the combo
+        if not name:
+            continue
+        # Resolve basename to full path from fix_batch_paths
+        path = None
+        for p in state["fix_batch_paths"]:
+            if os.path.basename(p) == name:
+                path = p
+                break
         if path and os.path.isfile(path):
             try:
                 img = Image.open(path).convert("RGB")
@@ -1848,6 +2012,12 @@ while True:
             except Exception as e:
                 window["-FIX_STATUS-"].update(f"⚠️ {e}")
 
+    # Combo selection change — load the selected image
+    if event == "-FIX_PATH-":
+        name = values["-FIX_PATH-"]
+        if name:
+            window.write_event_value("-FIX_LOAD-", None)
+
     if event == "-FIX_BROWSE-":
         # Launch load_image_DtD_GUI.py and wait for it to return the file path
         _script = os.path.join(os.path.dirname(__file__), "load_image_DtD_GUI.py")
@@ -1856,10 +2026,36 @@ while True:
             capture_output=True, text=True, timeout=120)
         _path = (_proc.stdout or "").strip()
         if _path and os.path.isfile(_path):
-            window["-FIX_PATH-"].update(_path)
+            _fix_batch_add_path(_path, window)
             window.write_event_value("-FIX_LOAD-", None)
         elif _path:
             window["-FIX_STATUS-"].update(f"⚠️ Invalid: {_path}")
+
+    if event == "-FIX_CLEAR-":
+        state["fix_batch_paths"] = []
+        state["fix_batch_outputs"] = []
+        window["-FIX_PATH-"].update(values=[], value="")
+        window["-FIX_CLEAR-"].update(disabled=True)
+        window["-FIX_STATUS-"].update("Batch list cleared")
+
+    if event == "-FIX_BATCH-":
+        batch_on = values["-FIX_BATCH-"]
+        if batch_on:
+            window["-FIX_CLEAR-"].update(disabled=not bool(state["fix_batch_paths"]))
+            window["-FIX_SWAP-"].update(disabled=True)
+            # Refresh combo to show batch list
+            if state["fix_batch_paths"]:
+                display = [os.path.basename(p) for p in state["fix_batch_paths"]]
+                window["-FIX_PATH-"].update(values=display,
+                                            value=display[-1] if display else "")
+        else:
+            window["-FIX_CLEAR-"].update(disabled=True)
+            window["-FIX_SWAP-"].update(disabled=False)
+            # In single mode, show only the current path
+            path = state.get("fix_original_path", "")
+            if path:
+                name = os.path.basename(path)
+                window["-FIX_PATH-"].update(values=[name], value=name)
 
     if event == "-FIX_SWAP-":
         out = state.get("fix_output")
@@ -1872,7 +2068,7 @@ while True:
             buf = io.BytesIO()
             _preview.save(buf, format="PNG")
             window["-FIX_IMG_BW-"].update(data=buf.getvalue())
-            window["-FIX_PATH-"].update("[swapped from output]")
+            window["-FIX_PATH-"].update(value="[swapped from output]")
             window["-FIX_STATUS-"].update("Swapped: output → input")
 
     if event == "-FIX_PROMPT_CLEAR-":
@@ -1895,32 +2091,65 @@ while True:
         do_fix_colorize(values, window, seed=random.randint(0, 2**31))
 
     if event == "-FIX_OVERWRITE-":
-        out = state.get("fix_output")
-        orig = state.get("fix_original_path", "")
-        if out is None:
-            sg.popup_error("No output image to save.")
-        elif not orig or not os.path.isfile(orig):
-            sg.popup_error("Original file no longer available.")
+        batch_on = window["-FIX_BATCH-"].get()
+        if batch_on and state["fix_batch_outputs"]:
+            # Overwrite all originals with their _colorized versions
+            count = 0
+            for orig_path, out_img in state["fix_batch_outputs"]:
+                out_img.save(orig_path)
+                count += 1
+            window["-FIX_STATUS-"].update(f"Overwritten: {count} files")
         else:
-            out.save(orig)
-            window["-FIX_STATUS-"].update(f"Overwritten: {os.path.basename(orig)}")
+            out = state.get("fix_output")
+            orig = state.get("fix_original_path", "")
+            if out is None:
+                sg.popup_error("No output image to save.")
+            elif not orig or not os.path.isfile(orig):
+                sg.popup_error("Original file no longer available.")
+            else:
+                out.save(orig)
+                window["-FIX_STATUS-"].update(f"Overwritten: {os.path.basename(orig)}")
 
     if event == "-FIX_SAVE-":
-        out = state.get("fix_output")
-        if out is None:
-            sg.popup_error("No output image to save.")
+        batch_on = window["-FIX_BATCH-"].get()
+        if batch_on and state["fix_batch_outputs"]:
+            # Show mask dialog: propose *_colorized pattern
+            ext = ".png"
+            if state["fix_batch_paths"]:
+                ext = os.path.splitext(state["fix_batch_paths"][0])[1] or ".png"
+            default_name = "*_colorized" + ext
+            mask = sg.popup_get_text(
+                "Save batch as (use * as filename wildcard):",
+                "Save Batch As",
+                default_text=default_name)
+            if mask and "*" in mask:
+                count = 0
+                for orig_path, out_img in state["fix_batch_outputs"]:
+                    name = os.path.splitext(os.path.basename(orig_path))[0]
+                    dest = mask.replace("*", name)
+                    dest_dir = os.path.dirname(orig_path)
+                    dest_path = os.path.join(dest_dir, dest)
+                    out_img.save(dest_path)
+                    count += 1
+                window["-FIX_STATUS-"].update(f"Saved: {count} files")
+            elif mask:
+                sg.popup_error("Mask must contain a * wildcard.")
         else:
-            src_path = state.get("fix_original_path", "") or values["-FIX_PATH-"]
-            default_dir  = os.path.dirname(src_path) if src_path else ""
-            _src_ext = os.path.splitext(src_path)[1] if src_path else ".png"
-            default_name = os.path.splitext(os.path.basename(src_path))[0] + "_colorized" + _src_ext if src_path else "colorized.png"
-            default_path = os.path.join(default_dir, default_name) if default_dir else default_name
-            dest = sg.popup_get_file("Save as", save_as=True,
-                                     default_path=default_path,
-                                     file_types=(("PNG", "*.png"), ("JPG", "*.jpg")))
-            if dest:
-                out.save(dest)
-                window["-FIX_STATUS-"].update(f"Saved: {os.path.basename(dest)}")
+            out = state.get("fix_output")
+            if out is None:
+                sg.popup_error("No output image to save.")
+            else:
+                src_path = state.get("fix_original_path", "")
+                default_dir  = os.path.dirname(src_path) if src_path else ""
+                _src_ext = os.path.splitext(src_path)[1] if src_path else ".png"
+                default_name = os.path.splitext(os.path.basename(src_path))[0] + "_colorized" + _src_ext if src_path else "colorized.png"
+                default_path = os.path.join(default_dir, default_name) if default_dir else default_name
+                dest = sg.popup_get_file("Save as", save_as=True,
+                                         default_path=default_path,
+                                         file_types=(("PNG", "*.png"), ("JPG", "*.jpg")))
+                if dest:
+                    out.save(dest)
+                    window["-FIX_STATUS-"].update(f"Saved: {os.path.basename(dest)}")
 
     if event == "-FIX_DONE-":
         out, elapsed, seed, prompt = values[event]
@@ -1930,18 +2159,35 @@ while True:
         buf = io.BytesIO()
         _preview.save(buf, format="PNG")
         window["-FIX_IMG_CLR-"].update(data=buf.getvalue())
-        window["-FIX_STATUS-"].update(f"✅ Done ({elapsed:.1f}s, seed={seed})")
         window["-FIX_PROMPT-"].update(values=state["fix_prompts"], value=prompt)
-        window["-FIX_COLORIZE-"].update(disabled=False)
-        window["-FIX_COLORIZE_RND-"].update(disabled=False)
         # Auto-save prompts to config
         cfg["fix_prompts"] = state["fix_prompts"]
         save_all_configs(cfg)
 
+        # Batch mode: advance to next image
+        batch_on = window["-FIX_BATCH-"].get()
+        batch_idx = state.get("fix_batch_index", -1)
+        if batch_on and batch_idx >= 0:
+            total = len(state["fix_batch_paths"])
+            window["-FIX_STATUS-"].update(f"✅ {batch_idx+1}/{total} ({elapsed:.1f}s, seed={seed})")
+            state["fix_batch_index"] += 1
+            _start_batch_image(values, window, seed)
+        else:
+            window["-FIX_STATUS-"].update(f"✅ Done ({elapsed:.1f}s, seed={seed})")
+            window["-FIX_COLORIZE-"].update(disabled=False)
+            window["-FIX_COLORIZE_RND-"].update(disabled=False)
+
     if event == "-FIX_LOG-":
         window["-FIX_STATUS-"].update(values[event])
-        window["-FIX_COLORIZE-"].update(disabled=False)
-        window["-FIX_COLORIZE_RND-"].update(disabled=False)
+        # Batch mode: advance past failed image
+        batch_on = window["-FIX_BATCH-"].get()
+        batch_idx = state.get("fix_batch_index", -1)
+        if batch_on and batch_idx >= 0:
+            state["fix_batch_index"] += 1
+            _start_batch_image(values, window, 42)
+        else:
+            window["-FIX_COLORIZE-"].update(disabled=False)
+            window["-FIX_COLORIZE_RND-"].update(disabled=False)
 
     # ---- Fix Video tab ----
     if event == "-FIXV_FIRST_LOAD-":
@@ -2072,7 +2318,15 @@ while True:
             window.write_event_value("-FIXC_REF_LOAD-", None)
 
     if event == "-FIXC_TARGET_LOAD-":
-        path = values["-FIXC_TARGET_PATH-"]
+        name = values["-FIXC_TARGET_PATH-"]
+        if not name:
+            continue
+        # Resolve basename to full path
+        path = None
+        for p in state["fixc_batch_paths"]:
+            if os.path.basename(p) == name:
+                path = p
+                break
         if path and os.path.isfile(path):
             try:
                 img = Image.open(path).convert("RGB")
@@ -2086,6 +2340,12 @@ while True:
             except Exception as e:
                 window["-FIXC_STATUS-"].update(f"⚠️ {e}")
 
+    # Combo selection change
+    if event == "-FIXC_TARGET_PATH-":
+        name = values["-FIXC_TARGET_PATH-"]
+        if name:
+            window.write_event_value("-FIXC_TARGET_LOAD-", None)
+
     if event == "-FIXC_TARGET_BROWSE-":
         _script = os.path.join(os.path.dirname(__file__), "load_image_DtD_GUI.py")
         _proc = subprocess.run(
@@ -2093,8 +2353,32 @@ while True:
             capture_output=True, text=True, timeout=120)
         _path = (_proc.stdout or "").strip()
         if _path and os.path.isfile(_path):
-            window["-FIXC_TARGET_PATH-"].update(_path)
+            _fixc_batch_add_path(_path, window)
             window.write_event_value("-FIXC_TARGET_LOAD-", None)
+
+    if event == "-FIXC_CLEAR-":
+        state["fixc_batch_paths"] = []
+        state["fixc_batch_outputs"] = []
+        window["-FIXC_TARGET_PATH-"].update(values=[], value="")
+        window["-FIXC_CLEAR-"].update(disabled=True)
+        window["-FIXC_STATUS-"].update("Batch list cleared")
+
+    if event == "-FIXC_BATCH-":
+        batch_on = values["-FIXC_BATCH-"]
+        if batch_on:
+            window["-FIXC_CLEAR-"].update(disabled=not bool(state["fixc_batch_paths"]))
+            window["-FIXC_COPY_TO_FIX-"].update(disabled=True)
+            if state["fixc_batch_paths"]:
+                display = [os.path.basename(p) for p in state["fixc_batch_paths"]]
+                window["-FIXC_TARGET_PATH-"].update(values=display,
+                                                    value=display[-1] if display else "")
+        else:
+            window["-FIXC_CLEAR-"].update(disabled=True)
+            window["-FIXC_COPY_TO_FIX-"].update(disabled=False)
+            path = state.get("fixc_target_original_path", "")
+            if path:
+                name = os.path.basename(path)
+                window["-FIXC_TARGET_PATH-"].update(values=[name], value=name)
 
     if event == "-FIXC_COLORIZE-":
         do_fixc_colorize(values, window)
@@ -2107,41 +2391,87 @@ while True:
         buf = io.BytesIO()
         _preview.save(buf, format="PNG")
         window["-FIXC_OUT_IMG-"].update(data=buf.getvalue())
-        window["-FIXC_STATUS-"].update(f"✅ Done ({elapsed:.1f}s)")
-        window["-FIXC_COLORIZE-"].update(disabled=False)
+
+        # Batch mode: advance to next image
+        batch_on = window["-FIXC_BATCH-"].get()
+        batch_idx = state.get("fixc_batch_index", -1)
+        if batch_on and batch_idx >= 0:
+            total = len(state["fixc_batch_paths"])
+            window["-FIXC_STATUS-"].update(f"✅ {batch_idx+1}/{total} ({elapsed:.1f}s)")
+            state["fixc_batch_index"] += 1
+            _start_fixc_batch_image(values, window)
+        else:
+            window["-FIXC_STATUS-"].update(f"✅ Done ({elapsed:.1f}s)")
+            window["-FIXC_COLORIZE-"].update(disabled=False)
 
     if event == "-FIXC_LOG-":
         window["-LOG_BOX-"].print(values[event])
         window["-FIXC_STATUS-"].update(values[event])
-        window["-FIXC_COLORIZE-"].update(disabled=False)
+        batch_on = window["-FIXC_BATCH-"].get()
+        batch_idx = state.get("fixc_batch_index", -1)
+        if batch_on and batch_idx >= 0:
+            state["fixc_batch_index"] += 1
+            _start_fixc_batch_image(values, window)
+        else:
+            window["-FIXC_COLORIZE-"].update(disabled=False)
 
     if event == "-FIXC_OVERWRITE-":
-        out = state.get("fixc_output")
-        orig = state.get("fixc_target_original_path", "")
-        if out is None:
-            sg.popup_error("No output image to save.")
-        elif not orig or not os.path.isfile(orig):
-            sg.popup_error("Original target file no longer available.")
+        batch_on = window["-FIXC_BATCH-"].get()
+        if batch_on and state["fixc_batch_outputs"]:
+            count = 0
+            for orig_path, out_img in state["fixc_batch_outputs"]:
+                out_img.save(orig_path)
+                count += 1
+            window["-FIXC_STATUS-"].update(f"Overwritten: {count} files")
         else:
-            out.save(orig)
-            window["-FIXC_STATUS-"].update(f"Overwritten: {os.path.basename(orig)}")
+            out = state.get("fixc_output")
+            orig = state.get("fixc_target_original_path", "")
+            if out is None:
+                sg.popup_error("No output image to save.")
+            elif not orig or not os.path.isfile(orig):
+                sg.popup_error("Original target file no longer available.")
+            else:
+                out.save(orig)
+                window["-FIXC_STATUS-"].update(f"Overwritten: {os.path.basename(orig)}")
 
     if event == "-FIXC_SAVE-":
-        out = state.get("fixc_output")
-        if out is None:
-            sg.popup_error("No output image to save.")
+        batch_on = window["-FIXC_BATCH-"].get()
+        if batch_on and state["fixc_batch_outputs"]:
+            ext = ".png"
+            if state["fixc_batch_paths"]:
+                ext = os.path.splitext(state["fixc_batch_paths"][0])[1] or ".png"
+            mask = sg.popup_get_text(
+                "Save batch as (use * as filename wildcard):",
+                "Save Batch As",
+                default_text="*_colorized" + ext)
+            if mask and "*" in mask:
+                count = 0
+                for orig_path, out_img in state["fixc_batch_outputs"]:
+                    name = os.path.splitext(os.path.basename(orig_path))[0]
+                    dest = mask.replace("*", name)
+                    dest_dir = os.path.dirname(orig_path)
+                    dest_path = os.path.join(dest_dir, dest)
+                    out_img.save(dest_path)
+                    count += 1
+                window["-FIXC_STATUS-"].update(f"Saved: {count} files")
+            elif mask:
+                sg.popup_error("Mask must contain a * wildcard.")
         else:
-            src_path = state.get("fixc_target_original_path", "") or values["-FIXC_TARGET_PATH-"]
-            default_dir  = os.path.dirname(src_path) if src_path else ""
-            _src_ext = os.path.splitext(src_path)[1] if src_path else ".png"
-            default_name = os.path.splitext(os.path.basename(src_path))[0] + "_colorized" + _src_ext if src_path else "colorized.png"
-            default_path = os.path.join(default_dir, default_name) if default_dir else default_name
-            dest = sg.popup_get_file("Save as", save_as=True,
-                                     default_path=default_path,
-                                     file_types=(("PNG", "*.png"), ("JPG", "*.jpg")))
-            if dest:
-                out.save(dest)
-                window["-FIXC_STATUS-"].update(f"Saved: {os.path.basename(dest)}")
+            out = state.get("fixc_output")
+            if out is None:
+                sg.popup_error("No output image to save.")
+            else:
+                src_path = state.get("fixc_target_original_path", "")
+                default_dir  = os.path.dirname(src_path) if src_path else ""
+                _src_ext = os.path.splitext(src_path)[1] if src_path else ".png"
+                default_name = os.path.splitext(os.path.basename(src_path))[0] + "_colorized" + _src_ext if src_path else "colorized.png"
+                default_path = os.path.join(default_dir, default_name) if default_dir else default_name
+                dest = sg.popup_get_file("Save as", save_as=True,
+                                         default_path=default_path,
+                                         file_types=(("PNG", "*.png"), ("JPG", "*.jpg")))
+                if dest:
+                    out.save(dest)
+                    window["-FIXC_STATUS-"].update(f"Saved: {os.path.basename(dest)}")
 
     if event == "-FIXC_COPY_TO_FIX-":
         out = state.get("fixc_output")
@@ -2155,7 +2485,7 @@ while True:
             buf = io.BytesIO()
             _preview.save(buf, format="PNG")
             window["-FIX_IMG_BW-"].update(data=buf.getvalue())
-            window["-FIX_PATH-"].update("[from Fix Colors output]")
+            window["-FIX_PATH-"].update(value="[from Fix Colors output]")
             window["-FIX_STATUS-"].update("Loaded: from Fix Colors output")
             window["-FIXC_STATUS-"].update("Copied output → Fix Image")
 
@@ -2233,6 +2563,7 @@ while True:
             "fast_pipe":             values["-FAST_PIPE-"],
             "fix_steps":              values["-FIX_STEPS-"],
             "fix_bw":                 values["-FIX_BW-"],
+            "fix_batch":              values["-FIX_BATCH-"],
             "fix_prompt_max":         values["-FIX_PROMPT_MAX-"],
             "fix_prompts":            state["fix_prompts"],
             # fix video
@@ -2248,6 +2579,7 @@ while True:
             # fix colors
             "fixc_ref_path":          values["-FIXC_REF_PATH-"],
             "fixc_target_path":       values["-FIXC_TARGET_PATH-"],
+            "fixc_batch":             values["-FIXC_BATCH-"],
             "mkv_path":              values["-MKV_PATH-"],
             "hf_cache":              values["-CACHE_DIR-"],
             "prompt":                values["-PROMPT-"],

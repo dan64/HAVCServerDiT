@@ -2074,7 +2074,8 @@ while True:
     if event == "-FIX_PROMPT_CLEAR-":
         state["fix_prompts"] = [cfg.get("fix_prompts", ["color this image, natural colors."])[0]]
         window["-FIX_PROMPT-"].update(values=state["fix_prompts"],
-                                     value=state["fix_prompts"][0])
+                                     value=state["fix_prompts"][0],
+                                     size=(40, None))
 
     if event == "-FIX_PROMPT_DEL-":
         cur = values["-FIX_PROMPT-"]
@@ -2082,7 +2083,8 @@ while True:
         if cur in state["fix_prompts"] and state["fix_prompts"].index(cur) != 0:
             state["fix_prompts"].remove(cur)
             window["-FIX_PROMPT-"].update(values=state["fix_prompts"],
-                                         value=state["fix_prompts"][0])
+                                         value=state["fix_prompts"][0],
+                                         size=(40, None))
 
     if event == "-FIX_COLORIZE-":
         do_fix_colorize(values, window, seed=42)
@@ -2159,7 +2161,7 @@ while True:
         buf = io.BytesIO()
         _preview.save(buf, format="PNG")
         window["-FIX_IMG_CLR-"].update(data=buf.getvalue())
-        window["-FIX_PROMPT-"].update(values=state["fix_prompts"], value=prompt)
+        window["-FIX_PROMPT-"].update(values=state["fix_prompts"], value=prompt, size=(40, None))
         # Auto-save prompts to config
         cfg["fix_prompts"] = state["fix_prompts"]
         save_all_configs(cfg)

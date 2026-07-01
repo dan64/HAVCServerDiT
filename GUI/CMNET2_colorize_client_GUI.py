@@ -2019,17 +2019,29 @@ while True:
             window.write_event_value("-FIX_LOAD-", None)
 
     if event == "-FIX_BROWSE-":
-        # Launch load_image_DtD_GUI.py and wait for it to return the file path
-        _script = os.path.join(os.path.dirname(__file__), "load_image_DtD_GUI.py")
-        _proc = subprocess.run(
-            [sys.executable, _script],
-            capture_output=True, text=True, timeout=120)
-        _path = (_proc.stdout or "").strip()
-        if _path and os.path.isfile(_path):
-            _fix_batch_add_path(_path, window)
-            window.write_event_value("-FIX_LOAD-", None)
-        elif _path:
-            window["-FIX_STATUS-"].update(f"⚠️ Invalid: {_path}")
+        batch_on = window["-FIX_BATCH-"].get()
+        if batch_on:
+            files = sg.popup_get_file(
+                "Select images (Ctrl+Click for multiple)", multiple_files=True,
+                file_types=(("Image files", "*.png *.jpg *.jpeg *.bmp *.tiff"),))
+            if files:
+                for f in files.split(";"):
+                    f = f.strip()
+                    if f and os.path.isfile(f):
+                        _fix_batch_add_path(f, window)
+                window.write_event_value("-FIX_LOAD-", None)
+        else:
+            # Launch load_image_DtD_GUI.py and wait for it to return the file path
+            _script = os.path.join(os.path.dirname(__file__), "load_image_DtD_GUI.py")
+            _proc = subprocess.run(
+                [sys.executable, _script],
+                capture_output=True, text=True, timeout=120)
+            _path = (_proc.stdout or "").strip()
+            if _path and os.path.isfile(_path):
+                _fix_batch_add_path(_path, window)
+                window.write_event_value("-FIX_LOAD-", None)
+            elif _path:
+                window["-FIX_STATUS-"].update(f"⚠️ Invalid: {_path}")
 
     if event == "-FIX_CLEAR-":
         state["fix_batch_paths"] = []
@@ -2349,14 +2361,26 @@ while True:
             window.write_event_value("-FIXC_TARGET_LOAD-", None)
 
     if event == "-FIXC_TARGET_BROWSE-":
-        _script = os.path.join(os.path.dirname(__file__), "load_image_DtD_GUI.py")
-        _proc = subprocess.run(
-            [sys.executable, _script],
-            capture_output=True, text=True, timeout=120)
-        _path = (_proc.stdout or "").strip()
-        if _path and os.path.isfile(_path):
-            _fixc_batch_add_path(_path, window)
-            window.write_event_value("-FIXC_TARGET_LOAD-", None)
+        batch_on = window["-FIXC_BATCH-"].get()
+        if batch_on:
+            files = sg.popup_get_file(
+                "Select images (Ctrl+Click for multiple)", multiple_files=True,
+                file_types=(("Image files", "*.png *.jpg *.jpeg *.bmp *.tiff"),))
+            if files:
+                for f in files.split(";"):
+                    f = f.strip()
+                    if f and os.path.isfile(f):
+                        _fixc_batch_add_path(f, window)
+                window.write_event_value("-FIXC_TARGET_LOAD-", None)
+        else:
+            _script = os.path.join(os.path.dirname(__file__), "load_image_DtD_GUI.py")
+            _proc = subprocess.run(
+                [sys.executable, _script],
+                capture_output=True, text=True, timeout=120)
+            _path = (_proc.stdout or "").strip()
+            if _path and os.path.isfile(_path):
+                _fixc_batch_add_path(_path, window)
+                window.write_event_value("-FIXC_TARGET_LOAD-", None)
 
     if event == "-FIXC_CLEAR-":
         state["fixc_batch_paths"] = []

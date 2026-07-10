@@ -5,7 +5,7 @@ Two backends, one API : pick the one that fits your hardware:
 
 - **nunchaku-qwen**: SVDQuant FP4/INT4 transformer via [Nunchaku](https://github.com/nunchaku-ai/nunchaku) : **4 sec/frame**, requires RTX 30/40/50 (16 GB VRAM) & CUDA 13.0
 - **gguf-qwen**: ComfyUI-native GGUF pipeline (Q3_K_S, Q4_K_S, Q5_K_M, Q6_K, Q8_0) : **12 sec/frame**, runs on RTX 30/40/50 (12 GB VRAM), zero ComfyUI GUI dependency
-- **longcat-gguf**: [LongCat-Image-Edit-Turbo](https://huggingface.co/meituan-longcat/LongCat-Image-Edit) GGUF pipeline (Q3_K_M–Q8_0) : **~12 sec/frame**, runs on RTX 30/40/50 (12 GB+ VRAM, 32 GB+ RAM), better image quality than gguf-qwen, zero ComfyUI GUI dependency
+- **longcat-gguf**: [LongCat-Image-Edit-Turbo](https://huggingface.co/meituan-longcat/LongCat-Image-Edit-Turbo) GGUF pipeline (Q3_K_M–Q8_0) : **~12 sec/frame**, runs on RTX 30/40/50 (12 GB+ VRAM, 32 GB+ RAM), better image quality than gguf-qwen, zero ComfyUI GUI dependency
 
 ---
 

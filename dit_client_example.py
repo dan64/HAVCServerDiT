@@ -95,7 +95,7 @@ def main():
                         default="Colorize this photo, natural skin tones, "
                                 "vibrant environment. Maintain consistency and details.")
     parser.add_argument("--img-size", type=int, default=0)
-    parser.add_argument("--steps", type=int, default=2)
+    parser.add_argument("--steps", type=int, default=4)
     parser.add_argument("--use-shm", action="store_true",
                         help="Use shared memory transport (same-host only, lower latency)")
     args = parser.parse_args()

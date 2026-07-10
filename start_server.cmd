@@ -11,6 +11,7 @@
 ::   start_server.cmd q5       -> loads Q5_K_M GGUF config  (16 GB VRAM)
 ::   start_server.cmd q6       -> loads Q6_K GGUF config    (18 GB VRAM)
 ::   start_server.cmd q8       -> loads Q8_0 GGUF config    (22 GB VRAM)
+::   start_server.cmd longcat  -> loads LongCat config      (18+ GB VRAM)
 ::
 :: Edit the USER CONFIGURATION block below before first use.
 :: =============================================================================
@@ -53,9 +54,16 @@ if /i "%ARG%"=="q4"   ( set CONFIG_FILE=config\qwen_gguf_q4.json      & set BACK
 if /i "%ARG%"=="q5"   ( set CONFIG_FILE=config\qwen_gguf_q5.json      & set BACKEND=GGUF Q5_K_M )
 if /i "%ARG%"=="q6"   ( set CONFIG_FILE=config\qwen_gguf_q6.json      & set BACKEND=GGUF Q6_K )
 if /i "%ARG%"=="q8"   ( set CONFIG_FILE=config\qwen_gguf_q8.json      & set BACKEND=GGUF Q8_0 )
+:: LongCat
+if /i "%ARG%"=="longcat"     ( set CONFIG_FILE=config\longcat_gguf_q4.json    & set BACKEND=LongCat Q4_K_M )
+if /i "%ARG%"=="longcat-q3"  ( set CONFIG_FILE=config\longcat_gguf_q3.json    & set BACKEND=LongCat Q3_K_M )
+if /i "%ARG%"=="longcat-q4"  ( set CONFIG_FILE=config\longcat_gguf_q4.json    & set BACKEND=LongCat Q4_K_M )
+if /i "%ARG%"=="longcat-q5"  ( set CONFIG_FILE=config\longcat_gguf_q5.json    & set BACKEND=LongCat Q5_K_M )
+if /i "%ARG%"=="longcat-q6"  ( set CONFIG_FILE=config\longcat_gguf_q6.json    & set BACKEND=LongCat Q6_K  )
+if /i "%ARG%"=="longcat-q8"  ( set CONFIG_FILE=config\longcat_gguf_q8.json    & set BACKEND=LongCat Q8_0  )
 
 if "%CONFIG_FILE%"=="" (
-    echo [ERROR] Unknown argument: "%ARG%". Use "q4" ^(default^), "q3", "q5", "q6", "q8", "fp4", or "int4".
+    echo [ERROR] Unknown argument: "%ARG%". Use "q4" ^(default^), "q3", "q5", "q6", "q8", "fp4", "int4", "longcat", "longcat-q3", "longcat-q5", "longcat-q6", or "longcat-q8".
     pause
     exit /b 1
 )

@@ -144,7 +144,7 @@ class FluxKontextImageScale(io.ComfyNode):
         height = image.shape[1]
         aspect_ratio = width / height
         _, width, height = min((abs(aspect_ratio - w / h), w, h) for w, h in PREFERRED_KONTEXT_RESOLUTIONS)
-        image = comfy.utils.common_upscale(image.movedim(-1, 1), width, height, "lanczos", "center").movedim(1, -1)
+        image = comfy.utils.common_upscale(image.movedim(-1, 1), width, height, "lanczos", "disabled").movedim(1, -1)
         return io.NodeOutput(image)
 
     scale = execute  # TODO: remove

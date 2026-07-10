@@ -1073,7 +1073,7 @@ encoder_values:    list[str] = ['x265', 'Nvenc']
 memory_values:     list[str] = [f"{x}" for x in range(10, 110, 10)]
 steps_values:      list[str] = ['2', '4', '8']
 speed_values:    list[str] = ['auto', 'fast', 'medium', 'slow', 'slower']
-model_list:        list[str] = ["nunchaku-qwen", "gguf-qwen"]
+model_list:        list[str] = ["nunchaku-qwen", "gguf-qwen", "longcat-gguf"]
 model_p_list:      list[str] = ["fp4", "int4", "q3", "q4", "q5", "q6", "q8"]
 model_r_list:      list[str] = ["32", "128"]
 model_steps_list:  list[str] = ["4", "8"]
@@ -1348,12 +1348,9 @@ tab3_layout = [
     [sg.Frame("Model Technical Details", [
         [sg.Text("Model Name:"),
          sg.Combo(model_list,      default_value=cfg["model_name"],           key="-MODEL_NAME-",     readonly=True, size=(18,1)),
-         sg.Text("Model Precision:"),
+         sg.Text("Precision:"),
          sg.Combo(model_p_list,    default_value=cfg["model_precision"],      key="-MODEL_PRECISION-",readonly=True, size=(6,1)),
-         sg.Text("Model Rank:"),
-         sg.Combo(model_r_list,    default_value=cfg["model_rank"],           key="-MODEL_RANK-",     readonly=True, size=(6,1)),
-         sg.Text("Model Steps:"),
-         sg.Combo(model_steps_list,default_value=cfg["model_inference_steps"],key="-MODEL_INF_STEPS-",readonly=True, size=(6,1))],
+          sg.Button("Run Server", key="-RUN_SERVER-", button_color=("white", "#1a6b1a"))],
         [sg.Text("Colorization Steps:"),
          sg.Combo(steps_values, default_value=cfg["steps"], key="-STEPS-", readonly=True, size=(6,1)),
          sg.Checkbox("Fast Pipeline", key="-FAST_PIPE-", default=cfg["fast_pipe"])],
@@ -2514,6 +2511,35 @@ while True:
             window["-FIX_PATH-"].update(value="[from Fix Colors output]")
             window["-FIX_STATUS-"].update("Loaded: from Fix Colors output")
             window["-FIXC_STATUS-"].update("Copied output → Fix Image")
+
+    # ---- Run Server ----
+    if event == "-RUN_SERVER-":
+        model_name = values["-MODEL_NAME-"]
+        precision = values["-MODEL_PRECISION-"]
+        arg = ''
+        if model_name == "longcat-gguf":
+            # Map precision to longcat quant variant
+            longcat_quant_map = {"q3": "longcat-q3", "q4": "longcat-q4", "q5": "longcat-q5",
+                                 "q6": "longcat-q6", "q8": "longcat-q8"}
+            arg = longcat_quant_map.get(precision, "longcat-q4")
+        elif model_name == "nunchaku-qwen":
+            arg = precision  # fp4 or int4
+        elif model_name == "gguf-qwen":
+            arg = precision  # q3, q4, q5, q6, q8
+        if arg:
+            server_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            cmd_path = os.path.join(server_dir, 'start_server.cmd')
+            if os.path.isfile(cmd_path):
+                subprocess.Popen(
+                    ['cmd', '/c', 'start', 'Running HAVC Server - ' + model_name, cmd_path, arg],
+                    cwd=server_dir,
+                    creationflags=subprocess.CREATE_NEW_CONSOLE,
+                )
+                window["-LOG_BOX-"].print(f'[Run Server] Launched: {cmd_path} {arg}')
+            else:
+                sg.popup_error(f'start_server.cmd not found at: {cmd_path}')
+        else:
+            sg.popup_error('Unknown model/precision combination.')
 
     # ---- RPC server connection ----
     if event == "-CONNECT-":

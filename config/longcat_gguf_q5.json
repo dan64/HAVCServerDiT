@@ -1,0 +1,12 @@
+{
+    "model_name": "longcat-gguf",
+    "unet_gguf": "LongCat-Image-Edit-Turbo-Q5_K_M.gguf",
+    "clip_gguf": "Qwen2.5-VL-7B-Instruct-Q4_K_M.gguf",
+    "vae_name": "ae.safetensors",
+    "steps": 8,
+    "hf_unet": "vantagewithai/LongCat-Image-Edit-Turbo-GGUF",
+    "hf_clip": "unsloth/Qwen2.5-VL-7B-Instruct-GGUF",
+    "hf_vae": "Comfy-Org/z_image_turbo",
+    "hf_lora": "",
+    "_vae_hf_path": "split_files/vae/ae.safetensors"
+}

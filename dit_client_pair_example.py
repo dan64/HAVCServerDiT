@@ -17,6 +17,7 @@ Usage:
     python dit_client_pair_example.py [--host HOST] [--port PORT]
                                       [--prompt "..."]
                                       [--gap-px N]
+                                      [--steps N]
                                       [--use-shm]
 -------------------------------------------------------------------------------
 """
@@ -53,7 +54,7 @@ def _bytes_to_pil(data) -> Image.Image:
 # ---------------------------------------------------------------------------
 
 def _colorize_pair_shm(proxy, img1: Image.Image, img2: Image.Image,
-                        prompt: str, gap_px: int) -> dict:
+                        prompt: str, gap_px: int, steps: int) -> dict:
     """
     Colorize two frames via shared memory in a single inference pass.
     Returns the same dict as colorize_frame_pair() plus 'image1' and 'image2'
@@ -79,7 +80,7 @@ def _colorize_pair_shm(proxy, img1: Image.Image, img2: Image.Image,
         result = proxy.colorize_frame_pair_shm(
             segs["in1"].name,  segs["out1"].name, h1, w1,
             segs["in2"].name,  segs["out2"].name, h2, w2,
-            prompt, gap_px,
+            prompt, gap_px, steps,
         )
 
         if result["ok"]:
@@ -113,6 +114,8 @@ def main():
                         default="Colorize this photo, natural skin tones, "
                                 "vibrant environment. Maintain consistency and details.")
     parser.add_argument("--gap-px", type=int, default=8)
+    parser.add_argument("--steps", type=int, default=4,
+                        help="Number of inference steps (default: 4)")
     parser.add_argument("--use-shm", action="store_true",
                         help="Use shared memory transport (same-host only, lower latency)")
     args = parser.parse_args()
@@ -157,15 +160,15 @@ def main():
     img2 = Image.open(input2).convert("RGB")
     print(f"[INFO] Image 1: {input1.name}  ({img1.width}x{img1.height} px)")
     print(f"[INFO] Image 2: {input2.name}  ({img2.width}x{img2.height} px)")
-    print(f"[INFO] Running paired inference (gap={args.gap_px}px) ...")
+    print(f"[INFO] Running paired inference (gap={args.gap_px}px, steps={args.steps}) ...")
 
     t0 = time.perf_counter()
     if use_shm:
-        result = _colorize_pair_shm(proxy, img1, img2, args.prompt, args.gap_px)
+        result = _colorize_pair_shm(proxy, img1, img2, args.prompt, args.gap_px, args.steps)
         out1, out2 = result["image1"], result["image2"]
     else:
         result = proxy.colorize_frame_pair(
-            _pil_to_bytes(img1), _pil_to_bytes(img2), args.prompt, args.gap_px)
+            _pil_to_bytes(img1), _pil_to_bytes(img2), args.prompt, args.gap_px, args.steps)
         out1 = _bytes_to_pil(result["data1"])
         out2 = _bytes_to_pil(result["data2"])
     wall_time = time.perf_counter() - t0
@@ -190,4 +193,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

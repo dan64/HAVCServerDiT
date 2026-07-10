@@ -28,6 +28,9 @@ set PROMPT=Colorize this photo, natural skin tones, vibrant environment. Maintai
 :: Separator width in pixels between the two images in the merged input
 set GAP_PX=8
 
+:: Number of inference steps
+set STEPS=4
+
 :: Shared memory transport (same-host only)
 set USE_SHM=1
 
@@ -59,9 +62,9 @@ echo ============================================================
 echo.
 
 if "%USE_SHM%"=="1" (
-    "%PYTHON_EXE%" "%CLIENT_SCRIPT%" --host %HOST% --port %PORT% --prompt "%PROMPT%" --gap-px %GAP_PX% --use-shm
+    "%PYTHON_EXE%" "%CLIENT_SCRIPT%" --host %HOST% --port %PORT% --prompt "%PROMPT%" --gap-px %GAP_PX% --steps %STEPS% --use-shm
 ) else (
-    "%PYTHON_EXE%" "%CLIENT_SCRIPT%" --host %HOST% --port %PORT% --prompt "%PROMPT%" --gap-px %GAP_PX%
+    "%PYTHON_EXE%" "%CLIENT_SCRIPT%" --host %HOST% --port %PORT% --prompt "%PROMPT%" --gap-px %GAP_PX% --steps %STEPS%
 )
 
 echo.

@@ -29,7 +29,7 @@ set PROMPT=Colorize this photo, natural skin tones, vibrant environment. Maintai
 set IMG_SIZE=0
 
 :: Inference steps (4 with LoRA, 20+ without)
-set STEPS=2
+set STEPS=4
 
 :: Shared memory transport (same-host only)
 set USE_SHM=1

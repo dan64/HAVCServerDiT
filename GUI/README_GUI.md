@@ -65,13 +65,13 @@ Steps 2–4.
 
 ## System Requirements
 
-| Requirement | Details |
-|-------------|---------|
-| **OS** | Windows 10 / 11 (64-bit) |
-| **Python** | 3.12 |
-| **GPU** | RTX 30 / 40 / 50 (same as the DiT server) |
-| **Tools** | VapourSynth R74, x265, NVEncC, MKVToolNix |
-| **Server** | `dit_rpc_server.py` must be running (see [main README](../README.md)) |
+| Requirement | Details                                                               |
+| ----------- | --------------------------------------------------------------------- |
+| **OS**      | Windows 10 / 11 (64-bit)                                              |
+| **Python**  | 3.12                                                                  |
+| **GPU**     | RTX 30 / 40 / 50 (same as the DiT server)                             |
+| **Tools**   | VapourSynth R74, x265, NVEncC, MKVToolNix                             |
+| **Server**  | `dit_rpc_server.py` must be running (see [main README](../README.md)) |
 
 The GUI and the server can run on the **same machine** (localhost) or on
 **different machines** — just point the RPC host field to the server's IP.
@@ -135,18 +135,18 @@ pip install packages\spatial_correlation_sampler-0.5.0-cp312-cp312-win_amd64.whl
 The GUI relies on three command-line tools that must be present on disk
 (they are **not** Python packages):
 
-| Tool | Purpose | Default location | Download |
-|------|---------|------------------|----------|
-| **VapourSynth** | Video frameserver | Bundled in the `.venv` | `pip install VapourSynth==74` |
-| **x265** | H.265 software encoder | `GUI/tools/x265/x265.exe` | [x265 downloads](https://www.videolan.org/developers/x265.html) |
-| **NVEncC** | NVIDIA GPU encoder | `GUI/tools/NVEncC/NVEncC64.exe` | [rigaya/NVEnc](https://github.com/rigaya/NVEnc/releases) |
-| **MKVToolNix** | `.h265` → `.mkv` muxing | `GUI/tools/MKVToolNix/mkvmerge.exe` | [MKVToolNix](https://mkvtoolnix.download/) |
+| Tool            | Purpose                 | Default location                    | Download                                                        |
+| --------------- | ----------------------- | ----------------------------------- | --------------------------------------------------------------- |
+| **VapourSynth** | Video frameserver       | Bundled in the `.venv`              | `pip install VapourSynth==74`                                   |
+| **x265**        | H.265 software encoder  | `GUI/tools/x265/x265.exe`           | [x265 downloads](https://www.videolan.org/developers/x265.html) |
+| **NVEncC**      | NVIDIA GPU encoder      | `GUI/tools/NVEncC/NVEncC64.exe`     | [rigaya/NVEnc](https://github.com/rigaya/NVEnc/releases)        |
+| **MKVToolNix**  | `.h265` → `.mkv` muxing | `GUI/tools/MKVToolNix/mkvmerge.exe` | [MKVToolNix](https://mkvtoolnix.download/)                      |
 
 > **Quick setup with Release 1.0.0**: the project's [Release 1.0.0](https://github.com/dan64/HAVCServerDiT/releases/tag/v1.0.0)
 > includes a `tools.zip` archive containing `x265.exe` and `mkvmerge.exe`.
 > Download it and extract its contents directly into `GUI/tools/` so that the
 > default paths match without any additional configuration:
->
+> 
 > ```
 > GUI/tools/
 > ├── x265/
@@ -156,7 +156,7 @@ The GUI relies on three command-line tools that must be present on disk
 > ├── NVEncC/        (download separately)
 > └── ...
 > ```
->
+> 
 > You can also place these tools anywhere — just point the GUI to their paths
 > in the **Encode/Merge** tab.
 
@@ -184,6 +184,7 @@ command prompt:
 
 1. Right-click on the desktop → **New → Shortcut**
 2. For the location, enter the full path to the `.vbs` file:
+   
    ```
    D:\PProjects\HAVCServerDiT\GUI\run_colorize_client_GUI.vbs
    ```
@@ -241,16 +242,16 @@ The GUI has seven tabs plus a persistent status bar at the bottom.
 
 ![GUI Tab #1](https://github.com/dan64/HAVCServerDiT/blob/main/GUI/assets/gui_page2.jpg)
 
-| Setting | Description |
-|---------|-------------|
-| **VapourSynth Pipe** | Path to `vspipe.exe` (bundled in `.venv`) |
-| **Script Directory** | Folder containing the `.vpy` scripts (`GUI/scripts/`) |
-| **Extract VPY** | VapourSynth script for frame extraction |
-| **Threshold / tht_ssim / min_int / mult/freq** | Scene-change detection parameters |
-| **Ref Override** | Force re-extraction even if reference frames exist |
-| **Duplicate first frame** | Copies the second extracted frame to `ref_000000.jpg` (useful for frame 0 coverage) |
-| **Video Directory** | Folder containing the video to process |
-| **Select Video** | Dropdown populated from the video directory |
+| Setting                                        | Description                                                                         |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------- |
+| **VapourSynth Pipe**                           | Path to `vspipe.exe` (bundled in `.venv`)                                           |
+| **Script Directory**                           | Folder containing the `.vpy` scripts (`GUI/scripts/`)                               |
+| **Extract VPY**                                | VapourSynth script for frame extraction                                             |
+| **Threshold / tht_ssim / min_int / mult/freq** | Scene-change detection parameters                                                   |
+| **Ref Override**                               | Force re-extraction even if reference frames exist                                  |
+| **Duplicate first frame**                      | Copies the second extracted frame to `ref_000000.jpg` (useful for frame 0 coverage) |
+| **Video Directory**                            | Folder containing the video to process                                              |
+| **Select Video**                               | Dropdown populated from the video directory                                         |
 
 After selecting a video, the **Video Technical Details** panel shows
 resolution, FPS, frame count, and pixel format.
@@ -259,15 +260,16 @@ resolution, FPS, frame count, and pixel format.
 
 ![GUI Tab #2](https://github.com/dan64/HAVCServerDiT/blob/main/GUI/assets/gui_page3.jpg)
 
-| Setting | Description |
-|---------|-------------|
-| **RPC Host / Port** | Server address (default: `127.0.0.1:8765`) |
-| **Connect button + LED** | Tests the RPC connection with a ping |
-| **Model / Precision / Rank / Steps** | Pipeline configuration sent to the server |
-| **Colorization Steps** | Diffusion steps per frame (lower = faster) |
-| **Fast Pipeline** | Enables **paired inference**: two frames colorized in one forward pass (~2× faster, temporally consistent) |
-| **Prompt** | Text prompt sent to the model |
-| **Cache Directory** | HuggingFace cache (leave empty for default) |
+| Setting                  | Description                                                                                                                                                    |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **RPC Host / Port**      | Server address (default: `127.0.0.1:8765`)                                                                                                                     |
+| **Connect button + LED** | Tests the RPC connection with a ping                                                                                                                           |
+| **Model / Precision**    | Pipeline configuration. Precision selects the GGUF quant level (`q3`–`q8`) or Nunchaku variant (`fp4`/`int4`). LongCat GGUF available via `longcat-gguf` model |
+| **Run Server**           | Launch `start_server.cmd` with the selected model + precision in a new terminal window                                                                         |
+| **Colorization Steps**   | Diffusion steps per frame (lower = faster). LongCat recommends 8 steps, Qwen 2 steps                                                                           |
+| **Fast Pipeline**        | Enables **paired inference**: two frames colorized in one forward pass (~2× faster, temporally consistent). Only supported by nunchaku-qwen                    |
+| **Prompt**               | Text prompt sent to the model                                                                                                                                  |
+| **Cache Directory**      | HuggingFace cache (leave empty for default)                                                                                                                    |
 
 The two image panels show a live preview of the B&W input and the AI output
 as frames are processed.
@@ -276,19 +278,19 @@ as frames are processed.
 
 ![GUI Tab #3](https://github.com/dan64/HAVCServerDiT/blob/main/GUI/assets/gui_page4.jpg)
 
-| Setting | Description |
-|---------|-------------|
-| **MKVmerge Path** | Path to `mkvmerge.exe` |
-| **x265 Path** | Path to `x265.exe` (also used to locate NVEncC) |
-| **Encode VPY** | VapourSynth script for encoding |
-| **CRF** | x265 quality (lower = better, typical: 18–24) |
-| **FPS** | Output frame rate |
-| **Encoder** | `x265` (software) or `Nvenc` (GPU hardware) |
-| **Memory Frames** | Max frames buffered by VapourSynth |
-| **Render Speed** | VapourSynth render preset (`auto`, `fast`, `medium`, `slow`, `slower`) |
-| **Merge Weight** | Blend ratio for Step 4 (0.30 = 30% original, 0.75 = 75% original) |
-| **VBR Quality** | NVEnc quality target (lower = better) |
-| **NVEnc Sharpness** | Enables `--vpp-unsharp --vpp-edgelevel` on NVEnc |
+| Setting             | Description                                                            |
+| ------------------- | ---------------------------------------------------------------------- |
+| **MKVmerge Path**   | Path to `mkvmerge.exe`                                                 |
+| **x265 Path**       | Path to `x265.exe` (also used to locate NVEncC)                        |
+| **Encode VPY**      | VapourSynth script for encoding                                        |
+| **CRF**             | x265 quality (lower = better, typical: 18–24)                          |
+| **FPS**             | Output frame rate                                                      |
+| **Encoder**         | `x265` (software) or `Nvenc` (GPU hardware)                            |
+| **Memory Frames**   | Max frames buffered by VapourSynth                                     |
+| **Render Speed**    | VapourSynth render preset (`auto`, `fast`, `medium`, `slow`, `slower`) |
+| **Merge Weight**    | Blend ratio for Step 4 (0.30 = 30% original, 0.75 = 75% original)      |
+| **VBR Quality**     | NVEnc quality target (lower = better)                                  |
+| **NVEnc Sharpness** | Enables `--vpp-unsharp --vpp-edgelevel` on NVEnc                       |
 
 ### Tab 4 — Fix Image
 
@@ -299,29 +301,29 @@ Supports both SHM (same-host) and PNG-over-RPC (remote server) transport.
 
 **Single‑image mode** (default):
 
-| Control | Description |
-|---------|-------------|
-| **Colorization Steps** | Inference steps (default: 2) |
-| **Convert in B&W** | Convert the input to grayscale before colorization (useful for re‑colorizing) |
-| **Prompt** | Text prompt for the model (combo with history) |
-| **Max / Delete / Clear** | Prompt history management |
-| **Load Image** | Load image via the ComboBox, drag‑and‑drop, or Browse |
-| **Colorize** | Run colorization with fixed seed (42) |
-| **Colorize (Random)** | Run colorization with random seed for variation |
-| **Overwrite** | Overwrite the original loaded image with the colorized result |
-| **Save As...** | Save the colorized result (PNG / JPG) |
-| **Swap Output → Input** | Copy the output image as input for the next colorization |
+| Control                  | Description                                                                   |
+| ------------------------ | ----------------------------------------------------------------------------- |
+| **Colorization Steps**   | Inference steps (default: 2)                                                  |
+| **Convert in B&W**       | Convert the input to grayscale before colorization (useful for re‑colorizing) |
+| **Prompt**               | Text prompt for the model (combo with history)                                |
+| **Max / Delete / Clear** | Prompt history management                                                     |
+| **Load Image**           | Load image via the ComboBox, drag‑and‑drop, or Browse                         |
+| **Colorize**             | Run colorization with fixed seed (42)                                         |
+| **Colorize (Random)**    | Run colorization with random seed for variation                               |
+| **Overwrite**            | Overwrite the original loaded image with the colorized result                 |
+| **Save As...**           | Save the colorized result (PNG / JPG)                                         |
+| **Swap Output → Input**  | Copy the output image as input for the next colorization                      |
 
 **Batch processing** (`Enable batch processing` checkbox):
 
-| Control | Description |
-|---------|-------------|
-| **Enable batch processing** | Toggle between single‑image and batch mode |
-| **Clear** | Remove all images from the batch list |
-| **ComboBox** | Shows all loaded images (by basename); select one to preview |
-| **Overwrite** | Overwrites **all** original files with their colorized versions |
-| **Save As...** | Shows a mask dialog (`*_colorized.png`); `*` is replaced with each filename |
-| **Swap Output** | Disabled in batch mode |
+| Control                     | Description                                                                 |
+| --------------------------- | --------------------------------------------------------------------------- |
+| **Enable batch processing** | Toggle between single‑image and batch mode                                  |
+| **Clear**                   | Remove all images from the batch list                                       |
+| **ComboBox**                | Shows all loaded images (by basename); select one to preview                |
+| **Overwrite**               | Overwrites **all** original files with their colorized versions             |
+| **Save As...**              | Shows a mask dialog (`*_colorized.png`); `*` is replaced with each filename |
+| **Swap Output**             | Disabled in batch mode                                                      |
 
 In batch mode, each loaded image (drag‑and‑drop or Browse) is appended to the
 list. Pressing **Colorize** processes all images sequentially: the current
@@ -342,25 +344,25 @@ colorizes a B&W target image using a color reference image as context.
 
 **Single‑image mode** (default):
 
-| Control | Description |
-|---------|-------------|
-| **Reference Image (Color)** | Load a color reference image (drag & drop or Browse) that provides the color palette |
-| **Target Image (B&W)** | Load the B&W image to colorize via ComboBox, drag & drop, or Browse |
-| **Colorize** | Run CMNET2 colorization in a background thread. The first call loads the model (~5–10 s); subsequent calls reuse it (~1–2 s) |
-| **Overwrite** | Overwrite the original target file with the colorized result |
-| **Save As...** | Save the colorized result to a new file (PNG / JPG) |
-| **Copy → Fix Image** | Copy the colorized output as the input image for Tab 4 (Fix Image), enabling a two‑stage pipeline: CMNET2 → DiT RPC |
+| Control                     | Description                                                                                                                  |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| **Reference Image (Color)** | Load a color reference image (drag & drop or Browse) that provides the color palette                                         |
+| **Target Image (B&W)**      | Load the B&W image to colorize via ComboBox, drag & drop, or Browse                                                          |
+| **Colorize**                | Run CMNET2 colorization in a background thread. The first call loads the model (~5–10 s); subsequent calls reuse it (~1–2 s) |
+| **Overwrite**               | Overwrite the original target file with the colorized result                                                                 |
+| **Save As...**              | Save the colorized result to a new file (PNG / JPG)                                                                          |
+| **Copy → Fix Image**        | Copy the colorized output as the input image for Tab 4 (Fix Image), enabling a two‑stage pipeline: CMNET2 → DiT RPC          |
 
 **Batch processing** (`Enable batch processing` on the Target Image):
 
-| Control | Description |
-|---------|-------------|
-| **Enable batch processing** | Toggle batch mode for the Target Image |
-| **Clear** | Remove all target images from the batch list |
-| **ComboBox** | Shows all loaded target images; select one to preview |
-| **Overwrite** | Overwrites **all** original target files with their colorized versions |
-| **Save As...** | Mask dialog (`*_colorized.png`); `*` replaced with each filename |
-| **Copy → Fix Image** | Disabled in batch mode |
+| Control                     | Description                                                            |
+| --------------------------- | ---------------------------------------------------------------------- |
+| **Enable batch processing** | Toggle batch mode for the Target Image                                 |
+| **Clear**                   | Remove all target images from the batch list                           |
+| **ComboBox**                | Shows all loaded target images; select one to preview                  |
+| **Overwrite**               | Overwrites **all** original target files with their colorized versions |
+| **Save As...**              | Mask dialog (`*_colorized.png`); `*` replaced with each filename       |
+| **Copy → Fix Image**        | Disabled in batch mode                                                 |
 
 In batch mode, a single reference image colorizes **multiple target images**
 sequentially. Each target is added via drag‑and‑drop or Browse. **Colorize**
@@ -383,18 +385,18 @@ in memory; resizing only applies to the previews.
 A standalone video recoloring tab that runs a VapourSynth + NVEnc pipeline
 using the selected video, encode script, and two reference images.
 
-| Control | Description |
-|---------|-------------|
-| **Video Directory** | Folder containing the video to recolor |
-| **Select Video** | Dropdown populated from the video directory |
-| **Encode VPY** | VapourSynth script for encoding / recoloring (script: encode_cmnet2_recolor.vpy) |
-| **FPS** | Output frame rate |
-| **VBR Quality** | NVEnc quality target (lower = better) |
-| **Memory Frames** | Max frames buffered by VapourSynth |
-| **Render Speed** | VapourSynth render preset (`auto`, `fast`, `medium`, `slow`, `slower`) |
-| **First Reference** | Load a reference image (drag & drop or Browse) for the start of the clip |
-| **Last Reference** | Load a reference image (drag & drop or Browse) for the end of the clip |
-| **Recolor** | Runs the VapourSynth → NVEnc pipeline in a background thread |
+| Control             | Description                                                                      |
+| ------------------- | -------------------------------------------------------------------------------- |
+| **Video Directory** | Folder containing the video to recolor                                           |
+| **Select Video**    | Dropdown populated from the video directory                                      |
+| **Encode VPY**      | VapourSynth script for encoding / recoloring (script: encode_cmnet2_recolor.vpy) |
+| **FPS**             | Output frame rate                                                                |
+| **VBR Quality**     | NVEnc quality target (lower = better)                                            |
+| **Memory Frames**   | Max frames buffered by VapourSynth                                               |
+| **Render Speed**    | VapourSynth render preset (`auto`, `fast`, `medium`, `slow`, `slower`)           |
+| **First Reference** | Load a reference image (drag & drop or Browse) for the start of the clip         |
+| **Last Reference**  | Load a reference image (drag & drop or Browse) for the end of the clip           |
+| **Recolor**         | Runs the VapourSynth → NVEnc pipeline in a background thread                     |
 
 The two reference images guide the recoloring script: they are passed to the
 VapourSynth script as `RefStart` and `RefEnd` parameters. The `RefDir`
@@ -451,10 +453,10 @@ VapourSynth reads the original video and the colorized frames from
 `ref_qwen/`, then `vscmnet2` overlays the color onto the original luminance
 channel. The result is piped to the chosen encoder.
 
-| Encoder | Pros | Cons |
-|---------|------|------|
-| **x265** | Higher quality, fine CRF control | Slower (CPU-bound) |
-| **NVEnc** | Fast (GPU), VBR quality control | Requires NVIDIA GPU |
+| Encoder   | Pros                             | Cons                |
+| --------- | -------------------------------- | ------------------- |
+| **x265**  | Higher quality, fine CRF control | Slower (CPU-bound)  |
+| **NVEnc** | Fast (GPU), VBR quality control  | Requires NVIDIA GPU |
 
 The output is a `.h265` raw video stream. If MKVToolNix is configured, a
 `.mkv` container is created automatically and the raw `.h265` is deleted.
@@ -474,11 +476,11 @@ output = (DiT clip × (1 - weight)) + (original color clip × weight)
 The **Merge Weight** slider (0.30–0.74) controls how much of the original
 color clip is kept:
 
-| Weight | Effect |
-|--------|--------|
-| 0.30 | 30% original color, 70% DiT — DiT look dominates |
-| 0.50 | 50/50 — balanced blend |
-| 0.74 | 74% original color, 26% DiT — original colors dominate |
+| Weight | Effect                                                 |
+| ------ | ------------------------------------------------------ |
+| 0.30   | 30% original color, 70% DiT — DiT look dominates       |
+| 0.50   | 50/50 — balanced blend                                 |
+| 0.74   | 74% original color, 26% DiT — original colors dominate |
 
 > If the original clip is black-and-white, **disable Step 4**.
 > Blending a B&W clip with a colorized one only desaturates the result.
@@ -527,7 +529,7 @@ startup and includes:
 
 - **CMNET2 / vscmnet2**: [github.com/dan64/vs-cmnet2](https://github.com/dan64/vs-cmnet2) — VapourSynth color-matching and scene-detection functions
 - **spatial_correlation_sampler**: [Pytorch-Correlation-extension](https://github.com/ClementPinard/Pytorch-Correlation-extension) — GPU correlation layer used by vscmnet2
-- **DiT Model**: [Qwen/Qwen-Image-Edit-2511](https://huggingface.co/Qwen/Qwen-Image-Edit-2511)
+- **DiT Model**: [Qwen/Qwen-Image-Edit-2511](https://huggingface.co/Qwen/Qwen-Image-Edit-2511), [LongCat-Image-Edit-Turbo](https://huggingface.co/meituan-longcat/LongCat-Image-Edit-Turbo)
 - **VapourSynth**: [vapoursynth.com](https://www.vapoursynth.com/)
 - **x265**: [videolan.org](https://www.videolan.org/developers/x265.html)
 - **NVEncC**: [rigaya/NVEnc](https://github.com/rigaya/NVEnc)

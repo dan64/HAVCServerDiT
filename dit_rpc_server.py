@@ -59,6 +59,7 @@ try:
     from dit_colorize_main import (
         load_nunchaku_pipeline,
         load_gguf_pipeline,
+        load_longcat_pipeline,
         process_image,
         process_image_pair,
         process_single_image,
@@ -73,6 +74,7 @@ try:
 except ImportError as _e:
     load_nunchaku_pipeline    = None
     load_gguf_pipeline        = None
+    load_longcat_pipeline     = None
     process_image             = None
     process_image_pair        = None
     process_single_image      = None
@@ -260,6 +262,17 @@ class ColorizeService:
                         hf_vae=hf_vae,
                         hf_lora=hf_lora,
                     )
+                elif model_name == "longcat-gguf":
+                    pipe = load_longcat_pipeline(
+                        model_name=model_name,
+                        model_precision=model_precision,
+                        model_rank=model_rank,
+                        model_inference_steps=model_inference_steps,
+                        hf_unet=hf_unet,
+                        hf_clip=hf_clip,
+                        hf_vae=hf_vae,
+                        vae_name=vae_name,
+                    )
                 else:
                     pipe = None
                 if pipe is None:
@@ -374,7 +387,7 @@ class ColorizeService:
         if self._pipeline is None:
             return {"ok": False, "elapsed": 0.0, "msg": "Pipeline not loaded"}
         # GGUF does not support paired inference: fall back to single-image processing
-        if self._pipeline_model_name == "gguf-qwen":
+        if self._pipeline_model_name in ("gguf-qwen", "longcat-gguf"):
             return self._colorize_pair_fallback_file(img1_path, img2_path, out_dir, prompt, gap_px, steps)
         try:
             elapsed = process_image_pair(
@@ -548,7 +561,7 @@ class ColorizeService:
                     "elapsed": 0.0, "skipped1": False, "skipped2": False,
                     "msg": "Pipeline not loaded"}
         # GGUF does not support paired inference: fall back to individual colorization
-        if self._pipeline_model_name == "gguf-qwen":
+        if self._pipeline_model_name in ("gguf-qwen", "longcat-gguf"):
             return self._colorize_pair_fallback_mem(img1_data, img2_data, prompt, steps)
         try:
             orig1 = _bytes_to_pil(img1_data)
@@ -750,7 +763,7 @@ class ColorizeService:
             return {"ok": False, "elapsed": 0.0, "skipped1": False,
                     "skipped2": False, "msg": "Pipeline not loaded"}
         # GGUF does not support paired inference: fall back to individual colorization
-        if self._pipeline_model_name == "gguf-qwen":
+        if self._pipeline_model_name in ("gguf-qwen", "longcat-gguf"):
             return self._colorize_pair_fallback_shm(
                 shm_in1_name, shm_out1_name, height1, width1,
                 shm_in2_name, shm_out2_name, height2, width2,
@@ -898,7 +911,7 @@ def _load_pipeline_config(config_path: str) -> dict:
 
     model_name = cfg.get("model_name", "")
 
-    # New format (gguf-qwen / nunchaku-qwen)
+    # New format (gguf-qwen / nunchaku-qwen / longcat-gguf)
     if "unet_gguf" in cfg or "quant" in cfg:
         # New GGUF format
         required = {"model_name", "unet_gguf", "clip_gguf", "vae_name", "steps"}

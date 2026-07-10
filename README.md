@@ -5,6 +5,7 @@ Two backends, one API : pick the one that fits your hardware:
 
 - **nunchaku-qwen**: SVDQuant FP4/INT4 transformer via [Nunchaku](https://github.com/nunchaku-ai/nunchaku) : **4 sec/frame**, requires RTX 30/40/50 (16 GB VRAM) & CUDA 13.0
 - **gguf-qwen**: ComfyUI-native GGUF pipeline (Q3_K_S, Q4_K_S, Q5_K_M, Q6_K, Q8_0) : **12 sec/frame**, runs on RTX 30/40/50 (12 GB VRAM), zero ComfyUI GUI dependency
+- **longcat-gguf**: [LongCat-Image-Edit-Turbo](https://github.com/Meituan-AI/LongCat-Image-Edit) GGUF pipeline (Q3_K_M–Q8_0) : **~12 sec/frame**, runs on RTX 30/40/50 (12 GB+ VRAM, 32 GB+ RAM), better image quality than gguf-qwen, zero ComfyUI GUI dependency
 
 ---
 
@@ -78,12 +79,39 @@ pip show nunchaku    # Expected: 1.2.1+cu13.0torch2.10
 
 ## 📢 What's New
 
+### 2026-07-10 — LongCat GGUF Backend
+
+A third model backend has been added: **longcat-gguf** (LongCat-Image-Edit-Turbo GGUF).
+Uses quantized UNet (Q4_K_M) and CLIP GGUF files — runs on 12 GB VRAM GPUs.
+It achieves excellent colorization quality (~12 s/frame via the RPC server) — richer colors, more natural skin tones, and better detail preservation than the gguf-qwen model — and is accessible from all existing tabs and RPC endpoints.
+
+Three new model files are required (*auto-downloaded on first run*):
+
+| File                                        | Size    | Source                                                                                                            |
+| ------------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------- |
+| `unet/LongCat-Image-Edit-Turbo-Q4_K_M.gguf` | ~5.4 GB | [vantagewithai/LongCat-Image-Edit-Turbo-GGUF](https://huggingface.co/vantagewithai/LongCat-Image-Edit-Turbo-GGUF) |
+| `clip/Qwen2.5-VL-7B-Instruct-Q4_K_M.gguf`   | ~4.6 GB | [unsloth/Qwen2.5-VL-7B-Instruct-GGUF](https://huggingface.co/unsloth/Qwen2.5-VL-7B-Instruct-GGUF)                 |
+| `vae/ae.safetensors`                        | ~160 MB | [Comfy-Org/z_image_turbo](https://huggingface.co/Comfy-Org/z_image_turbo)                                         |
+
+Launch via `run_server_longcat.cmd` (Q4_K_M) or `start_server.cmd longcat` (Q4), `longcat-q3`, `longcat-q5`, `longcat-q6`, `longcat-q8`. Pre-made configs for all quantizations are in the `config/` folder.
+
+> **Prerequisite**: 12 GB+ VRAM and 32GB+ RAM. Uses GGUF quantized models.
+> The pipeline uses the comfy_bridge runtime (no external ComfyUI checkout needed).
+> Custom nodes `CFGNorm`, `FluxKontextMultiReferenceLatentMethod`, and
+> `TextEncodeQwenImageEditPlus` are included in `comfy_bridge/comfy_extras/`.
+
+The GUI Tab 2 (Colorization) now includes a **Run Server** button that launches
+`start_server.cmd` with the selected Model Name + Precision directly, opening a
+new terminal window. This replaces the need to manually find and run the right
+`.cmd` file.
+
 ### 2026-07-01 — Batch Processing for Fix Image & Fix Colors (GUI)
 
 The **Fix Image** (Tab 4) and **Fix Colors** (Tab 5) tabs now support batch
 processing of multiple images:
 
 **Fix Image (Tab 4):**
+
 - New **Enable batch processing** checkbox — toggles between single-image and batch mode
 - The image field is now a **ComboBox** showing all loaded images (drag & drop / Browse appends)
 - **Colorize** processes all images sequentially against the DiT RPC server
@@ -92,6 +120,7 @@ processing of multiple images:
 - **Swap Output** is automatically disabled in batch mode
 
 **Fix Colors (Tab 5):**
+
 - Same batch logic on the **Target Image** field — multiple targets against one color reference
 - ComboBox, Clear, sequential colorization via local CMNET2, wildcard save
 - **Copy → Fix Image** disabled in batch mode
@@ -172,11 +201,10 @@ The Fix Image tab is independent of the batch video pipeline and does not requir
 .venv\Scripts\activate
 (.venv) pip install tkinterDnD2
 ```
- 
 
 ### 2026-06-09 — Improved GGUF
 
-Changed the GGUF configuration files. The pipeline Qwen-Image-Edit-2511 + Qwen-Image-Edit-2511-Lightning-4steps has substituted by the pipeline with  Qwen-Image-Edit-2509 + Qwen-Image-Edit-2511-Lightning-4steps. This change has removed the artifacts problem which affected the colored images with the GGUF models and improved the overall quality of the colored images. It should be noted that, despite these improvements, the Nunchaku model remains the best and is the one recommended for production use.  
+Changed the GGUF configuration files. The pipeline Qwen-Image-Edit-2511 + Qwen-Image-Edit-2511-Lightning-4steps has substituted by the pipeline with  Qwen-Image-Edit-2509 + Qwen-Image-Edit-2511-Lightning-4steps. This change has removed the artifacts problem which affected the colored images with the GGUF models and improved the overall quality of the colored images. It should be noted that, despite these improvements, the Nunchaku model remains the best and is the one recommended for production use (*for systems with limited hardware resources, it is recommended to use the GGUFs of LongCat-Image-Edit-Turbo added on July 10th, 2027*). 
 
 ### 2026-06-07 — Desktop GUI for Batch Video Processing
 
@@ -237,6 +265,25 @@ Choose the backend that matches your hardware:
 > **Q5_K_M / Q6_K** improve fidelity at higher VRAM cost. **Q8_0** is near-lossless.
 > Uses ComfyUI-native code : no ComfyUI GUI installation needed.
 > Pre-made configs for all quantizations are in the `config/` folder.
+
+### longcat-gguf : 12 sec/frame (Q3–Q8) — Best Quality
+
+| Requirement | Details                            |
+| ----------- | ---------------------------------- |
+| **GPU**     | NVIDIA RTX 30/40/50  (12 GB+ VRAM) |
+| **RAM**     | 32 GB+                             |
+| **CUDA**    | 13.0+                              |
+
+> LongCat-Image-Edit-Turbo delivers noticeably better colorization than the
+> gguf-qwen model — richer colors, more natural skin tones, and better
+> detail preservation — at the same ~12 s/frame speed.
+> 
+> Uses GGUF quantized UNet (Q3_K_M to Q8_0) + CLIP Q4_K_M. The UNet is
+> distributed in five quantization levels to fit different VRAM budgets.
+> All files are auto-downloaded on first run.
+> 
+> See `config/longcat_gguf_q*.json` — the general rule: lower quant = less VRAM.
+> Launch with `run_server_longcat.cmd` (Q4_K_M) or `start_server.cmd longcat|longcat-q3|...`.
 
 ### Both backends
 
@@ -455,6 +502,7 @@ dit-colorize-rpc/
 ├── config/                      # Pipeline configs (nunchaku FP4/INT4 + gguf Q3–Q8)
 ├── install.cmd                  # Windows automated installer
 ├── start_server.cmd             # Windows launcher : server
+├── run_server_longcat.cmd       # Windows launcher : LongCat server
 ├── run_client_example.cmd       # Windows launcher : single frame example
 ├── run_client_pair_example.cmd  # Windows launcher : paired inference example
 ├── patch_nunchaku.cmd           # Windows launcher : nunchaku patch
@@ -731,6 +779,7 @@ To enable shared memory edit `run_client_pair_example.cmd` and set `USE_SHM=1`.
   --host HOST                  Server host (default: 127.0.0.1)
   --port PORT                  Server port (default: 8765)
   --prompt PROMPT              Text prompt for the model
+  --steps N                    Number of steps for inference (default:4)
   --use-shm                    Use shared memory transport (same-host only)
 ```
 
@@ -880,19 +929,20 @@ def colorize_pair_shm(proxy, img1: Image.Image, img2: Image.Image, prompt: str):
 Edit the variables at the top of the file to match your setup, then double-click it or run it from a terminal.
 
 ```
-start_server.cmd [q3|q4|q5|q6|q8|fp4|int4]
+start_server.cmd [q3|q4|q5|q6|q8|fp4|int4|longcat]
 ```
 
-| Argument | Backend  | Quantization | VRAM  |
-| -------- | -------- | ------------ | ----- |
-| _(none)_ | GGUF     | Q4_K_S       | 12 GB |
-| `q3`     | GGUF     | Q3_K_S       | 12 GB |
-| `q4`     | GGUF     | Q4_K_S       | 12 GB |
-| `q5`     | GGUF     | Q5_K_M       | 16 GB |
-| `q6`     | GGUF     | Q6_K         | 18 GB |
-| `q8`     | GGUF     | Q8_0         | 22 GB |
-| `fp4`    | Nunchaku | FP4          | 16 GB |
-| `int4`   | Nunchaku | INT4         | 16 GB |
+| Argument  | Backend  | Quantization | VRAM  |
+| --------- | -------- | ------------ | ----- |
+| _(none)_  | GGUF     | Q4_K_S       | 12 GB |
+| `q3`      | GGUF     | Q3_K_S       | 12 GB |
+| `q4`      | GGUF     | Q4_K_S       | 12 GB |
+| `q5`      | GGUF     | Q5_K_M       | 16 GB |
+| `q6`      | GGUF     | Q6_K         | 18 GB |
+| `q8`      | GGUF     | Q8_0         | 22 GB |
+| `fp4`     | Nunchaku | FP4          | 16 GB |
+| `int4`    | Nunchaku | INT4         | 16 GB |
+| `longcat` | LongCat  | Q4_K_M       | 12 GB |
 
 If no argument is passed it defaults to `q4` (Q4_K_S). Use `int4` for RTX 30 / 40-Series Nunchaku:
 
@@ -902,11 +952,25 @@ start_server.cmd int4
 
 **Convenience wrappers** — double-click or run from terminal without arguments:
 
-| File                  | Equivalent command      | Backend       |
-| --------------------- | ----------------------- | ------------- |
-| `run_server_q3.cmd`   | `start_server.cmd q3`   | GGUF Q3_K_S   |
-| `run_server_fp4.cmd`  | `start_server.cmd fp4`  | Nunchaku FP4  |
-| `run_server_int4.cmd` | `start_server.cmd int4` | Nunchaku INT4 |
+| File                     | Equivalent command         | Backend        |
+| ------------------------ | -------------------------- | -------------- |
+| `run_server_q3.cmd`      | `start_server.cmd q3`      | GGUF Q3_K_S    |
+| `run_server_fp4.cmd`     | `start_server.cmd fp4`     | Nunchaku FP4   |
+| `run_server_int4.cmd`    | `start_server.cmd int4`    | Nunchaku INT4  |
+| `run_server_longcat.cmd` | `start_server.cmd longcat` | LongCat Q4_K_M |
+
+> **GUI shortcut**: From the desktop GUI, go to Tab 2 (Colorization), pick a Model + Precision,
+> and click **Run Server** — a terminal window opens with the correct `start_server.cmd` arguments.
+
+---
+
+## 🎯 Suggested Inference Steps
+
+| Model Family             | Recommended Steps | Notes                                                                                  |
+| ------------------------ | ----------------- | -------------------------------------------------------------------------------------- |
+| Qwen (nunchaku fp4/int4) | **2**             | Good results with 2 steps when using lightning LoRA                                    |
+| Qwen (gguf q3–q8)        | **2**             | Default in config files; 4 steps possible but slower                                   |
+| LongCat (longcat-gguf)   | **8**             | Calibrated for 8 steps; best quality at 8 steps; 4 steps possible but colors are faded |
 
 ---
 
@@ -934,7 +998,7 @@ Subsequent runs load from the local cache.
 
 ## 🔗 Credits
 
-- **Model**: [Qwen/Qwen-Image-Edit-2511](https://huggingface.co/Qwen/Qwen-Image-Edit-2511)
+- **Model**: [Qwen/Qwen-Image-Edit-2511](https://huggingface.co/Qwen/Qwen-Image-Edit-2511), [LongCat-Image-Edit-Turbo](https://huggingface.co/meituan-longcat/LongCat-Image-Edit-Turbo)
 - **Nunchaku quantization**: [Nunchaku / SVDQuant](https://github.com/mit-han-lab/nunchaku)
 - **GGUF dequantization kernels**: adapted from [ComfyUI-GGUF](https://github.com/city96/ComfyUI-GGUF) (Apache 2.0)
 - **Pipeline**: [Hugging Face Diffusers](https://github.com/huggingface/diffusers)

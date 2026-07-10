@@ -284,9 +284,58 @@ def load_qwen_pipeline(model_path: str, cache_dir: str, model_precision: str = "
 
 
 # ----------------------------
-# Image Processing Utilities
+# Load LongCat Image Edit Turbo pipeline
 # ----------------------------
+def load_longcat_pipeline(model_name: str, model_precision: str = "", model_rank: str = "",
+                          model_inference_steps: str = "4", cache_dir: str = "",
+                          full_model_path: str = "", vae_name: str = "ae.safetensors",
+                          hf_unet: str = "vantagewithai/LongCat-Image-Edit-Turbo-GGUF",
+                          hf_clip: str = "unsloth/Qwen2.5-VL-7B-Instruct-GGUF",
+                          hf_vae: str = "Comfy-Org/z_image_turbo",
+                          **kwargs):
+    """
+    Load the LongCat-Image-Edit-Turbo GGUF pipeline via ComfyUI runtime.
 
+    Parameters
+    ----------
+    model_name  : "longcat-gguf"
+    model_precision : UNet GGUF filename (e.g. LongCat-Image-Edit-Turbo-Q4_K_M.gguf)
+    model_rank      : CLIP GGUF filename (e.g. Qwen2.5-VL-7B-Instruct-Q4_K_M.gguf)
+    model_inference_steps : default inference steps (default "4")
+    hf_unet/clip/vae : HuggingFace repo for auto-download
+    """
+    if model_name != "longcat-gguf":
+        return None
+
+    import os as _os
+    _bridge_dir = _os.path.join(_os.path.dirname(__file__), "comfy_bridge")
+
+    unet_name = model_precision if model_precision else "LongCat-Image-Edit-Turbo-Q4_K_M.gguf"
+    clip_name = model_rank if model_rank else "Qwen2.5-VL-7B-Instruct-Q4_K_M.gguf"
+
+    # Auto-download missing models
+    _auto = _os.environ.get("COMFY_AUTO_DOWNLOAD", "1") == "1"
+    _files = {}
+    for tag, filename, repo, folder in [
+        ("unet", unet_name, hf_unet, "unet"),
+        ("clip", clip_name, hf_clip, "clip"),
+        ("vae",  vae_name,  hf_vae,  "vae"),
+    ]:
+        local = _os.path.join(_bridge_dir, "models", folder, filename)
+        hf_path = filename
+        if folder == "vae":
+            hf_path = "split_files/vae/" + filename
+        _files[tag] = (local, repo, hf_path)
+
+    if _auto:
+        _ensure_models(_files)
+
+    from comfy_bridge.longcat_colorize import load_pipeline as _load, colorize as _colorize
+
+    pipeline = _load(unet_name=unet_name, clip_name=clip_name, vae_name=vae_name)
+    pipeline["_model_type"] = "longcat-gguf"
+    pipeline["_colorize_fn"] = _colorize
+    return pipeline
 def upscale_with_lanczos(image, target_size):
     return image.resize(target_size, Image.Resampling.LANCZOS)
 
@@ -308,6 +357,11 @@ def resize_long_side(img: Image.Image, dim: int = 1024) -> Image.Image:
     return img.resize((new_w, new_h), Image.Resampling.LANCZOS)
 
 def colorize_image(pipe, img: Image, prompt:str, steps: int = 2, seed: int=42) -> Image:
+    # LongCat pipeline (dict with _model_type marker)
+    if isinstance(pipe, dict) and pipe.get("_model_type") == "longcat-gguf":
+        _colorize_fn = pipe.get("_colorize_fn")
+        return _colorize_fn(pipe, img, prompt=prompt, steps=steps, seed=seed)
+
     # GGUF pipeline (dict)  :  comfy_bridge colorize
     if isinstance(pipe, dict):
         from comfy_bridge import colorize
@@ -468,3 +522,5 @@ def process_image_pair(pipe, img1_path: Path, img2_path: Path, output_dir: Path,
     right_final.save(out2)
 
     return t_end - t_start
+
+

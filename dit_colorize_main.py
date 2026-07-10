@@ -288,10 +288,10 @@ def load_qwen_pipeline(model_path: str, cache_dir: str, model_precision: str = "
 # ----------------------------
 def load_longcat_pipeline(model_name: str, model_precision: str = "", model_rank: str = "",
                           model_inference_steps: str = "4", cache_dir: str = "",
-                          full_model_path: str = "", vae_name: str = "ae.safetensors",
+                          full_model_path: str = "", vae_name: str = "lct_vae.safetensors",
                           hf_unet: str = "vantagewithai/LongCat-Image-Edit-Turbo-GGUF",
                           hf_clip: str = "unsloth/Qwen2.5-VL-7B-Instruct-GGUF",
-                          hf_vae: str = "Comfy-Org/z_image_turbo",
+                          hf_vae: str = "meituan-longcat/LongCat-Image-Edit-Turbo",
                           **kwargs):
     """
     Load the LongCat-Image-Edit-Turbo GGUF pipeline via ComfyUI runtime.
@@ -323,8 +323,7 @@ def load_longcat_pipeline(model_name: str, model_precision: str = "", model_rank
     ]:
         local = _os.path.join(_bridge_dir, "models", folder, filename)
         hf_path = filename
-        if folder == "vae":
-            hf_path = "split_files/vae/" + filename
+        if folder == "vae": hf_path = "vae/diffusion_pytorch_model.safetensors"
         _files[tag] = (local, repo, hf_path)
 
     if _auto:

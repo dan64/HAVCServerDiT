@@ -1,11 +1,11 @@
 # HAVC Server DiT
 
 Hybrid Automatic Video Colorizer (HAVC) server that exposes a GPU-accelerated colorization pipeline for black-and-white images and video frames based on Diffusion Transformer (DiT) models.
-Two backends, one API : pick the one that fits your hardware:
+3 backends, one API : pick the one that fits your hardware:
 
-- **nunchaku-qwen**: SVDQuant FP4/INT4 transformer via [Nunchaku](https://github.com/nunchaku-ai/nunchaku) : **4 sec/frame**, requires RTX 30/40/50 (16 GB VRAM) & CUDA 13.0
-- **gguf-qwen**: ComfyUI-native GGUF pipeline (Q3_K_S, Q4_K_S, Q5_K_M, Q6_K, Q8_0) : **12 sec/frame**, runs on RTX 30/40/50 (12 GB VRAM), zero ComfyUI GUI dependency
-- **longcat-gguf**: [LongCat-Image-Edit-Turbo](https://huggingface.co/meituan-longcat/LongCat-Image-Edit-Turbo) GGUF pipeline (Q3_K_M–Q8_0) : **~12 sec/frame**, runs on RTX 30/40/50 (12 GB+ VRAM, 32 GB+ RAM), better image quality than gguf-qwen, zero ComfyUI GUI dependency
+- **nunchaku-qwen**: SVDQuant FP4/INT4 transformer via [Nunchaku](https://github.com/nunchaku-ai/nunchaku) : **4 sec/frame**, requires RTX 30/40/50 (16GB+ VRAM , 64GB RAM) & CUDA 13.0
+- **gguf-qwen**: ComfyUI-native GGUF pipeline (Q3_K_S, Q4_K_S, Q5_K_M, Q6_K, Q8_0) : **12 sec/frame**, runs on RTX 30/40/50 (12GB+ VRAM, 32GB+ RAM), zero ComfyUI GUI dependency
+- **longcat-gguf**: [LongCat-Image-Edit-Turbo](https://huggingface.co/meituan-longcat/LongCat-Image-Edit-Turbo) GGUF pipeline (Q3_K_M–Q8_0) : **~12 sec/frame**, runs on RTX 30/40/50 (12GB+ VRAM, 32GB+ RAM), better image quality than gguf-qwen, zero ComfyUI GUI dependency
 
 ---
 
@@ -87,11 +87,11 @@ It achieves excellent colorization quality (~12 s/frame via the RPC server) — 
 
 Three new model files are required (*auto-downloaded on first run*):
 
-| File                                        | Size    | Source                                                                                                            |
-| ------------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------- |
-| `unet/LongCat-Image-Edit-Turbo-Q4_K_M.gguf` | ~5.4 GB | [vantagewithai/LongCat-Image-Edit-Turbo-GGUF](https://huggingface.co/vantagewithai/LongCat-Image-Edit-Turbo-GGUF) |
-| `clip/Qwen2.5-VL-7B-Instruct-Q4_K_M.gguf`   | ~4.6 GB | [unsloth/Qwen2.5-VL-7B-Instruct-GGUF](https://huggingface.co/unsloth/Qwen2.5-VL-7B-Instruct-GGUF)                 |
-| `vae/ae.safetensors`                        | ~160 MB | [Comfy-Org/z_image_turbo](https://huggingface.co/Comfy-Org/z_image_turbo)                                         |
+| File                                        | Size    | Source                                                                                                                    |
+| ------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `unet/LongCat-Image-Edit-Turbo-Q4_K_M.gguf` | ~5.4 GB | [vantagewithai/LongCat-Image-Edit-Turbo-GGUF](https://huggingface.co/vantagewithai/LongCat-Image-Edit-Turbo-GGUF)         |
+| `clip/Qwen2.5-VL-7B-Instruct-Q4_K_M.gguf`   | ~4.6 GB | [unsloth/Qwen2.5-VL-7B-Instruct-GGUF](https://huggingface.co/unsloth/Qwen2.5-VL-7B-Instruct-GGUF)                         |
+| `vae/lct_vae.safetensors`                   | ~160 MB | [meituan-longcat/LongCat-Image-Edit-Turbo](https://huggingface.co/meituan-longcat/LongCat-Image-Edit-Turbo/tree/main/vae) |
 
 Launch via `run_server_longcat.cmd` (Q4_K_M) or `start_server.cmd longcat` (Q4), `longcat-q3`, `longcat-q5`, `longcat-q6`, `longcat-q8`. Pre-made configs for all quantizations are in the `config/` folder.
 
@@ -226,7 +226,7 @@ See [GUI/README_GUI.md](GUI/README_GUI.md) for installation, setup, and usage in
 
 ## ✨ Features
 
-- 📦 **Two backends, one API** : nunchaku-qwen (FP4/INT4, 4 sec/frame) for speed, gguf-qwen (Q3_K_S … Q8_0, 12 sec/frame) for lower VRAM
+- 📦 **3 backends, one API** : nunchaku-qwen (FP4/INT4, 4 sec/frame) for speed, gguf-qwen and longcat-gguf (Q3, …, Q8, 12 sec/frame) for lower VRAM
 - 🎨 **Batch colorization** : process entire directories of B&W images via filesystem paths
 - 🖼️ **Paired inference** : colorize two images in a single forward pass (faster, temporally consistent)
 - 📡 **In-memory RPC** : pass raw PNG frames over XML-RPC without touching the filesystem (ideal for video pipelines)
@@ -553,7 +553,7 @@ Pick the one that matches your hardware and pass it to `--pipeline-config`.
 > ⚠️ **`model_precision`**: use `"fp4"` only on RTX 50-Series (Blackwell). On RTX 30 / 40-Series
 > use `"int4"` : FP4 kernels require sm_120 and will fail on older architectures.
 
-### GGUF Backend : `config/qwen_gguf_q3.json` … `qwen_gguf_q8.json`
+### GGUF Backend : `config/qwen_gguf_q3.json` … `qwen_gguf_q8.json` / `config/longcat_gguf_q3.json` … `longcat_gguf_q8.json`
 
 Five quantization levels are available. All share the same structure with
 `model_name: "gguf-qwen"` and a `quant` field that selects the quantization:
@@ -959,8 +959,7 @@ start_server.cmd int4
 | `run_server_int4.cmd`    | `start_server.cmd int4`    | Nunchaku INT4  |
 | `run_server_longcat.cmd` | `start_server.cmd longcat` | LongCat Q4_K_M |
 
-> **GUI shortcut**: From the desktop GUI, go to Tab 2 (Colorization), pick a Model + Precision,
-> and click **Run Server** — a terminal window opens with the correct `start_server.cmd` arguments.
+> **GUI shortcut**: From the desktop GUI, go to Tab 2 (Colorization), pick a Model + Precision, and click **Run Server** — a terminal window opens with the correct `start_server.cmd` arguments.
 
 ---
 

@@ -26,7 +26,7 @@ def get_value_at_index(obj, index):
 def load_pipeline(
     unet_name: str = "LongCat-Image-Edit-Turbo-Q4_K_M.gguf",
     clip_name: str = "Qwen2.5-VL-7B-Instruct-Q4_K_M.gguf",
-    vae_name: str = "ae.safetensors",
+    vae_name: str = "lct_vae.safetensors",
 ):
     """Load LongCat-Image-Edit-Turbo GGUF via ComfyUI runtime.
     Returns a dict with model handles; subsequent calls are no-ops."""

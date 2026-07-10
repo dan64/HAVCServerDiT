@@ -158,8 +158,6 @@ def load_all_configs():
         # --- model ---
         "model_name":             "nunchaku-qwen",
         "model_precision":        "fp4",
-        "model_rank":             "32",
-        "model_inference_steps":  "4",
         "steps":                  "2",
         "fast_pipe":              True,
         # --- fix image ---
@@ -603,8 +601,8 @@ def orchestrator(init_values, window):
             result = rpc.load_pipeline(
                 values["-MODEL_NAME-"],
                 values["-MODEL_PRECISION-"],
-                values["-MODEL_RANK-"],
-                values["-MODEL_INF_STEPS-"],
+                cfg.get("model_rank", "32"),
+                cfg.get("model_inference_steps", "4"),
                 values["-CACHE_DIR-"],
             )
             if not result.get("ok"):
@@ -694,8 +692,8 @@ def orchestrator(init_values, window):
             result = rpc.load_pipeline(
                 values["-MODEL_NAME-"],
                 values["-MODEL_PRECISION-"],
-                values["-MODEL_RANK-"],
-                values["-MODEL_INF_STEPS-"],
+                cfg.get("model_rank", "32"),
+                cfg.get("model_inference_steps", "4"),
                 values["-CACHE_DIR-"],
             )
             if not result.get("ok"):
@@ -1134,8 +1132,8 @@ def _fix_colorize_worker(values, window, seed, pil_in=None):
             result = rpc.load_pipeline(  
                 values["-MODEL_NAME-"],  
                 values["-MODEL_PRECISION-"],  
-                values["-MODEL_RANK-"],  
-                values["-MODEL_INF_STEPS-"],  
+                cfg.get("model_rank", "32"),  
+                cfg.get("model_inference_steps", "4"),  
                 values["-CACHE_DIR-"],  
             )  
             if not result.get("ok"):  
@@ -2609,8 +2607,6 @@ while True:
             "base_dir":              values["-BASE_DIR-"],
             "model_name":            values["-MODEL_NAME-"],
             "model_precision":       values["-MODEL_PRECISION-"],
-            "model_rank":            values["-MODEL_RANK-"],
-            "model_inference_steps": values["-MODEL_INF_STEPS-"],
             "steps":                 values["-STEPS-"],
             "fast_pipe":             values["-FAST_PIPE-"],
             "fix_steps":              values["-FIX_STEPS-"],

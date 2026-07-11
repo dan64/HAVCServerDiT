@@ -3,7 +3,7 @@
 Hybrid Automatic Video Colorizer (HAVC) server that exposes a GPU-accelerated colorization pipeline for black-and-white images and video frames based on Diffusion Transformer (DiT) models.
 3 backends, one API : pick the one that fits your hardware:
 
-- **nunchaku-qwen**: SVDQuant FP4/INT4 transformer via [Nunchaku](https://github.com/nunchaku-ai/nunchaku) : **4 sec/frame**, requires RTX 30/40/50 (16GB+ VRAM , 64GB RAM) & CUDA 13.0
+- **nunchaku-qwen**: SVDQuant FP4/INT4 transformer via [Nunchaku](https://github.com/nunchaku-ai/nunchaku) : **4 sec/frame**, requires RTX 30/40/50 (16GB+ VRAM , 64GB+ RAM) & CUDA 13.0
 - **gguf-qwen**: ComfyUI-native GGUF pipeline (Q3_K_S, Q4_K_S, Q5_K_M, Q6_K, Q8_0) : **12 sec/frame**, runs on RTX 30/40/50 (12GB+ VRAM, 32GB+ RAM), zero ComfyUI GUI dependency
 - **longcat-gguf**: [LongCat-Image-Edit-Turbo](https://huggingface.co/meituan-longcat/LongCat-Image-Edit-Turbo) GGUF pipeline (Q3_K_M–Q8_0) : **~12 sec/frame**, runs on RTX 30/40/50 (12GB+ VRAM, 32GB+ RAM), better image quality than gguf-qwen, zero ComfyUI GUI dependency
 
@@ -204,7 +204,7 @@ The Fix Image tab is independent of the batch video pipeline and does not requir
 
 ### 2026-06-09 — Improved GGUF
 
-Changed the GGUF configuration files. The pipeline Qwen-Image-Edit-2511 + Qwen-Image-Edit-2511-Lightning-4steps has substituted by the pipeline with  Qwen-Image-Edit-2509 + Qwen-Image-Edit-2511-Lightning-4steps. This change has removed the artifacts problem which affected the colored images with the GGUF models and improved the overall quality of the colored images. It should be noted that, despite these improvements, the Nunchaku model remains the best and is the one recommended for production use (*for systems with limited hardware resources, it is recommended to use the GGUFs of LongCat-Image-Edit-Turbo added on July 10th, 2027*). 
+Changed the GGUF configuration files. The pipeline Qwen-Image-Edit-2511 + Qwen-Image-Edit-2511-Lightning-4steps has substituted by the pipeline with  Qwen-Image-Edit-2509 + Qwen-Image-Edit-2511-Lightning-4steps. This change has removed the artifacts problem which affected the colored images with the GGUF models and improved the overall quality of the colored images. It should be noted that, despite these improvements, the Nunchaku model remains the best and is the one recommended for production use (*for systems with limited hardware resources, it is recommended to use the GGUFs of LongCat-Image-Edit-Turbo added on July 10th, 2026*). 
 
 ### 2026-06-07 — Desktop GUI for Batch Video Processing
 

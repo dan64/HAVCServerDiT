@@ -14,6 +14,13 @@ Hybrid Automatic Video Colorizer (HAVC) server that exposes a GPU-accelerated co
 > If you already have the `.venv` with CUDA 13.0 and just need to update
 > the project to the latest version, follow these steps:
 
+**Script update option**: run `quick_update.cmd` (double-click it, or run it from a
+terminal in the repository root) — it performs all six steps below
+automatically in a single run, including the conditional Nunchaku patch
+re-apply. See [What's New](#-whats-new) for details.
+
+Or step by step manually:
+
 ```powershell
 # 1) Pull the latest code
 git pull
@@ -37,6 +44,10 @@ pip show nunchaku    # Expected: 1.2.1+cu13.0torch2.10
 
 > **Note**: steps 4–5 are only needed if `packages/` or `patch_nunchaku.py`
 > have changed. Check `git log --oneline -5` to see what was updated.
+
+> **Tip**: `quick_update.cmd` automates all of this — it skips steps 4–5
+> automatically when they are not needed and re-applies the Nunchaku patch
+> only when `patch_nunchaku.py --check` reports it is missing.
 
 ---
 
@@ -78,6 +89,19 @@ pip show nunchaku    # Expected: 1.2.1+cu13.0torch2.10
 ---
 
 ## 📢 What's New
+
+### 2026-07-12 — Quick Update Script
+
+A new Windows launcher, `quick_update.cmd`, automates updating an existing installation to the latest version in a single run — no need to type the manual commands from the [Quick Update](#-quick-update-existing-installation) section:
+
+1. **Pull the latest code** (`git pull`)
+2. **Activate the virtual environment** (`.venv\Scripts\activate`)
+3. **Update GUI dependencies** from `GUI\requirements.txt` (skipped if absent)
+4. **Update vscmnet2** from the newest wheel found in `packages/` (skipped if none)
+5. **Re-apply the Nunchaku patch only when needed** — it first runs `patch_nunchaku.py --check` and skips re-applying when the patch is already applied; a failure is reported as a warning without aborting the update
+6. **Verify the installation** by showing the installed `torch` and `nunchaku` versions against the expected ones
+
+The script changes to the repository root itself (`cd /d "%~dp0"`), so it can be launched from any working directory (double-click or `quick_update.cmd`). Prerequisite: an existing `.venv` with CUDA 13.0 (see the Environment Setup steps in the Quick Update section).
 
 ### 2026-07-10 — LongCat GGUF Backend
 

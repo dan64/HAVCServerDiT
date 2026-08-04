@@ -90,7 +90,7 @@ pip show nunchaku    # Expected: 1.2.1+cu13.0torch2.10
 
 ## 📢 What's New
 
-### 2026-07-12 — Quick Update Script
+### 2026-08-04 — Quick Update Script
 
 A new Windows launcher, `quick_update.cmd`, automates updating an existing installation to the latest version in a single run — no need to type the manual commands from the [Quick Update](#-quick-update-existing-installation) section:
 

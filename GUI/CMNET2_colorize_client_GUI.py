@@ -176,6 +176,7 @@ def load_all_configs():
         "fixv_vbr_quality":  "27.00",
         "fixv_memory_frames": "20",
         "fixv_render_speed":  "auto",
+        "fixv_backbone":      "dinov3",
         # --- fix colors ---
         "fixc_ref_path":    r"",
         "fixc_target_path": r"",
@@ -197,6 +198,7 @@ def load_all_configs():
         "ref_override":   False,
         "frames_memory":  "20",
         "render_speed":   "auto",
+        "backbone":       "dinov3",
         "crf":            "20.0",
         "merge_weight":   "0.40",
         "vbr_quality":    "27.00",
@@ -815,11 +817,13 @@ def orchestrator(init_values, window):
         fps_val    = values["-FPS-"].strip() or "24000/1001"
         render_speed = window["-RENDER_SPEED-"].get().strip() or "auto"
         memory_frames = window["-MEMORY_FRAMES-"].get().strip() or "20"
+        backbone = window["-BACKBONE-"].get().strip() or "dinov3"
         encode_vpy = os.path.join(values["-SCRIPT_DIR-"], values["-ENCODE_VPY-"])
 
         vsp_cmd = (f'"{values["-VSPIPE-"]}" "{encode_vpy}" - '
                    f'-a "VideoPath={orig_video_path}" -a "RefDir={ref_dir}" '
                    f'-a "RenderSpeed={render_speed}" -a "MemoryFrames={memory_frames}" '
+                   f'-a "Backbone={backbone}" '
                    f'--outputindex 0 -c y4m')
         x265_cmd = (f'"{values["-X265-"]}" --preset fast --input - '
                     f'--fps {fps_val} --output-depth 10 --y4m --profile main10 '
@@ -898,11 +902,13 @@ def orchestrator(init_values, window):
         fps_val    = values["-FPS-"].strip() or "24000/1001"
         render_speed = window["-RENDER_SPEED-"].get().strip() or "auto"
         memory_frames = window["-MEMORY_FRAMES-"].get().strip() or "20"
+        backbone = window["-BACKBONE-"].get().strip() or "dinov3"
         encode_vpy = os.path.join(values["-SCRIPT_DIR-"], values["-ENCODE_VPY-"])
 
         vsp_cmd = (f'"{values["-VSPIPE-"]}" "{encode_vpy}" - '
                    f'-a "VideoPath={orig_video_path}" -a "RefDir={ref_dir}" '
                    f'-a "RenderSpeed={render_speed}" -a "MemoryFrames={memory_frames}" '
+                   f'-a "Backbone={backbone}" '
                    f'--outputindex 0 -c y4m')
         sharp_filter = window["-USE_SHARP-"].get()
         sharp = "--vpp-unsharp --vpp-edgelevel" if sharp_filter else ""
@@ -1071,6 +1077,7 @@ encoder_values:    list[str] = ['x265', 'Nvenc']
 memory_values:     list[str] = [f"{x}" for x in range(10, 110, 10)]
 steps_values:      list[str] = ['2', '4', '8']
 speed_values:    list[str] = ['auto', 'fast', 'medium', 'slow', 'slower']
+backbone_values: list[str] = ['dinov3', 'dinov2']
 model_list:        list[str] = ["nunchaku-qwen", "gguf-qwen", "longcat-gguf"]
 model_p_list:      list[str] = ["fp4", "int4", "q3", "q4", "q5", "q6", "q8"]
 model_r_list:      list[str] = ["32", "128"]
@@ -1389,7 +1396,10 @@ tab4_layout = [
               key="-MEMORY_FRAMES-", readonly=True, size=(5, 1)),
      sg.Text("Render Speed:"),
      sg.Combo(speed_values, default_value=cfg.get("render_speed", "auto"),
-              key="-RENDER_SPEED-", readonly=True, size=(8, 1))
+              key="-RENDER_SPEED-", readonly=True, size=(8, 1)),
+     sg.Text("Backbone:"),
+     sg.Combo(backbone_values, default_value=cfg.get("backbone", "dinov3"),
+              key="-BACKBONE-", readonly=True, size=(8, 1))
      ],
     [sg.Frame("NVEnc Merge Settings", [
         [sg.Text("Merge Weight:"),
@@ -1474,7 +1484,10 @@ tab6_layout = [
               key="-FIXV_MEMORY_FRAMES-", readonly=True, size=(5, 1)),
      sg.Text("Render Speed:"),
      sg.Combo(speed_values, default_value=cfg.get("fixv_render_speed", "auto"),
-              key="-FIXV_RENDER_SPEED-", readonly=True, size=(8, 1))],
+              key="-FIXV_RENDER_SPEED-", readonly=True, size=(8, 1)),
+     sg.Text("Backbone:"),
+     sg.Combo(backbone_values, default_value=cfg.get("fixv_backbone", "dinov3"),
+              key="-FIXV_BACKBONE-", readonly=True, size=(8, 1))],
 
     [sg.HorizontalSeparator()],
 
@@ -1835,6 +1848,7 @@ def _fixv_recolor_thread(values, window):
         vbr_quality   = values["-FIXV_VBR_QUALITY-"]
         memory_frames = values["-FIXV_MEMORY_FRAMES-"].strip() or "20"
         render_speed  = values["-FIXV_RENDER_SPEED-"].strip() or "auto"
+        backbone      = values["-FIXV_BACKBONE-"].strip() or "dinov3"
         encode_vpy  = values["-FIXV_ENCODE_VPY-"]
 
         if not base_dir or not video_name:
@@ -1882,6 +1896,7 @@ def _fixv_recolor_thread(values, window):
                    f'-a "VideoPath={orig_video_path}" -a "RefDir={ref_dir}" '
                    f'-a "RefStart={ref_start}" -a "RefEnd={ref_end}" '
                    f'-a "RenderSpeed={render_speed}" -a "MemoryFrames={memory_frames}" '
+                   f'-a "Backbone={backbone}" '
                    f'--outputindex 0 -c y4m')
 
         # Build NVEnc command (forced)
@@ -2624,6 +2639,7 @@ while True:
             "fixv_vbr_quality":        values["-FIXV_VBR_QUALITY-"],
             "fixv_memory_frames":      values["-FIXV_MEMORY_FRAMES-"],
             "fixv_render_speed":       values["-FIXV_RENDER_SPEED-"],
+            "fixv_backbone":           values["-FIXV_BACKBONE-"],
             # fix colors
             "fixc_ref_path":          values["-FIXC_REF_PATH-"],
             "fixc_target_path":       values["-FIXC_TARGET_PATH-"],
@@ -2646,6 +2662,7 @@ while True:
             "encoder":               values["-ENCODER-"],
             "frames_memory":         values["-MEMORY_FRAMES-"],
             "render_speed":          values["-RENDER_SPEED-"],
+            "backbone":              values["-BACKBONE-"],
             "merge_weight":          values["-MERGE_WEIGHT-"],
             "vbr_quality":           values["-VBR_QUALITY-"],
             "use_sharp":             values["-USE_SHARP-"],

@@ -3,7 +3,7 @@
 Hybrid Automatic Video Colorizer (HAVC) server that exposes a GPU-accelerated colorization pipeline for black-and-white images and video frames based on Diffusion Transformer (DiT) models.
 3 backends, one API : pick the one that fits your hardware:
 
-- **nunchaku-qwen**: SVDQuant FP4/INT4 transformer via [Nunchaku](https://github.com/nunchaku-ai/nunchaku) : **4 sec/frame**, requires RTX 30/40/50 (16GB+ VRAM , 64GB+ RAM) & CUDA 13.0
+- **nunchaku-qwen**: SVDQuant FP4/INT4 transformer via [Nunchaku](https://github.com/nunchaku-ai/nunchaku) : **4 sec/frame**, requires RTX 30/40/50 (16GB+ VRAM , 64GB RAM) & CUDA 13.0
 - **gguf-qwen**: ComfyUI-native GGUF pipeline (Q3_K_S, Q4_K_S, Q5_K_M, Q6_K, Q8_0) : **12 sec/frame**, runs on RTX 30/40/50 (12GB+ VRAM, 32GB+ RAM), zero ComfyUI GUI dependency
 - **longcat-gguf**: [LongCat-Image-Edit-Turbo](https://huggingface.co/meituan-longcat/LongCat-Image-Edit-Turbo) GGUF pipeline (Q3_K_M–Q8_0) : **~12 sec/frame**, runs on RTX 30/40/50 (12GB+ VRAM, 32GB+ RAM), better image quality than gguf-qwen, zero ComfyUI GUI dependency
 
@@ -13,13 +13,6 @@ Hybrid Automatic Video Colorizer (HAVC) server that exposes a GPU-accelerated co
 
 > If you already have the `.venv` with CUDA 13.0 and just need to update
 > the project to the latest version, follow these steps:
-
-**Script update option**: run `quick_update.cmd` (double-click it, or run it from a
-terminal in the repository root) — it performs all six steps below
-automatically in a single run, including the conditional Nunchaku patch
-re-apply. See [What's New](#-whats-new) for details.
-
-Or step by step manually:
 
 ```powershell
 # 1) Pull the latest code
@@ -32,7 +25,7 @@ git pull
 pip install -r GUI\requirements.txt
 
 # 4) Update vscmnet2 (if a newer wheel is available in packages/)
-pip install packages\vscmnet2-1.0.6-py3-none-any.whl
+pip install packages\vscmnet2-1.0.8-py3-none-any.whl
 
 # 5) Re-apply the Nunchaku patch
 python patch_nunchaku.py
@@ -44,10 +37,6 @@ pip show nunchaku    # Expected: 1.2.1+cu13.0torch2.10
 
 > **Note**: steps 4–5 are only needed if `packages/` or `patch_nunchaku.py`
 > have changed. Check `git log --oneline -5` to see what was updated.
-
-> **Tip**: `quick_update.cmd` automates all of this — it skips steps 4–5
-> automatically when they are not needed and re-applies the Nunchaku patch
-> only when `patch_nunchaku.py --check` reports it is missing.
 
 ---
 
@@ -90,18 +79,18 @@ pip show nunchaku    # Expected: 1.2.1+cu13.0torch2.10
 
 ## 📢 What's New
 
-### 2026-08-04 — Quick Update Script
+### 2026-09-17 — vscmnet2 1.0.8 (DINOv3 Backbone)
 
-A new Windows launcher, `quick_update.cmd`, automates updating an existing installation to the latest version in a single run — no need to type the manual commands from the [Quick Update](#-quick-update-existing-installation) section:
+Updated to `vscmnet2` 1.0.8, which switches CMNET2 to a **DINOv3 ViT-B/16** key-encoder backbone by default (previously DINOv2 ViT-S/14), improving colorization quality. The legacy DINOv2 backbone remains available via a `backbone` parameter.
 
-1. **Pull the latest code** (`git pull`)
-2. **Activate the virtual environment** (`.venv\Scripts\activate`)
-3. **Update GUI dependencies** from `GUI\requirements.txt` (skipped if absent)
-4. **Update vscmnet2** from the newest wheel found in `packages/` (skipped if none)
-5. **Re-apply the Nunchaku patch only when needed** — it first runs `patch_nunchaku.py --check` and skips re-applying when the patch is already applied; a failure is reported as a warning without aborting the update
-6. **Verify the installation** by showing the installed `torch` and `nunchaku` versions against the expected ones
+A new **Backbone** combo (`dinov3` / `dinov2`) has been added to the GUI in both tabs that drive CMNET2 through VapourSynth:
 
-The script changes to the repository root itself (`cd /d "%~dp0"`), so it can be launched from any working directory (double-click or `quick_update.cmd`). Prerequisite: an existing `.venv` with CUDA 13.0 (see the Environment Setup steps in the Quick Update section).
+- **Encode/Merge (Tab 3)** — `GUI/scripts/encode_cmnet2.vpy`
+- **Fix Video (Tab 6)** — `GUI/scripts/encode_cmnet2_recolor.vpy`
+
+Both scripts now pass the selected backbone to `vs_cmnet2()` / `vs_cmnet2_recolor()` via a `Backbone` VapourSynth argument, alongside the existing `RenderSpeed` and `MemoryFrames` parameters.
+
+> **Prerequisite**: the DINOv3 backbone requires new weight files — see [GUI README: DINOv3 backbone weights](GUI/README_GUI.md#dinov3-backbone-weights-required-default-since-108) for download links and install steps. The `dinov2` option remains available for installations that only have the legacy DINOv2 weights.
 
 ### 2026-07-10 — LongCat GGUF Backend
 
@@ -195,7 +184,7 @@ Key features:
 - **NVEnc-only**: uses GPU hardware encoding (NVEncC64.exe required)
 - **RefStart / RefEnd**: reference images passed to the VapourSynth script as parameters
 - **RefDir auto-detection**: set to the folder of the first reference image
-- **Configurable**: FPS, VBR Quality, Memory Frames, Render Speed
+- **Configurable**: FPS, VBR Quality, Memory Frames, Render Speed, Backbone
 - **MKV output**: `.h265` intermediate automatically muxed to `.mkv` and deleted
 - **Pre-flight check**: verifies NVEncC64.exe exists before starting
 
@@ -228,7 +217,7 @@ The Fix Image tab is independent of the batch video pipeline and does not requir
 
 ### 2026-06-09 — Improved GGUF
 
-Changed the GGUF configuration files. The pipeline Qwen-Image-Edit-2511 + Qwen-Image-Edit-2511-Lightning-4steps has substituted by the pipeline with  Qwen-Image-Edit-2509 + Qwen-Image-Edit-2511-Lightning-4steps. This change has removed the artifacts problem which affected the colored images with the GGUF models and improved the overall quality of the colored images. It should be noted that, despite these improvements, the Nunchaku model remains the best and is the one recommended for production use (*for systems with limited hardware resources, it is recommended to use the GGUFs of LongCat-Image-Edit-Turbo added on July 10th, 2026*). 
+Changed the GGUF configuration files. The pipeline Qwen-Image-Edit-2511 + Qwen-Image-Edit-2511-Lightning-4steps has substituted by the pipeline with  Qwen-Image-Edit-2509 + Qwen-Image-Edit-2511-Lightning-4steps. This change has removed the artifacts problem which affected the colored images with the GGUF models and improved the overall quality of the colored images. It should be noted that, despite these improvements, the Nunchaku model remains the best and is the one recommended for production use (*for systems with limited hardware resources, it is recommended to use the GGUFs of LongCat-Image-Edit-Turbo added on July 10th, 2027*). 
 
 ### 2026-06-07 — Desktop GUI for Batch Video Processing
 

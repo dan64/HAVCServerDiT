@@ -112,10 +112,49 @@ and 4 (scene-change detection, edge-aware frame extraction, color merging,
 and encoding). It is available from [github.com/dan64/vs-cmnet2](https://github.com/dan64/vs-cmnet2):
 
 ```powershell
-pip install packages\vscmnet2-1.0.6-py3-none-any.whl
+pip install packages\vscmnet2-1.0.8-py3-none-any.whl
 ```
 
 To complete the installation of this filter is necessary to install the models, weights and plugins, as described in the filter home page: [vs-cmnet2](https://github.com/dan64/vs-cmnet2#installation)
+
+#### DINOv3 backbone weights (required, default since 1.0.8)
+
+Since `vscmnet2` 1.0.8, CMNET2 uses the **DINOv3 ViT-B/16** key-encoder backbone
+by default (the **Backbone** setting in the GUI). Download these two files from
+the [CMNET2 v1.1.0 Release](https://github.com/dan64/cmnet2/releases/tag/v1.1.0)
+and place them under `.venv\Lib\site-packages\vscmnet2\weights\`:
+
+| File                                      | Destination                              | Download                                                                                                      |
+| ------------------------------------------ | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `DINOv3FeatureV6_LocalAtten_p369412.pth`   | `vscmnet2\weights\`                       | [download](https://github.com/dan64/cmnet2/releases/download/v1.1.0/DINOv3FeatureV6_LocalAtten_p369412.pth)   |
+| `dinov3-vitb16.zip` (extract in place)     | `vscmnet2\weights\dinov3-vitb16\`         | [download](https://github.com/dan64/cmnet2/releases/download/v1.1.0/dinov3-vitb16.zip)                        |
+
+```powershell
+# from the repository root, with the venv active
+Invoke-WebRequest https://github.com/dan64/cmnet2/releases/download/v1.1.0/DINOv3FeatureV6_LocalAtten_p369412.pth -OutFile .venv\Lib\site-packages\vscmnet2\weights\DINOv3FeatureV6_LocalAtten_p369412.pth
+Invoke-WebRequest https://github.com/dan64/cmnet2/releases/download/v1.1.0/dinov3-vitb16.zip -OutFile dinov3-vitb16.zip
+Expand-Archive dinov3-vitb16.zip -DestinationPath .venv\Lib\site-packages\vscmnet2\weights\
+Remove-Item dinov3-vitb16.zip
+```
+
+> Without these files, selecting **Backbone = dinov3** (the default) in the
+> Encode/Merge or Fix Video tab fails at pipeline start. Select **Backbone =
+> dinov2** instead if you only have the legacy DINOv2 weights below.
+
+#### DINOv2 backbone weights (legacy, optional)
+
+To use the previous **DINOv2 ViT-S/14** backbone (`Backbone = dinov2` in the
+GUI), download these files from the
+[CMNET2 v1.0.0 Release](https://github.com/dan64/cmnet2/releases/tag/v1.0.0):
+
+| File                                     | Destination                     | Download                                                                                                  |
+| ----------------------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `DINOv2FeatureV6_LocalAtten_s2_154000.pth` | `vscmnet2\weights\`              | [download](https://github.com/dan64/cmnet2/releases/download/v1.0.0/DINOv2FeatureV6_LocalAtten_s2_154000.pth) |
+| `dinov2_vits14_pretrain.pth`               | `vscmnet2\models\checkpoints\`   | [download](https://github.com/dan64/cmnet2/releases/download/v1.0.0/dinov2_vits14_pretrain.pth)               |
+| `resnet18-5c106cde.pth`                    | `vscmnet2\models\checkpoints\`   | [download](https://github.com/dan64/cmnet2/releases/download/v1.0.0/resnet18-5c106cde.pth)                    |
+| `resnet50-19c8e357.pth`                    | `vscmnet2\models\checkpoints\`   | [download](https://github.com/dan64/cmnet2/releases/download/v1.0.0/resnet50-19c8e357.pth)                    |
+
+All destinations above are relative to `.venv\Lib\site-packages\`.
 
 ### 4. Install `spatial_correlation_sampler`
 
@@ -288,6 +327,7 @@ as frames are processed.
 | **Encoder**         | `x265` (software) or `Nvenc` (GPU hardware)                            |
 | **Memory Frames**   | Max frames buffered by VapourSynth                                     |
 | **Render Speed**    | VapourSynth render preset (`auto`, `fast`, `medium`, `slow`, `slower`) |
+| **Backbone**        | CMNET2 key-encoder backbone: `dinov3` (default, best quality) or `dinov2` (legacy) |
 | **Merge Weight**    | Blend ratio for Step 4 (0.30 = 30% original, 0.75 = 75% original)      |
 | **VBR Quality**     | NVEnc quality target (lower = better)                                  |
 | **NVEnc Sharpness** | Enables `--vpp-unsharp --vpp-edgelevel` on NVEnc                       |
@@ -394,6 +434,7 @@ using the selected video, encode script, and two reference images.
 | **VBR Quality**     | NVEnc quality target (lower = better)                                            |
 | **Memory Frames**   | Max frames buffered by VapourSynth                                               |
 | **Render Speed**    | VapourSynth render preset (`auto`, `fast`, `medium`, `slow`, `slower`)           |
+| **Backbone**        | CMNET2 key-encoder backbone: `dinov3` (default, best quality) or `dinov2` (legacy) |
 | **First Reference** | Load a reference image (drag & drop or Browse) for the start of the clip         |
 | **Last Reference**  | Load a reference image (drag & drop or Browse) for the end of the clip           |
 | **Recolor**         | Runs the VapourSynth → NVEnc pipeline in a background thread                     |

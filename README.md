@@ -25,7 +25,7 @@ git pull
 pip install -r GUI\requirements.txt
 
 # 4) Update vscmnet2 (if a newer wheel is available in packages/)
-pip install packages\vscmnet2-1.0.8-py3-none-any.whl
+pip install packages\vscmnet2-1.0.9-py3-none-any.whl
 
 # 5) Re-apply the Nunchaku patch
 python patch_nunchaku.py
@@ -78,6 +78,26 @@ pip show nunchaku    # Expected: 1.2.1+cu13.0torch2.10
 ---
 
 ## 📢 What's New
+
+### 2026-09-24 — vscmnet2 1.0.9 (proximity-weighted memory matching)
+
+Updated to `vscmnet2` 1.0.9, which add _proximity-weighted memory matching_. By default, permanent-memory candidates are ranked purely by content similarity, with no notion of *when* in the video a reference frame was captured relative to the frame being colorized — with a wide `max_memory_frames` window holding several visually similar but differently-colored references, this can wash the result toward gray. Unlike `backbone`, this is **not** exposed as a filter parameter on `vs_cmnet2`: it is configured once for the whole installation via the `enable_proximity_bias`/`proximity_bias_alpha` keys in `vsslib/models.json` (see above). Off by default. To permanently enable it (useful for permanent memory window size > 50) it is necessary to set `enable_proximity_bias=true` in the configuration file stored in: `vsslib/models.json` as shown in the example below:
+
+```json
+{
+  "cmnet2": {
+    "dinov3": {
+      "checkpoint": "DINOv3FeatureV6_LocalAtten_p372402.pth",
+      "weights_dir": "dinov3-vitb16",
+      "enable_proximity_bias": true,
+      "proximity_bias_alpha": 0.7
+    },
+    "dinov2": {
+      "checkpoint": "DINOv2FeatureV6_LocalAtten_s2_154000.pth"
+    }
+  }
+}
+```
 
 ### 2026-09-17 — vscmnet2 1.0.8 (DINOv3 Backbone)
 

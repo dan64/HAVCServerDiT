@@ -50,7 +50,7 @@ Original Video
       │
       ▼
  Step 3: ENCODE
- (VapourSynth → vscmnet2 → x265 or NVEnc → .h265 video)
+ (VapourSynth → vscmnet2 → x265/x264/NVEnc → .h265/.h264 video)
       │
       ▼
  Step 4: MERGE (optional)
@@ -179,23 +179,30 @@ The GUI relies on three command-line tools that must be present on disk
 | --------------- | ----------------------- | ----------------------------------- | --------------------------------------------------------------- |
 | **VapourSynth** | Video frameserver       | Bundled in the `.venv`              | `pip install VapourSynth==74`                                   |
 | **x265**        | H.265 software encoder  | `GUI/tools/x265/x265.exe`           | [x265 downloads](https://www.videolan.org/developers/x265.html) |
+| **x264**        | H.264 software encoder  | `GUI/tools/x264/x264.exe`           | [x264 downloads](https://www.videolan.org/developers/x264.html) |
 | **NVEncC**      | NVIDIA GPU encoder      | `GUI/tools/NVEncC/NVEncC64.exe`     | [rigaya/NVEnc](https://github.com/rigaya/NVEnc/releases)        |
-| **MKVToolNix**  | `.h265` → `.mkv` muxing | `GUI/tools/MKVToolNix/mkvmerge.exe` | [MKVToolNix](https://mkvtoolnix.download/)                      |
+| **MKVToolNix**  | `.h265`/`.h264` → `.mkv` muxing | `GUI/tools/MKVToolNix/mkvmerge.exe` | [MKVToolNix](https://mkvtoolnix.download/)              |
 
 > **Quick setup with Release 1.0.0**: the project's [Release 1.0.0](https://github.com/dan64/HAVCServerDiT/releases/tag/v1.0.0)
-> includes a `tools.zip` archive containing `x265.exe` and `mkvmerge.exe`.
-> Download it and extract its contents directly into `GUI/tools/` so that the
-> default paths match without any additional configuration:
+> includes a `tools.zip` archive containing `x265.exe`, `x264.exe` and
+> `mkvmerge.exe`. Download it and extract its contents directly into
+> `GUI/tools/` so that the default paths match without any additional
+> configuration:
 > 
 > ```
 > GUI/tools/
 > ├── x265/
 > │   └── x265.exe
+> ├── x264/
+> │   └── x264.exe
 > ├── MKVToolNix/
 > │   └── mkvmerge.exe
 > ├── NVEncC/        (download separately)
 > └── ...
 > ```
+>
+> `x264.exe` is located as a sibling of `x265.exe` (same convention as
+> `NVEncC/`) — no separate path field is exposed in the GUI for it.
 > 
 > You can also place these tools anywhere — just point the GUI to their paths
 > in the **Encode/Merge** tab.
@@ -304,10 +311,11 @@ resolution, FPS, frame count, and pixel format.
 | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **RPC Host / Port**      | Server address (default: `127.0.0.1:8765`)                                                                                                                     |
 | **Connect button + LED** | Tests the RPC connection with a ping                                                                                                                           |
-| **Model / Precision**    | Pipeline configuration. Precision selects the GGUF quant level (`q3`–`q8`) or Nunchaku variant (`fp4`/`int4`). LongCat GGUF available via `longcat-gguf` model |
-| **Run Server**           | Launch `start_server.cmd` with the selected model + precision in a new terminal window                                                                         |
-| **Colorization Steps**   | Diffusion steps per frame (lower = faster). LongCat recommends 8 steps, Qwen 2 steps                                                                           |
-| **Fast Pipeline**        | Enables **paired inference**: two frames colorized in one forward pass (~2× faster, temporally consistent). Only supported by nunchaku-qwen                    |
+| **Model / Precision**    | Pipeline configuration. Precision selects the GGUF quant level (`q3`–`q8`) or Nunchaku variant (`fp4`/`int4`). LongCat GGUF available via `longcat-gguf` model. Selecting **qwen21-viggle** auto-disables Precision (unused — model paths come from `config/qwen21_viggle.json`) |
+| **Run Server**           | Launch the server for the selected Model + Precision in a new terminal window — `start_server.cmd` for nunchaku/gguf/longcat, `run_server_qwen21.cmd` for qwen21-viggle |
+| **Colorization Steps**   | Diffusion steps per frame (lower = faster). LongCat recommends 8 steps, Qwen 2 steps, qwen21-viggle 6 steps (its LoRA's native step count — `2`/`4`/`8` also available, experimental) |
+| **Fast Pipeline**        | Enables **paired inference**: two frames colorized in one forward pass (~2× faster, temporally consistent). Supported by nunchaku-qwen and qwen21-viggle; gguf-qwen/longcat-gguf fall back to per-image processing |
+| **Enhance Prompt**       | **qwen21-viggle only**: rewrites the prompt via Qwen3-VL before colorizing (image-aware, adds ~15-20s/frame) — no effect on other backends. Try a direct anti-hedging prompt first, see [main README](../README.md#-suggested-inference-steps) |
 | **Prompt**               | Text prompt sent to the model                                                                                                                                  |
 | **Cache Directory**      | HuggingFace cache (leave empty for default)                                                                                                                    |
 
@@ -321,11 +329,11 @@ as frames are processed.
 | Setting             | Description                                                            |
 | ------------------- | ---------------------------------------------------------------------- |
 | **MKVmerge Path**   | Path to `mkvmerge.exe`                                                 |
-| **x265 Path**       | Path to `x265.exe` (also used to locate NVEncC)                        |
+| **x265 Path**       | Path to `x265.exe` (also used to locate NVEncC and x264, see setup §5) |
 | **Encode VPY**      | VapourSynth script for encoding                                        |
-| **CRF**             | x265 quality (lower = better, typical: 18–24)                          |
+| **CRF**             | Encoder quality for `x265`/`x264` (lower = better, typical: 18–24)     |
 | **FPS**             | Output frame rate                                                      |
-| **Encoder**         | `x265` (software) or `Nvenc` (GPU hardware)                            |
+| **Encoder**         | `x265` (software, 10-bit), `x264` (software, 8-bit) or `Nvenc` (GPU hardware) |
 | **Memory Frames**   | Max frames buffered by VapourSynth                                     |
 | **Render Speed**    | VapourSynth render preset (`auto`, `fast`, `medium`, `slow`, `slower`) |
 | **Backbone**        | CMNET2 key-encoder backbone: `dinov3` (default, best quality) or `dinov2` (legacy) |
@@ -345,6 +353,7 @@ Supports both SHM (same-host) and PNG-over-RPC (remote server) transport.
 | Control                  | Description                                                                   |
 | ------------------------ | ----------------------------------------------------------------------------- |
 | **Colorization Steps**   | Inference steps (default: 2)                                                  |
+| **Enhance Prompt**       | **qwen21-viggle only**: rewrites the prompt via Qwen3-VL before colorizing — no effect on other backends |
 | **Convert in B&W**       | Convert the input to grayscale before colorization (useful for re‑colorizing) |
 | **Prompt**               | Text prompt for the model (combo with history)                                |
 | **Max / Delete / Clear** | Prompt history management                                                     |
@@ -495,13 +504,15 @@ VapourSynth reads the original video and the colorized frames from
 `ref_qwen/`, then `vscmnet2` overlays the color onto the original luminance
 channel. The result is piped to the chosen encoder.
 
-| Encoder   | Pros                             | Cons                |
-| --------- | -------------------------------- | ------------------- |
-| **x265**  | Higher quality, fine CRF control | Slower (CPU-bound)  |
-| **NVEnc** | Fast (GPU), VBR quality control  | Requires NVIDIA GPU |
+| Encoder   | Pros                                    | Cons                          |
+| --------- | ---------------------------------------- | ------------------------------ |
+| **x265**  | Higher quality, fine CRF control, 10-bit | Slower (CPU-bound)             |
+| **x264**  | Widest compatibility, fine CRF control   | Slower (CPU-bound), 8-bit only |
+| **NVEnc** | Fast (GPU), VBR quality control          | Requires NVIDIA GPU            |
 
-The output is a `.h265` raw video stream. If MKVToolNix is configured, a
-`.mkv` container is created automatically and the raw `.h265` is deleted.
+The output is a raw `.h265` (x265/NVEnc) or `.h264` (x264) video stream. If
+MKVToolNix is configured, a `.mkv` container is created automatically and the
+raw stream is deleted.
 
 ### Step 4: Merge (optional)
 
@@ -571,8 +582,9 @@ startup and includes:
 
 - **CMNET2 / vscmnet2**: [github.com/dan64/vs-cmnet2](https://github.com/dan64/vs-cmnet2) — VapourSynth color-matching and scene-detection functions
 - **spatial_correlation_sampler**: [Pytorch-Correlation-extension](https://github.com/ClementPinard/Pytorch-Correlation-extension) — GPU correlation layer used by vscmnet2
-- **DiT Model**: [Qwen/Qwen-Image-Edit-2511](https://huggingface.co/Qwen/Qwen-Image-Edit-2511), [LongCat-Image-Edit-Turbo](https://huggingface.co/meituan-longcat/LongCat-Image-Edit-Turbo)
+- **DiT Model**: [Qwen/Qwen-Image-Edit-2511](https://huggingface.co/Qwen/Qwen-Image-Edit-2511), [Qwen/Qwen-Image-2.1](https://huggingface.co/Comfy-Org/Qwen-Image-2.1) + [Viggle-Turbo LoRA](https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo), [LongCat-Image-Edit-Turbo](https://huggingface.co/meituan-longcat/LongCat-Image-Edit-Turbo)
 - **VapourSynth**: [vapoursynth.com](https://www.vapoursynth.com/)
 - **x265**: [videolan.org](https://www.videolan.org/developers/x265.html)
+- **x264**: [videolan.org](https://www.videolan.org/developers/x264.html)
 - **NVEncC**: [rigaya/NVEnc](https://github.com/rigaya/NVEnc)
 - **MKVToolNix**: [mkvtoolnix.download](https://mkvtoolnix.download/)

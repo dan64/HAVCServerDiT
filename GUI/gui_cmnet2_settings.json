@@ -13,7 +13,8 @@
     "fix_bw": false,
     "fix_prompt_max": "30",
     "fix_prompts": [
-        "color this image, natural colors."
+        "color this image, natural colors.",
+		"Add color to this black-and-white image without hesitation regarding the appropriate colors. For any subject, garment, object, or setting where the color is common knowledge or established by convention, confidently apply the expected color; otherwise, use natural colors. Color the image, strictly preserve all shapes, outlines, and background details."
     ],
     "fixv_base_dir": "C:/HAVCServerDiT/GUI/samples",
     "fixv_video": "",
@@ -27,7 +28,7 @@
     "fixv_backbone": "dinov3",
     "mkv_path": "C:/HAVCServerDiT/GUI/tools/MKVToolNix/mkvmerge.exe",
     "hf_cache": "",
-    "prompt": "color this image, natural colors. Strictly preserve all shapes, edges and background details.",
+    "prompt": "Add color to this black-and-white image without hesitation regarding the appropriate colors. For any subject, garment, object, or setting where the color is common knowledge or established by convention, confidently apply the expected color; otherwise use natural colors. Color the image, strictly preserve all shapes, outlines, and background details.",
     "shutdown_on_complete": false,
     "dupe_first_frame": true,
     "do_step1": true,

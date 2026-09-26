@@ -1,11 +1,17 @@
 # HAVC Server DiT
 
 Hybrid Automatic Video Colorizer (HAVC) server that exposes a GPU-accelerated colorization pipeline for black-and-white images and video frames based on Diffusion Transformer (DiT) models.
-3 backends, one API : pick the one that fits your hardware:
+4 backends, one API : pick the one that fits your hardware:
 
-- **nunchaku-qwen**: SVDQuant FP4/INT4 transformer via [Nunchaku](https://github.com/nunchaku-ai/nunchaku) : **4 sec/frame**, requires RTX 30/40/50 (16GB+ VRAM , 64GB RAM) & CUDA 13.0
-- **gguf-qwen**: ComfyUI-native GGUF pipeline (Q3_K_S, Q4_K_S, Q5_K_M, Q6_K, Q8_0) : **12 sec/frame**, runs on RTX 30/40/50 (12GB+ VRAM, 32GB+ RAM), zero ComfyUI GUI dependency
-- **longcat-gguf**: [LongCat-Image-Edit-Turbo](https://huggingface.co/meituan-longcat/LongCat-Image-Edit-Turbo) GGUF pipeline (Q3_K_M–Q8_0) : **~12 sec/frame**, runs on RTX 30/40/50 (12GB+ VRAM, 32GB+ RAM), better image quality than gguf-qwen, zero ComfyUI GUI dependency
+- **nunchaku-qwen**: SVDQuant FP4/INT4 transformer via [Nunchaku](https://github.com/nunchaku-ai/nunchaku) : **4 sec/frame**¹, requires RTX 30/40/50 (16GB+ VRAM , 64GB RAM) & CUDA 13.0
+- **gguf-qwen**: ComfyUI-native GGUF pipeline (Q3_K_S, Q4_K_S, Q5_K_M, Q6_K, Q8_0) : **12 sec/frame**², runs on RTX 30/40/50 (12GB+ VRAM, 32GB+ RAM), zero ComfyUI GUI dependency
+- **longcat-gguf**: [LongCat-Image-Edit-Turbo](https://huggingface.co/meituan-longcat/LongCat-Image-Edit-Turbo) GGUF pipeline (Q3_K_M–Q8_0) : **~12 sec/frame**², runs on RTX 30/40/50 (12GB+ VRAM, 32GB+ RAM), better image quality than gguf-qwen, zero ComfyUI GUI dependency
+- **qwen21-viggle**: Qwen-Image-2.1 (native ComfyUI int8 ConvRot weights) + [Viggle-Turbo](https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo) LoRA : **4 sec/frame**¹ (`steps=2`) or ~8-11 sec/frame (`steps=6`, single-image, see [What's New](#-whats-new)), runs on RTX 30/40/50 (12GB+ VRAM, 32GB+ RAM), optional `enhance_prompt` (Qwen3-VL image-aware prompt rewriting), zero ComfyUI GUI dependency
+
+> ¹ Measured with **Fast Pipeline** (paired inference, two frames per forward pass) at the backend's fastest recommended step count. ² `gguf-qwen`/`longcat-gguf` don't support paired inference (fall back to per-image processing, see [What's New](#-whats-new)) — their figure is a genuine single-image time, not directly comparable to the Fast Pipeline figures above.
+
+> **Recommended**: **nunchaku-qwen** and **qwen21-viggle** are both recommended for production use — at their fastest usable step count (`steps=2` for both) they measure the same **4 sec/frame** via Fast Pipeline, but `qwen21-viggle` needs meaningfully less hardware (12GB+ VRAM / 32GB+ RAM vs. 16GB+ VRAM / 64GB+ RAM) for that speed. `gguf-qwen`/`longcat-gguf` remain the choice for VRAM-constrained setups where neither of the above fits, at a real speed cost (see the `⚠️ Experimental` note under GGUF below).
+
 
 ---
 
@@ -13,6 +19,11 @@ Hybrid Automatic Video Colorizer (HAVC) server that exposes a GPU-accelerated co
 
 > If you already have the `.venv` with CUDA 13.0 and just need to update
 > the project to the latest version, follow these steps:
+
+> **Shortcut**: `quick_update.cmd` automates all of the steps below
+> (including the `comfy-kitchen`/`comfy-aimdo` pin) — activate the `.venv`
+> first, then double-click it or run it from a terminal. The manual steps
+> are documented here for reference and for non-Windows setups.
 
 ```powershell
 # 1) Pull the latest code
@@ -30,13 +41,24 @@ pip install packages\vscmnet2-1.0.9-py3-none-any.whl
 # 5) Re-apply the Nunchaku patch
 python patch_nunchaku.py
 
-# 6) Verify everything is up-to-date
-pip show torch       # Expected: 2.10.0+cu130
-pip show nunchaku    # Expected: 1.2.1+cu13.0torch2.10
+# 6) Required for qwen21-viggle (see What's New, 2026-09-26): pin
+#    comfy-kitchen and comfy-aimdo to the tested versions — install.cmd
+#    only sets these for a fresh install, an existing .venv needs this
+#    explicitly
+pip install comfy-kitchen==0.2.35
+pip install comfy-aimdo==0.5.5
+
+# 7) Verify everything is up-to-date
+pip show torch          # Expected: 2.10.0+cu130
+pip show nunchaku       # Expected: 1.2.1+cu13.0torch2.10
+pip show comfy-kitchen  # Expected: 0.2.35
+pip show comfy-aimdo    # Expected: 0.5.5
 ```
 
 > **Note**: steps 4–5 are only needed if `packages/` or `patch_nunchaku.py`
-> have changed. Check `git log --oneline -5` to see what was updated.
+> have changed. Step 6 is only needed to use `qwen21-viggle` — the other
+> three backends work with the older `comfy-kitchen`/`comfy-aimdo` versions.
+> Check `git log --oneline -5` to see what was updated.
 
 ---
 
@@ -78,6 +100,64 @@ pip show nunchaku    # Expected: 1.2.1+cu13.0torch2.10
 ---
 
 ## 📢 What's New
+
+### 2026-09-26 — qwen21-viggle Backend
+
+A fourth model backend has been added: **qwen21-viggle** (Qwen-Image-2.1
+native ComfyUI weights + [Viggle-Turbo](https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo)
+LoRA). Uses native **int8 ConvRot** quantized weights (not GGUF) — GGUF
+quantization was evaluated and works, but is ~2× slower for this model, so
+it was not adopted. Runs on 12GB+ VRAM GPUs, ~8-11 sec/frame (the time
+scales little with the number of steps — a fixed text-encoding/VAE-decode
+cost dominates over sampling).
+
+> **To use this backend on an existing installation**: `git pull` then run
+> `quick_update.cmd` — this pulls in the required `comfy-kitchen==0.2.35`/
+> `comfy-aimdo==0.5.5` versions (see [Quick Update](#-quick-update-existing-installation))
+> alongside the rest of the qwen21-viggle code.
+
+Four model files are required (*auto-downloaded on first run*):
+
+| File                                                                | Size    | Source                                                                                             |
+| -------------------------------------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------- |
+| `unet/qwen_image_2.1_int8_convrot.safetensors`                      | ~6.8 GB | [Comfy-Org/Qwen-Image-2.1](https://huggingface.co/Comfy-Org/Qwen-Image-2.1)                          |
+| `clip/qwen3vl_8b_int8_convrot.safetensors`                          | ~8.7 GB | [Comfy-Org/Qwen-Image-2.1](https://huggingface.co/Comfy-Org/Qwen-Image-2.1)                          |
+| `vae/qwen_image_2.1_vae_bf16.safetensors`                           | ~0.7 GB | [Comfy-Org/Qwen-Image-2.1](https://huggingface.co/Comfy-Org/Qwen-Image-2.1)                          |
+| `loras/Qwen-Image-2.1-viggle-turbo-v0.2.1-6step-lora-r128.safetensors` | ~0.7 GB | [Viggle/Qwen-Image-2.1-viggle-turbo](https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo)      |
+
+Launch via `run_server_qwen21.cmd` (no arguments needed — a single config
+is available). Config: `config/qwen21_viggle.json`.
+
+**Steps**: the Viggle-Turbo LoRA is distilled for 6-step inference (its
+native step count). Four precomputed sigma schedules are available —
+`2`, `4`, `6` (native), `8` — selected via the usual `steps` parameter; any
+other value falls back to the 6-step schedule with a warning in the logs.
+2/4/8 are experimental (the LoRA author only documents 5-7 step schedules).
+
+**`enhance_prompt`** (optional, default `False`, all colorization RPC
+methods): rewrites the prompt using Qwen3-VL as an image-aware "observer"
+before colorizing — useful when the plain prompt leaves color ambiguous on
+recognizable subjects (e.g. a costume with a well-known color) and the
+model resolves the ambiguity inconsistently. Adds ~15-20s per frame (a
+second Qwen3-VL generation pass). A direct, explicitly anti-hedging prompt
+often achieves the same result without the extra cost — see the
+[suggested prompt](#-suggested-inference-steps) below before reaching for
+`enhance_prompt` by default.
+
+> **Prerequisite**: 12 GB+ VRAM and 32GB+ RAM. Uses `comfy_bridge`'s
+> native ComfyUI runtime (no external ComfyUI checkout needed) — the same
+> as `gguf-qwen`/`longcat-gguf`, extended with native Qwen-Image-2.1/Qwen3-VL
+> support.
+
+The GUI Tab 2 (Colorization) supports this backend: selecting
+**qwen21-viggle** from Model Name auto-disables the (unused) Precision
+combo, reads model paths from `config/qwen21_viggle.json`, and **Run
+Server** launches `run_server_qwen21.cmd` instead of `start_server.cmd`.
+An **Enhance Prompt** checkbox is available in Tab 2 and Tab 4 (Fix Image).
+
+### 2026-09-25 — x264 encoder option (GUI)
+
+Added **x264** as a third software encoder choice in the GUI's Encode/Merge tab, alongside the existing `x265` (software, 10-bit) and `Nvenc` (GPU hardware, H.265). `x264` is an 8-bit H.264 CPU encoder — useful when H.265 decoding/compatibility is a constraint. The `x264.exe` binary is located next to `x265.exe`, same convention already used for `NVEncC64.exe` — no extra path field needed in the GUI. Now included in the Release 1.0.0 `tools.zip` alongside `x265.exe`/`mkvmerge.exe`. See [GUI README: install external tools](GUI/README_GUI.md#5-install-external-tools).
 
 ### 2026-09-24 — vscmnet2 1.0.9 (proximity-weighted memory matching)
 
@@ -246,7 +326,7 @@ It orchestrates the full video colorization pipeline from a single graphical int
 
 1. **Extract** reference frames via VapourSynth + scene-change detection
 2. **Colorize** frames via the HAVC DiT Server (standard or paired inference)
-3. **Encode** the result as H.265 (x265 or NVEnc)
+3. **Encode** the result as H.265 (x265 or NVEnc) or H.264 (x264)
 4. **Merge** the AI output with an existing color clip (optional, luminance-guided chroma blend)
 
 ![GUI Tab #2](https://github.com/dan64/HAVCServerDiT/blob/main/GUI/assets/gui_page3.jpg)
@@ -259,7 +339,7 @@ See [GUI/README_GUI.md](GUI/README_GUI.md) for installation, setup, and usage in
 
 ## ✨ Features
 
-- 📦 **3 backends, one API** : nunchaku-qwen (FP4/INT4, 4 sec/frame) for speed, gguf-qwen and longcat-gguf (Q3, …, Q8, 12 sec/frame) for lower VRAM
+- 📦 **4 backends, one API** : nunchaku-qwen (FP4/INT4, 4 sec/frame) for speed, gguf-qwen and longcat-gguf (Q3, …, Q8, 12 sec/frame) for lower VRAM, qwen21-viggle (int8 ConvRot, ~8-11 sec/frame) with optional Qwen3-VL prompt rewriting
 - 🎨 **Batch colorization** : process entire directories of B&W images via filesystem paths
 - 🖼️ **Paired inference** : colorize two images in a single forward pass (faster, temporally consistent)
 - 📡 **In-memory RPC** : pass raw PNG frames over XML-RPC without touching the filesystem (ideal for video pipelines)
@@ -318,7 +398,24 @@ Choose the backend that matches your hardware:
 > See `config/longcat_gguf_q*.json` — the general rule: lower quant = less VRAM.
 > Launch with `run_server_longcat.cmd` (Q4_K_M) or `start_server.cmd longcat|longcat-q3|...`.
 
-### Both backends
+### qwen21-viggle : ~8-11 sec/frame (Qwen-Image-2.1 int8 ConvRot)
+
+| Requirement | Details                            |
+| ----------- | ----------------------------------- |
+| **GPU**     | NVIDIA RTX 30/40/50  (12 GB+ VRAM) |
+| **RAM**     | 32 GB+                             |
+| **CUDA**    | 13.0+                              |
+
+> Native ComfyUI int8 ConvRot weights (not GGUF — GGUF was evaluated but is
+> ~2× slower for this model). Requires `comfy-kitchen==0.2.35` and
+> `comfy-aimdo==0.5.5` exactly (pinned, not a minimum — both are compiled
+> packages and an untested newer build is not assumed safe). A fresh
+> `install.cmd` run sets these; an **existing** `.venv` needs an explicit
+> upgrade, see [Quick Update](#-quick-update-existing-installation).
+> All files are auto-downloaded on first run — see [What's New](#-whats-new).
+> Launch with `run_server_qwen21.cmd`.
+
+### All backends
 
 | Requirement | Details                |
 | ----------- | ---------------------- |
@@ -511,8 +608,8 @@ pip install \
     av \
     torchsde \
     gguf \
-    comfy-aimdo==0.4.7 \
-    comfy-kitchen
+    comfy-aimdo==0.5.5 \
+    comfy-kitchen==0.2.35
 ```
 
 > **Nunchaku users**: `diffusers` was already installed in step 5 as the compatible
@@ -521,7 +618,11 @@ pip install \
 > `safetensors` is pulled automatically by diffusers.
 > 
 > `scipy`, `av`, and `torchsde` are required by the diffusers pipeline.
-> `gguf`, `comfy-aimdo`, and `comfy-kitchen` are required by the GGUF backend.
+> `gguf`, `comfy-aimdo`, and `comfy-kitchen` are required by the GGUF backends
+> (`gguf-qwen`/`longcat-gguf`) and by `qwen21-viggle`. The pinned versions
+> here (`0.5.5`/`0.2.35`) are required specifically for `qwen21-viggle` —
+> exact pins, not just a minimum, to avoid drifting to an untested newer
+> build of these compiled packages.
 
 ## 📂 Project Structure
 
@@ -532,10 +633,12 @@ dit-colorize-rpc/
 ├── dit_client_example.py        # Example RPC client : single frame
 ├── dit_client_pair_example.py   # Example RPC client : paired inference
 ├── patch_nunchaku.py            # Compatibility patch for nunchaku 1.2.1
-├── config/                      # Pipeline configs (nunchaku FP4/INT4 + gguf Q3–Q8)
+├── config/                      # Pipeline configs (nunchaku FP4/INT4, gguf/longcat Q3–Q8, qwen21-viggle)
+├── comfy_bridge/                # Self-contained ComfyUI runtime (gguf-qwen/longcat-gguf/qwen21-viggle)
 ├── install.cmd                  # Windows automated installer
-├── start_server.cmd             # Windows launcher : server
+├── start_server.cmd             # Windows launcher : server (nunchaku/gguf/longcat)
 ├── run_server_longcat.cmd       # Windows launcher : LongCat server
+├── run_server_qwen21.cmd        # Windows launcher : qwen21-viggle server
 ├── run_client_example.cmd       # Windows launcher : single frame example
 ├── run_client_pair_example.cmd  # Windows launcher : paired inference example
 ├── patch_nunchaku.cmd           # Windows launcher : nunchaku patch
@@ -602,7 +705,7 @@ Five quantization levels are available. All share the same structure with
 > **Q4 is the recommended default** : good quality/VRAM balance, but even Q3 is capable of delivering frames with acceptable colors.
 > All quants share the same VAE, mmproj, and LoRA files (auto-downloaded from HuggingFace).
 
-> **⚠️ The GGUF backend is experimental.** In some cases the frames colors may be faded or little colored. For production use, prefer `nunchaku-qwen` (FP4/INT4) which is not affected by such problems.
+> **⚠️ The GGUF backend is experimental.** In some cases the frames colors may be faded or little colored. For production use, prefer `nunchaku-qwen` (FP4/INT4) or `qwen21-viggle`, which are not affected by such problems — see the recommendation note at the top of this README.
 
 Config example (`config/qwen_gguf_q4.json`):
 
@@ -632,22 +735,51 @@ The LoRA file `Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors` enab
 
 The LoRA is merged statically (not applied as an adapter), so there is no runtime overhead.
 
+### qwen21-viggle Backend : `config/qwen21_viggle.json`
+
+A single config file — this backend has no quantization variants (int8
+ConvRot only):
+
+```json
+{
+    "model_name":  "qwen21-viggle",
+    "unet_name":   "models/unet/qwen_image_2.1_int8_convrot.safetensors",
+    "clip_name":   "models/clip/qwen3vl_8b_int8_convrot.safetensors",
+    "vae_name":    "qwen_image_2.1_vae_bf16.safetensors",
+    "lora_path":   "models/loras/Qwen-Image-2.1-viggle-turbo-v0.2.1-6step-lora-r128.safetensors",
+    "steps":       6,
+    "hf_unet":     "Comfy-Org/Qwen-Image-2.1",
+    "hf_clip":     "Comfy-Org/Qwen-Image-2.1",
+    "hf_vae":      "Comfy-Org/Qwen-Image-2.1",
+    "hf_lora":     "Viggle/Qwen-Image-2.1-viggle-turbo"
+}
+```
+
+> Note the different key names from the GGUF format above: `unet_name`/
+> `clip_name` (not `unet_gguf`/`clip_gguf`) — these are plain `.safetensors`
+> paths, not GGUF files. `steps: 6` here only documents the LoRA's native
+> step count for anyone reading the file; the actual number of steps used
+> at inference time is the `steps` argument passed per-call to the
+> colorization RPC methods (see [Suggested Inference Steps](#-suggested-inference-steps)
+> and [RPC API Reference](#-rpc-api-reference)), same as every other backend.
+
 ### Key reference
 
 | Key                                       | Required | Description                                                                                  |
 | ----------------------------------------- | -------- | -------------------------------------------------------------------------------------------- |
-| `model_name`                              | ✅        | `"nunchaku-qwen"` or `"gguf-qwen"`                                                           |
+| `model_name`                              | ✅        | `"nunchaku-qwen"`, `"gguf-qwen"`, `"longcat-gguf"`, or `"qwen21-viggle"`                     |
 | `quant`                                   |          | **GGUF only**: quantization level (`"q3"`, `"q4"`, `"q5"`, `"q6"`, `"q8"`). Default: `"q4"`  |
-| `model_precision`                         | ✅        | **Nunchaku**: `"fp4"` (RTX 50) or `"int4"` (RTX 30/40). **GGUF**: not used                   |
+| `model_precision`                         | ✅        | **Nunchaku**: `"fp4"` (RTX 50) or `"int4"` (RTX 30/40). **GGUF/qwen21-viggle**: not used     |
 | `unet_gguf` / `clip_gguf` / `mmproj_gguf` | ✅        | **GGUF only**: local paths to the GGUF model files                                           |
-| `model_rank`                              |          | **Nunchaku**: SVD rank (`"32"`). **GGUF**: not used                                          |
-| `model_inference_steps`                   |          | **Nunchaku**: diffusion steps (`"4"`). **GGUF**: not used                                    |
+| `unet_name` / `clip_name`                 | ✅        | **qwen21-viggle only**: local paths to the `.safetensors` model files                        |
+| `model_rank`                              |          | **Nunchaku**: SVD rank (`"32"`). **GGUF/qwen21-viggle**: not used                            |
+| `model_inference_steps`                   |          | **Nunchaku**: diffusion steps (`"4"`). **GGUF/qwen21-viggle**: not used at load time          |
 | `cache_dir`                               |          | HuggingFace cache directory. Leave empty to use the default `~/.cache/huggingface`           |
 | `full_model_path`                         |          | **Nunchaku**: local path to the transformer checkpoint. **GGUF**: not used                   |
-| `lora_path`                               |          | **GGUF only**: path to the Lightning 4-step LoRA (`.safetensors`). Omit to skip LoRA merging |
-| `steps`                                   |          | **GGUF only**: inference steps (`4` with LoRA, `20` without)                                 |
-| `vae_name`                                |          | **GGUF only**: VAE filename                                                                  |
-| `hf_*`                                    |          | **GGUF only**: HuggingFace repo names for auto-download                                      |
+| `lora_path`                               |          | **GGUF/qwen21-viggle**: path to the LoRA (`.safetensors`). Omit for GGUF to skip LoRA merging |
+| `steps`                                   |          | **GGUF**: inference steps (`4` with LoRA, `20` without). **qwen21-viggle**: documents the native step count only, not consumed at load time |
+| `vae_name`                                |          | **GGUF/qwen21-viggle only**: VAE filename                                                    |
+| `hf_*`                                    |          | **GGUF/qwen21-viggle only**: HuggingFace repo names for auto-download                        |
 
 ---
 
@@ -714,11 +846,11 @@ All methods return a `dict` with at least `{"ok": bool, "msg": str}`.
 
 ### Pipeline management
 
-| Method                                                                                                            | Returns         | Description                   |
-| ----------------------------------------------------------------------------------------------------------------- | --------------- | ----------------------------- |
-| `load_pipeline(model_name, model_precision, model_rank, model_inference_steps, cache_dir="", full_model_path="")` | `{"ok", "msg"}` | Load the model into VRAM      |
-| `is_pipeline_loaded()`                                                                                            | `bool`          | True if the pipeline is ready |
-| `unload_pipeline()`                                                                                               | `{"ok", "msg"}` | Release VRAM                  |
+| Method                                                                                                                                                              | Returns         | Description                   |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- | ------------------------------ |
+| `load_pipeline(model_name, model_precision, model_rank, model_inference_steps, cache_dir="", full_model_path="", vae_name="", hf_unet="", hf_clip="", hf_vae="", hf_lora="")` | `{"ok", "msg"}` | Load the model into VRAM. The `vae_name`/`hf_*` arguments are only meaningful for `gguf-qwen`/`longcat-gguf`/`qwen21-viggle` — omit for `nunchaku-qwen` |
+| `is_pipeline_loaded()`                                                                                                                                            | `bool`          | True if the pipeline is ready |
+| `unload_pipeline()`                                                                                                                                                | `{"ok", "msg"}` | Release VRAM                  |
 
 ### Stop control
 
@@ -730,29 +862,32 @@ All methods return a `dict` with at least `{"ok": bool, "msg": str}`.
 
 ### Colorization : filesystem-based
 
-| Method                                                                          | Returns                               | Description                                  |
-| ------------------------------------------------------------------------------- | ------------------------------------- | -------------------------------------------- |
-| `colorize_image(in_path, out_path, prompt, img_size=0, steps=2)`                | `{"ok", "elapsed", "skipped", "msg"}` | Single image, paths on the server filesystem |
-| `colorize_image_pair(img1_path, img2_path, out_dir, prompt, gap_px=8, steps=2)` | `{"ok", "elapsed", "msg"}`            | Two images, single inference pass            |
-| `colorize_single_image(img_path, out_dir, prompt, steps=2)`                     | `{"ok", "elapsed", "msg"}`            | Single image fallback (odd batch end)        |
+| Method                                                                                                | Returns                               | Description                                  |
+| ------------------------------------------------------------------------------------------------------- | -------------------------------------- | -------------------------------------------- |
+| `colorize_image(in_path, out_path, prompt, img_size=0, steps=2, enhance_prompt=False)`                | `{"ok", "elapsed", "skipped", "msg"}` | Single image, paths on the server filesystem |
+| `colorize_image_pair(img1_path, img2_path, out_dir, prompt, gap_px=8, steps=2, enhance_prompt=False)` | `{"ok", "elapsed", "msg"}`            | Two images, single inference pass            |
+| `colorize_single_image(img_path, out_dir, prompt, steps=2, enhance_prompt=False)`                     | `{"ok", "elapsed", "msg"}`            | Single image fallback (odd batch end)        |
 
 ### Colorization : in-memory (PNG bytes over RPC)
 
-| Method                                                                 | Returns                                                              | Description                       |
-| ---------------------------------------------------------------------- | -------------------------------------------------------------------- | --------------------------------- |
-| `colorize_frame(img_data, prompt, img_size=0, steps=2)`                | `{"ok", "data", "elapsed", "skipped", "msg"}`                        | Single frame as raw PNG bytes     |
-| `colorize_frame_pair(img1_data, img2_data, prompt, gap_px=8, steps=2)` | `{"ok", "data1", "data2", "elapsed", "skipped1", "skipped2", "msg"}` | Two frames, single inference pass |
+| Method                                                                                    | Returns                                                              | Description                       |
+| -------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | --------------------------------- |
+| `colorize_frame(img_data, prompt, img_size=0, steps=2, seed=42, skip_bw=False, enhance_prompt=False)`                | `{"ok", "data", "elapsed", "skipped", "msg"}`                        | Single frame as raw PNG bytes     |
+| `colorize_frame_pair(img1_data, img2_data, prompt, gap_px=8, steps=2, enhance_prompt=False)` | `{"ok", "data1", "data2", "elapsed", "skipped1", "skipped2", "msg"}` | Two frames, single inference pass |
 
 > `skipped=True` means the frame was too dark to colorize (average brightness < 9/255).
 > The returned `data` field contains the unchanged input in that case.
 
 ### Colorization : shared memory (same-host only, zero-copy)
 
-| Method                                                                                                     | Returns                                            | Description                                         |
-| ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------- | --------------------------------------------------- |
-| `colorize_frame_shm(shm_in, shm_out, h, w, prompt, img_size=0, steps=2)`                                   | `{"ok", "elapsed", "skipped", "msg"}`              | Single frame via shared memory                      |
-| `colorize_frame_pair_shm(shm_in1, shm_out1, h1, w1, shm_in2, shm_out2, h2, w2, prompt, gap_px=8, steps=4)` | `{"ok", "elapsed", "skipped1", "skipped2", "msg"}` | Two frames via shared memory, single inference pass |
+| Method                                                                                                                         | Returns                                            | Description                                         |
+| ---------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- | ----------------------------------------------------- |
+| `colorize_frame_shm(shm_in, shm_out, h, w, prompt, img_size=0, steps=2, seed=42, skip_bw=False, enhance_prompt=False)`             | `{"ok", "elapsed", "skipped", "msg"}`              | Single frame via shared memory                      |
+| `colorize_frame_pair_shm(shm_in1, shm_out1, h1, w1, shm_in2, shm_out2, h2, w2, prompt, gap_px=8, steps=4, enhance_prompt=False)`    | `{"ok", "elapsed", "skipped1", "skipped2", "msg"}` | Two frames via shared memory, single inference pass |
 
+> `enhance_prompt` (all methods above, default `False`) rewrites the prompt
+> via Qwen3-VL before colorizing — only meaningful for `qwen21-viggle`;
+> silently has no effect on the other backends. See [What's New](#-whats-new).
 > See [Shared Memory Transport](#-shared-memory-transport-same-host-only) for usage details.
 
 ---
@@ -986,13 +1121,18 @@ start_server.cmd int4
 **Convenience wrappers** — double-click or run from terminal without arguments:
 
 | File                     | Equivalent command         | Backend        |
-| ------------------------ | -------------------------- | -------------- |
+| ------------------------ | --------------------------- | -------------- |
 | `run_server_q3.cmd`      | `start_server.cmd q3`      | GGUF Q3_K_S    |
 | `run_server_fp4.cmd`     | `start_server.cmd fp4`     | Nunchaku FP4   |
 | `run_server_int4.cmd`    | `start_server.cmd int4`    | Nunchaku INT4  |
 | `run_server_longcat.cmd` | `start_server.cmd longcat` | LongCat Q4_K_M |
 
-> **GUI shortcut**: From the desktop GUI, go to Tab 2 (Colorization), pick a Model + Precision, and click **Run Server** — a terminal window opens with the correct `start_server.cmd` arguments.
+`run_server_qwen21.cmd` is a **separate, standalone launcher** for
+`qwen21-viggle` — it does not take an argument (`start_server.cmd
+qwen21-viggle` is not a thing), it always launches with
+`config/qwen21_viggle.json` (the only config available for this backend).
+
+> **GUI shortcut**: From the desktop GUI, go to Tab 2 (Colorization), pick a Model + Precision, and click **Run Server** — a terminal window opens with the correct `.cmd` file/arguments for the selected Model Name (`run_server_qwen21.cmd` when `qwen21-viggle` is selected, `start_server.cmd` with the right arguments otherwise).
 
 ---
 
@@ -1003,6 +1143,24 @@ start_server.cmd int4
 | Qwen (nunchaku fp4/int4) | **2**             | Good results with 2 steps when using lightning LoRA                                    |
 | Qwen (gguf q3–q8)        | **2**             | Default in config files; 4 steps possible but slower                                   |
 | LongCat (longcat-gguf)   | **8**             | Calibrated for 8 steps; best quality at 8 steps; 4 steps possible but colors are faded |
+| Qwen-Image-2.1 (qwen21-viggle) | **6**       | LoRA's native step count. `2`/`4`/`8` are experimental alternate schedules — `2` in particular trades a little brightness accuracy for ~25% less time, worth trying |
+
+> **Prompt tip (qwen21-viggle)**: on subjects with a strong color convention
+> (e.g. a well-known costume), the model can leave the color ambiguous and
+> resolve it inconsistently between runs. Before reaching for
+> `enhance_prompt` (which adds ~15-20s/frame), try a direct,
+> explicitly anti-hedging prompt — it solves the same problem for free in
+> most cases:
+> > "Add colors to this black-and-white image, not to hedge about what
+> > colors might be present. For any subject, garment, object, or setting
+> > whose color is a matter of common knowledge or strong convention,
+> > assign the expected color directly and confidently. Colorize this
+> > image using natural colors. Strictly preserve all shapes, edges and
+> > background details."
+>
+> Avoid naming specific example subjects in this prompt (e.g. "like a stop
+> sign") — the model may render that literal example into the scene instead
+> of just using it as a color reference.
 
 ---
 
@@ -1019,7 +1177,7 @@ python dit_rpc_server.py --module-dir /path/to/dit_colorize_main
 ```
 
 **`Model 'xxx' is not supported`**
-Supported values for `model_name` are `"nunchaku-qwen"` (FP4/INT4) and `"gguf-qwen"` (Q3_K_S, Q4_K_S, Q5_K_M, Q6_K, Q8_0). For `"gguf-qwen"`, the quantization is selected via the `quant` field in the config (e.g. `"q4"`).
+Supported values for `model_name` are `"nunchaku-qwen"` (FP4/INT4), `"gguf-qwen"` (Q3_K_S, Q4_K_S, Q5_K_M, Q6_K, Q8_0), `"longcat-gguf"`, and `"qwen21-viggle"`. For `"gguf-qwen"`, the quantization is selected via the `quant` field in the config (e.g. `"q4"`).
 
 **Pipeline takes a long time to load**
 **Nunchaku**: on the first run the model weights (~15–30 GB) are downloaded from HuggingFace.
@@ -1030,7 +1188,8 @@ Subsequent runs load from the local cache.
 
 ## 🔗 Credits
 
-- **Model**: [Qwen/Qwen-Image-Edit-2511](https://huggingface.co/Qwen/Qwen-Image-Edit-2511), [LongCat-Image-Edit-Turbo](https://huggingface.co/meituan-longcat/LongCat-Image-Edit-Turbo)
+- **Model**: [Qwen/Qwen-Image-Edit-2511](https://huggingface.co/Qwen/Qwen-Image-Edit-2511), [Qwen/Qwen-Image-2.1](https://huggingface.co/Comfy-Org/Qwen-Image-2.1), [LongCat-Image-Edit-Turbo](https://huggingface.co/meituan-longcat/LongCat-Image-Edit-Turbo)
+- **Viggle-Turbo LoRA**: [Viggle/Qwen-Image-2.1-viggle-turbo](https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo)
 - **Nunchaku quantization**: [Nunchaku / SVDQuant](https://github.com/mit-han-lab/nunchaku)
 - **GGUF dequantization kernels**: adapted from [ComfyUI-GGUF](https://github.com/city96/ComfyUI-GGUF) (Apache 2.0)
 - **Pipeline**: [Hugging Face Diffusers](https://github.com/huggingface/diffusers)

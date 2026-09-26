@@ -152,8 +152,8 @@ echo [5/6] Installing remaining dependencies ...
     av ^
     torchsde ^
     gguf ^
-    comfy-aimdo==0.4.7 ^
-    comfy-kitchen
+    comfy-aimdo==0.5.5 ^
+    comfy-kitchen==0.2.35
 if %errorlevel% neq 0 ( echo [ERROR] Dependency install failed. & pause & exit /b 1 )
 echo.
 

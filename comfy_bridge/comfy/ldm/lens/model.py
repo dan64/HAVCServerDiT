@@ -272,7 +272,7 @@ class LensTransformerBlock(nn.Module):
 class _AdaLayerNormContinuousNoAffine(nn.Module):
     """AdaLayerNormContinuous(elementwise_affine=False).
 
-    The reference uses ``scale, shift = chunk(2)`` (scale first)  :  opposite
+    The reference uses ``scale, shift = chunk(2)`` (scale first) — opposite
     to Flux's ``LastLayer``.
     """
 

@@ -110,10 +110,12 @@ class CMNET2RpcClient:
 
     def load_pipeline(self, model_name, model_precision, model_rank,
                       model_inference_steps, cache_dir,
-                      full_model_path="") -> dict:
+                      full_model_path="", vae_name="", hf_unet="",
+                      hf_clip="", hf_vae="", hf_lora="") -> dict:
         return self._proxy_slow.load_pipeline(
             model_name, model_precision, model_rank,
             model_inference_steps, cache_dir, full_model_path,
+            vae_name, hf_unet, hf_clip, hf_vae, hf_lora,
         )
 
     def is_pipeline_loaded(self) -> bool:
@@ -126,18 +128,18 @@ class CMNET2RpcClient:
         return bool(self._proxy_fast.clear_stop())
 
     def colorize_image(self, in_path, out_path, prompt,
-                       img_size=0, steps=2) -> dict:
+                       img_size=0, steps=2, enhance_prompt=False) -> dict:
         return self._proxy_slow.colorize_image(
-            str(in_path), str(out_path), prompt, img_size, steps)
+            str(in_path), str(out_path), prompt, img_size, steps, enhance_prompt)
 
     def colorize_image_pair(self, img1_path, img2_path,
-                            out_dir, prompt, gap_px=8, steps=4) -> dict:
+                            out_dir, prompt, gap_px=8, steps=4, enhance_prompt=False) -> dict:
         return self._proxy_slow.colorize_image_pair(
-            str(img1_path), str(img2_path), str(out_dir), prompt, gap_px, steps)
+            str(img1_path), str(img2_path), str(out_dir), prompt, gap_px, steps, enhance_prompt)
 
-    def colorize_single_image(self, img_path, out_dir, prompt, steps=4) -> dict:
+    def colorize_single_image(self, img_path, out_dir, prompt, steps=4, enhance_prompt=False) -> dict:
         return self._proxy_slow.colorize_single_image(
-            str(img_path), str(out_dir), prompt, steps)
+            str(img_path), str(out_dir), prompt, steps, enhance_prompt)
 
 
 # ---------------------------------------------------------------------------
@@ -160,10 +162,12 @@ def load_all_configs():
         "model_precision":        "fp4",
         "steps":                  "2",
         "fast_pipe":              True,
+        "enhance_prompt":         False,
         # --- fix image ---
         "fix_steps":              "2",
         "fix_bw":                 True,
         "fix_batch":              False,
+        "fix_enhance_prompt":     False,
         "fix_prompt_max":         "30",
         "fix_prompts":            ["color this image, natural colors."],
         # --- fix video ---
@@ -184,7 +188,7 @@ def load_all_configs():
         # --- encode ---
         "mkv_path":       r"",
         "hf_cache":       "",
-        "prompt":         "color this image, natural colors. Strictly preserve all shapes, edges and background details.",
+        "prompt":         "Add colors to this black-and-white image, not to hedge about what colors might be present. For any subject, garment, object, or setting whose color is a matter of common knowledge or strong convention, assign the expected color directly and confidently. Colorize this image using natural colors. Strictly preserve all shapes, edges and background details.",
         "shutdown_on_complete": False,
         "dupe_first_frame":     False,
         "do_step1":       False,
@@ -218,6 +222,19 @@ def load_all_configs():
         except Exception:
             return defaults
     return defaults
+
+
+def load_viggle_config():
+    """Read config/qwen21_viggle.json (unet/clip/lora/vae paths + hf_* repos).
+    Returns None (and shows a popup) if missing or malformed - never raises."""
+    server_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    path = os.path.join(server_dir, "config", "qwen21_viggle.json")
+    try:
+        with open(path, "r") as f:
+            return json.load(f)
+    except Exception as e:
+        sg.popup_error(f"Could not read {path}: {e}")
+        return None
 
 
 def save_all_configs(cfg):
@@ -600,13 +617,32 @@ def orchestrator(init_values, window):
         # Load pipeline if not already loaded
         if not rpc.is_pipeline_loaded():
             log_message('Loading AI pipeline on server...')
-            result = rpc.load_pipeline(
-                values["-MODEL_NAME-"],
-                values["-MODEL_PRECISION-"],
-                cfg.get("model_rank", "32"),
-                cfg.get("model_inference_steps", "4"),
-                values["-CACHE_DIR-"],
-            )
+            model_name = values["-MODEL_NAME-"]
+            if model_name == "qwen21-viggle":
+                vcfg = load_viggle_config()
+                if vcfg is None:
+                    return
+                result = rpc.load_pipeline(
+                    model_name,
+                    vcfg["unet_name"],
+                    vcfg["clip_name"],
+                    str(vcfg.get("steps", 6)),
+                    values["-CACHE_DIR-"],
+                    vcfg["lora_path"],
+                    vcfg["vae_name"],
+                    vcfg.get("hf_unet", ""),
+                    vcfg.get("hf_clip", ""),
+                    vcfg.get("hf_vae", ""),
+                    vcfg.get("hf_lora", ""),
+                )
+            else:
+                result = rpc.load_pipeline(
+                    model_name,
+                    values["-MODEL_PRECISION-"],
+                    cfg.get("model_rank", "32"),
+                    cfg.get("model_inference_steps", "4"),
+                    values["-CACHE_DIR-"],
+                )
             if not result.get("ok"):
                 log_message(f"⚠️ Unable to load pipeline: {result.get('msg')}")
                 return
@@ -648,10 +684,11 @@ def orchestrator(init_values, window):
                 out_img_path = out_dir / (img_path.stem + ".jpg")
                 prompt = values["-PROMPT-"]
                 steps  = int(values.get("-STEPS-", cfg["steps"]))
+                enhance_prompt = values.get("-ENHANCE_PROMPT-", False)
 
                 result = rpc.colorize_image(
                     str(img_path), str(out_img_path),
-                    prompt, img_size=0, steps=steps,
+                    prompt, img_size=0, steps=steps, enhance_prompt=enhance_prompt,
                 )
                 if not result.get("ok"):
                     log_message(f"⚠️ {img_path.name}: {result.get('msg')}")
@@ -691,13 +728,32 @@ def orchestrator(init_values, window):
         # Load pipeline if not already loaded
         if not rpc.is_pipeline_loaded():
             log_message("Loading AI pipeline on server...")
-            result = rpc.load_pipeline(
-                values["-MODEL_NAME-"],
-                values["-MODEL_PRECISION-"],
-                cfg.get("model_rank", "32"),
-                cfg.get("model_inference_steps", "4"),
-                values["-CACHE_DIR-"],
-            )
+            model_name = values["-MODEL_NAME-"]
+            if model_name == "qwen21-viggle":
+                vcfg = load_viggle_config()
+                if vcfg is None:
+                    return
+                result = rpc.load_pipeline(
+                    model_name,
+                    vcfg["unet_name"],
+                    vcfg["clip_name"],
+                    str(vcfg.get("steps", 6)),
+                    values["-CACHE_DIR-"],
+                    vcfg["lora_path"],
+                    vcfg["vae_name"],
+                    vcfg.get("hf_unet", ""),
+                    vcfg.get("hf_clip", ""),
+                    vcfg.get("hf_vae", ""),
+                    vcfg.get("hf_lora", ""),
+                )
+            else:
+                result = rpc.load_pipeline(
+                    model_name,
+                    values["-MODEL_PRECISION-"],
+                    cfg.get("model_rank", "32"),
+                    cfg.get("model_inference_steps", "4"),
+                    values["-CACHE_DIR-"],
+                )
             if not result.get("ok"):
                 log_message(f"⚠️ Unable to load pipeline: {result.get('msg')}")
                 return
@@ -730,7 +786,8 @@ def orchestrator(init_values, window):
 
         # Group into pairs
         pairs = [image_files[i:i + 2] for i in range(0, tot_num_images, 2)]
-        prompt     = values["-PROMPT-"]
+        prompt         = values["-PROMPT-"]
+        enhance_prompt = values.get("-ENHANCE_PROMPT-", False)
         tot_time   = 0.0
         count      = 0
         n_images   = 0
@@ -755,7 +812,7 @@ def orchestrator(init_values, window):
                 if len(pair) == 2:
                     result = rpc.colorize_image_pair(
                         str(pair[0]), str(pair[1]),
-                        str(out_dir), prompt, gap_px=8, steps=steps
+                        str(out_dir), prompt, gap_px=8, steps=steps, enhance_prompt=enhance_prompt
                     )
                     if not result.get("ok"):
                         log_message(f"⚠️ Pair {pair[0].name}+{pair[1].name}: {result.get('msg')}")
@@ -770,6 +827,7 @@ def orchestrator(init_values, window):
                 else:
                     result = rpc.colorize_single_image(
                         str(pair[0]), str(out_dir), prompt,
+                        steps=steps, enhance_prompt=enhance_prompt,
                     )
                     if not result.get("ok"):
                         log_message(f"⚠️ {pair[0].name}: {result.get('msg')}")
@@ -823,7 +881,7 @@ def orchestrator(init_values, window):
         vsp_cmd = (f'"{values["-VSPIPE-"]}" "{encode_vpy}" - '
                    f'-a "VideoPath={orig_video_path}" -a "RefDir={ref_dir}" '
                    f'-a "RenderSpeed={render_speed}" -a "MemoryFrames={memory_frames}" '
-                   f'-a "Backbone={backbone}" '
+                   f'-a "Backbone={backbone}" -a "BitDepth=10" '
                    f'--outputindex 0 -c y4m')
         x265_cmd = (f'"{values["-X265-"]}" --preset fast --input - '
                     f'--fps {fps_val} --output-depth 10 --y4m --profile main10 '
@@ -839,6 +897,86 @@ def orchestrator(init_values, window):
                 window.write_event_value("-FPS-", info["fps"])
 
         full_cmd = f"{vsp_cmd} | {x265_cmd}"
+        log_message(f'ℹ️ Starting encoding with script: "{values["-ENCODE_VPY-"]}"')
+        log_message("----------------------------------------------------------------")
+        log_message(f"[ENCODE] {full_cmd.strip()}")
+        log_message("----------------------------------------------------------------")
+
+        proc = subprocess.Popen(
+            full_cmd, shell=True,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            text=True, bufsize=1, universal_newlines=True,
+            creationflags=(subprocess.CREATE_NEW_PROCESS_GROUP
+                           if os.name == 'nt' else 0),
+        )
+        state["current_process"] = proc
+        start_time = time.time()
+        frame_re   = re.compile(r"(\d+)(?:/\d+)?\s+frames?\b", re.IGNORECASE)
+        curr = 0
+        for line in proc.stderr:
+            if state["stop_requested"]:
+                break
+            line = line.strip()
+            if total_frames > 0:
+                match = frame_re.search(line)
+                if match:
+                    curr = int(match.group(1))
+                    p    = min(100, int((curr / total_frames) * 100))
+                    log_gui_only(f"[ENCODE] {line}")
+                    eta = get_eta_string(curr, total_frames, start_time)
+                    update_status(window, f"Status: ETA ENCODE: {eta}...", "info")
+                    window.write_event_value(
+                        "-PROGRESS-", (p, f"{p}% {curr}/{total_frames}"))
+                else:
+                    log_message(line)
+
+        proc.wait()
+        p = min(100, int((curr / total_frames) * 100)) if total_frames > 0 else 100
+        window.write_event_value("-PROGRESS-", (p, f"{p}% {curr}/{total_frames}"))
+        if p < 90:
+            update_status(window, "Status: Failed", "error")
+            log_message(f"[FAILED] Encoded only {curr}/{total_frames}")
+        else:
+            update_status(window, "Status: OK", "success")
+            log_message(f"[COMPLETED] Encoding: {orig_video_path} @ {fps_val} fps")
+            create_video_mkv(values["-MKV_PATH-"], out_video_file, fps_val, log_message)
+        return out_video_file
+
+    # ---- STEP 3a-bis: ENCODE x264 ----
+    def do_encode_x264(values, window, orig_video_path):
+        ref_dir = os.path.join(values["-BASE_DIR-"], "ref_qwen")
+        video_base_path = os.path.splitext(values["-VIDEO_DROPDOWN-"])[0]
+        sfx = "_dt-color.h264" if "cmnet2" in video_base_path else "_cmnet2_dt-color.h264"
+        out_video_file = os.path.join(values["-BASE_DIR-"], video_base_path + sfx)
+
+        crf_val    = window["-CRF-"].get().strip() or "20.0"
+        fps_val    = values["-FPS-"].strip() or "24000/1001"
+        render_speed = window["-RENDER_SPEED-"].get().strip() or "auto"
+        memory_frames = window["-MEMORY_FRAMES-"].get().strip() or "20"
+        backbone = window["-BACKBONE-"].get().strip() or "dinov3"
+        encode_vpy = os.path.join(values["-SCRIPT_DIR-"], values["-ENCODE_VPY-"])
+        x264_exe = os.path.join(
+            Path(values["-X265-"]).parent.parent / "x264", "x264.exe")
+
+        vsp_cmd = (f'"{values["-VSPIPE-"]}" "{encode_vpy}" - '
+                   f'-a "VideoPath={orig_video_path}" -a "RefDir={ref_dir}" '
+                   f'-a "RenderSpeed={render_speed}" -a "MemoryFrames={memory_frames}" '
+                   f'-a "Backbone={backbone}" -a "BitDepth=8" '
+                   f'--outputindex 0 -c y4m')
+        x264_cmd = (f'"{x264_exe}" --preset medium --demuxer y4m '
+                    f'--fps {fps_val} --profile high '
+                    f'--crf {crf_val} --output "{out_video_file}" -')
+
+        total_frames = state.get("total_frames", -1)
+        if total_frames <= 0:
+            info = get_video_info(
+                values["-VSPIPE-"], orig_video_path,
+                values["-SCRIPT_DIR-"], log_message)
+            if info:
+                total_frames = info["frames"]
+                window.write_event_value("-FPS-", info["fps"])
+
+        full_cmd = f"{vsp_cmd} | {x264_cmd}"
         log_message(f'ℹ️ Starting encoding with script: "{values["-ENCODE_VPY-"]}"')
         log_message("----------------------------------------------------------------")
         log_message(f"[ENCODE] {full_cmd.strip()}")
@@ -908,7 +1046,7 @@ def orchestrator(init_values, window):
         vsp_cmd = (f'"{values["-VSPIPE-"]}" "{encode_vpy}" - '
                    f'-a "VideoPath={orig_video_path}" -a "RefDir={ref_dir}" '
                    f'-a "RenderSpeed={render_speed}" -a "MemoryFrames={memory_frames}" '
-                   f'-a "Backbone={backbone}" '
+                   f'-a "Backbone={backbone}" -a "BitDepth=10" '
                    f'--outputindex 0 -c y4m')
         sharp_filter = window["-USE_SHARP-"].get()
         sharp = "--vpp-unsharp --vpp-edgelevel" if sharp_filter else ""
@@ -1034,8 +1172,12 @@ def orchestrator(init_values, window):
                 if not window["-DO_STEP3-"].get():
                     log_message("⚠️ Encoding task cancelled")
                 else:
-                    if window["-ENCODER-"].get() == "x265":
+                    selected_encoder = window["-ENCODER-"].get()
+                    if selected_encoder == "x265":
                         last_encoded_file = do_encode_x265(
+                            init_values, window, orig_video_path)
+                    elif selected_encoder == "x264":
+                        last_encoded_file = do_encode_x264(
                             init_values, window, orig_video_path)
                     else:
                         last_encoded_file = do_encode_Nvenc(
@@ -1073,12 +1215,12 @@ sg.theme("DarkBlue14")
 merge_values:      list[str] = [f"{x/100:.2f}" for x in range(20, 75, 5)]
 x265_crf_values:   list[str] = [f"{x/10:.2f}" for x in range(180, 285, 5)]
 nvenc_cq_values:   list[str] = [f"{x/10:.2f}" for x in range(220, 305, 5)]
-encoder_values:    list[str] = ['x265', 'Nvenc']
+encoder_values:    list[str] = ['x264', 'x265', 'Nvenc']
 memory_values:     list[str] = [f"{x}" for x in range(10, 110, 10)]
-steps_values:      list[str] = ['2', '4', '8']
+steps_values:      list[str] = ['2', '4', '6', '8']
 speed_values:    list[str] = ['auto', 'fast', 'medium', 'slow', 'slower']
 backbone_values: list[str] = ['dinov3', 'dinov2']
-model_list:        list[str] = ["nunchaku-qwen", "gguf-qwen", "longcat-gguf"]
+model_list:        list[str] = ["nunchaku-qwen", "gguf-qwen", "longcat-gguf", "qwen21-viggle"]
 model_p_list:      list[str] = ["fp4", "int4", "q3", "q4", "q5", "q6", "q8"]
 model_r_list:      list[str] = ["32", "128"]
 model_steps_list:  list[str] = ["4", "8"]
@@ -1135,15 +1277,34 @@ def _fix_colorize_worker(values, window, seed, pil_in=None):
 
         # Ensure pipeline loaded  
         if not rpc.is_pipeline_loaded():  
-            window.write_event_value("-FIX_LOG-", "Loading pipeline...")  
-            result = rpc.load_pipeline(  
-                values["-MODEL_NAME-"],  
-                values["-MODEL_PRECISION-"],  
-                cfg.get("model_rank", "32"),  
-                cfg.get("model_inference_steps", "4"),  
-                values["-CACHE_DIR-"],  
-            )  
-            if not result.get("ok"):  
+            window.write_event_value("-FIX_LOG-", "Loading pipeline...")
+            model_name = values["-MODEL_NAME-"]
+            if model_name == "qwen21-viggle":
+                vcfg = load_viggle_config()
+                if vcfg is None:
+                    return
+                result = rpc.load_pipeline(
+                    model_name,
+                    vcfg["unet_name"],
+                    vcfg["clip_name"],
+                    str(vcfg.get("steps", 6)),
+                    values["-CACHE_DIR-"],
+                    vcfg["lora_path"],
+                    vcfg["vae_name"],
+                    vcfg.get("hf_unet", ""),
+                    vcfg.get("hf_clip", ""),
+                    vcfg.get("hf_vae", ""),
+                    vcfg.get("hf_lora", ""),
+                )
+            else:
+                result = rpc.load_pipeline(
+                    model_name,
+                    values["-MODEL_PRECISION-"],
+                    cfg.get("model_rank", "32"),
+                    cfg.get("model_inference_steps", "4"),
+                    values["-CACHE_DIR-"],
+                )
+            if not result.get("ok"):
                 window.write_event_value("-FIX_LOG-", f"⚠️ {result.get('msg')}")  
                 return  
 
@@ -1158,29 +1319,30 @@ def _fix_colorize_worker(values, window, seed, pil_in=None):
             # Sort alphabetically (default at index 0 stays)
             if len(state["fix_prompts"]) > 2:
                 state["fix_prompts"][1:] = sorted(state["fix_prompts"][1:], key=str.lower)
-        steps  = int(values["-FIX_STEPS-"])  
+        steps  = int(values["-FIX_STEPS-"])
         host   = values["-RPC_HOST-"].strip()
         # Honor the "Convert in B&W" checkbox
         skip_bw = not values.get("-FIX_BW-", True)
-        rpc.clear_stop()  
+        enhance_prompt = values.get("-FIX_ENHANCE_PROMPT-", False)
+        rpc.clear_stop()
 
-        t0 = time.time()  
-        if _is_local_host(host):  
-            shm_in, h, w = _shm_write_fix(pil_in)  
-            try:  
-                shm_out = SharedMemory(name=f"fix_out_{uuid.uuid4().hex[:12]}", create=True, size=h * w * 3)  
-                res = rpc._proxy_slow.colorize_frame_shm(  
-                    shm_in.name, shm_out.name, h, w, prompt, 0, steps, seed, skip_bw)  
-                out = pil_in if res.get("skipped") else (_shm_read_fix(shm_out, h, w) if res.get("ok") else pil_in)  
-                shm_out.close()  
-                shm_out.unlink()  
-            finally:  
-                shm_in.close()  
-                shm_in.unlink()  
-        else:  
-            data = _pil_to_bytes(pil_in)  
-            res = rpc._proxy_slow.colorize_frame(data, prompt, 0, steps, seed, skip_bw)  
-            out = _bytes_to_pil(res.get("data", data)) if res.get("ok") else pil_in  
+        t0 = time.time()
+        if _is_local_host(host):
+            shm_in, h, w = _shm_write_fix(pil_in)
+            try:
+                shm_out = SharedMemory(name=f"fix_out_{uuid.uuid4().hex[:12]}", create=True, size=h * w * 3)
+                res = rpc._proxy_slow.colorize_frame_shm(
+                    shm_in.name, shm_out.name, h, w, prompt, 0, steps, seed, skip_bw, enhance_prompt)
+                out = pil_in if res.get("skipped") else (_shm_read_fix(shm_out, h, w) if res.get("ok") else pil_in)
+                shm_out.close()
+                shm_out.unlink()
+            finally:
+                shm_in.close()
+                shm_in.unlink()
+        else:
+            data = _pil_to_bytes(pil_in)
+            res = rpc._proxy_slow.colorize_frame(data, prompt, 0, steps, seed, skip_bw, enhance_prompt)
+            out = _bytes_to_pil(res.get("data", data)) if res.get("ok") else pil_in
 
         elapsed = time.time() - t0
 
@@ -1269,7 +1431,7 @@ tab1_layout = [
     [sg.Frame("Tasks to Execute", [
         [sg.Checkbox("1. Extract Reference Frames",    key="-DO_STEP1-", default=cfg["do_step1"])],
         [sg.Checkbox("2. Colorize Frames (AI)",        key="-DO_STEP2-", default=cfg["do_step2"])],
-        [sg.Checkbox("3. Encode Video (x265 / Nvenc)", key="-DO_STEP3-", default=cfg["do_step3"])],
+        [sg.Checkbox("3. Encode Video (x265 / x264 / Nvenc)", key="-DO_STEP3-", default=cfg["do_step3"])],
         [sg.Checkbox("4. Video Merge (NVEnc)",         key="-DO_STEP4-", default=cfg["do_step4"])],
     ], expand_x=True)],
     [sg.Checkbox("Shutdown PC when finished", key="-SHUTDOWN-",
@@ -1352,7 +1514,7 @@ tab3_layout = [
      sg.Input(cfg["hf_cache"], key="-CACHE_DIR-", expand_x=True), sg.FolderBrowse()],
     [sg.Frame("Model Technical Details", [
         [sg.Text("Model Name:"),
-         sg.Combo(model_list,      default_value=cfg["model_name"],           key="-MODEL_NAME-",     readonly=True, size=(18,1)),
+         sg.Combo(model_list,      default_value=cfg["model_name"],           key="-MODEL_NAME-",     readonly=True, size=(18,1), enable_events=True),
          sg.Text("Precision:"),
          sg.Combo(model_p_list,    default_value=cfg["model_precision"],      key="-MODEL_PRECISION-",readonly=True, size=(6,1)),
           sg.Button("Run Server", key="-RUN_SERVER-", button_color=("white", "#1a6b1a"))],
@@ -1360,7 +1522,8 @@ tab3_layout = [
          sg.Combo(steps_values, default_value=cfg["steps"], key="-STEPS-", readonly=True, size=(6,1)),
          sg.Checkbox("Fast Pipeline", key="-FAST_PIPE-", default=cfg["fast_pipe"])],
     ], expand_x=True)],
-    [sg.Text("Prompt:"), sg.Input(cfg["prompt"], key="-PROMPT-", expand_x=True)],
+    [sg.Text("Prompt:"), sg.Multiline(cfg["prompt"], key="-PROMPT-", expand_x=True, size=(80,3), no_scrollbar=True),
+     sg.Checkbox("Enhance Prompt", key="-ENHANCE_PROMPT-", default=cfg.get("enhance_prompt", False))],
     [sg.Column([
         [sg.Text("B&W Input")],
         [sg.Image(data=b'', key="-IMG_BW-", size=(370, 350), background_color="black")],
@@ -1423,7 +1586,8 @@ tab5_layout = [
 
     [sg.Text("Colorization Steps:"),
      sg.Combo(steps_values, default_value=cfg["fix_steps"], key="-FIX_STEPS-", readonly=True, size=(6,1)),
-     sg.Checkbox("Convert in B&W before colorization", key="-FIX_BW-", default=cfg.get("fix_bw", True))],
+     sg.Checkbox("Convert in B&W before colorization", key="-FIX_BW-", default=cfg.get("fix_bw", True)),
+     sg.Checkbox("Enhance Prompt", key="-FIX_ENHANCE_PROMPT-", default=cfg.get("fix_enhance_prompt", False))],
     [sg.Text("Prompt:"),
      sg.Combo(state["fix_prompts"], default_value=state["fix_prompts"][0],
               key="-FIX_PROMPT-", expand_x=True, size=(40,1)),
@@ -2525,32 +2689,43 @@ while True:
             window["-FIX_STATUS-"].update("Loaded: from Fix Colors output")
             window["-FIXC_STATUS-"].update("Copied output → Fix Image")
 
+    # ---- Model Name changed: disable Precision for backends that don't use it ----
+    if event == "-MODEL_NAME-":
+        is_viggle = (values["-MODEL_NAME-"] == "qwen21-viggle")
+        window["-MODEL_PRECISION-"].update(disabled=is_viggle)
+
     # ---- Run Server ----
     if event == "-RUN_SERVER-":
         model_name = values["-MODEL_NAME-"]
         precision = values["-MODEL_PRECISION-"]
+        server_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        cmd_path = None
         arg = ''
-        if model_name == "longcat-gguf":
-            # Map precision to longcat quant variant
+        if model_name == "qwen21-viggle":
+            cmd_path = os.path.join(server_dir, 'run_server_qwen21.cmd')
+        elif model_name == "longcat-gguf":
             longcat_quant_map = {"q3": "longcat-q3", "q4": "longcat-q4", "q5": "longcat-q5",
                                  "q6": "longcat-q6", "q8": "longcat-q8"}
             arg = longcat_quant_map.get(precision, "longcat-q4")
-        elif model_name == "nunchaku-qwen":
-            arg = precision  # fp4 or int4
-        elif model_name == "gguf-qwen":
-            arg = precision  # q3, q4, q5, q6, q8
-        if arg:
-            server_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             cmd_path = os.path.join(server_dir, 'start_server.cmd')
-            if os.path.isfile(cmd_path):
-                subprocess.Popen(
-                    ['cmd', '/c', 'start', 'Running HAVC Server - ' + model_name, cmd_path, arg],
-                    cwd=server_dir,
-                    creationflags=subprocess.CREATE_NEW_CONSOLE,
-                )
-                window["-LOG_BOX-"].print(f'[Run Server] Launched: {cmd_path} {arg}')
-            else:
-                sg.popup_error(f'start_server.cmd not found at: {cmd_path}')
+        elif model_name == "nunchaku-qwen":
+            arg = precision
+            cmd_path = os.path.join(server_dir, 'start_server.cmd')
+        elif model_name == "gguf-qwen":
+            arg = precision
+            cmd_path = os.path.join(server_dir, 'start_server.cmd')
+        if cmd_path and os.path.isfile(cmd_path):
+            launch_args = ['cmd', '/c', 'start', 'Running HAVC Server - ' + model_name, cmd_path]
+            if arg:
+                launch_args.append(arg)
+            subprocess.Popen(
+                launch_args,
+                cwd=server_dir,
+                creationflags=subprocess.CREATE_NEW_CONSOLE,
+            )
+            window["-LOG_BOX-"].print(f'[Run Server] Launched: {cmd_path} {arg}'.rstrip())
+        elif cmd_path:
+            sg.popup_error(f'{os.path.basename(cmd_path)} not found at: {cmd_path}')
         else:
             sg.popup_error('Unknown model/precision combination.')
 
@@ -2624,9 +2799,11 @@ while True:
             "model_precision":       values["-MODEL_PRECISION-"],
             "steps":                 values["-STEPS-"],
             "fast_pipe":             values["-FAST_PIPE-"],
+            "enhance_prompt":        values["-ENHANCE_PROMPT-"],
             "fix_steps":              values["-FIX_STEPS-"],
             "fix_bw":                 values["-FIX_BW-"],
             "fix_batch":              values["-FIX_BATCH-"],
+            "fix_enhance_prompt":     values["-FIX_ENHANCE_PROMPT-"],
             "fix_prompt_max":         values["-FIX_PROMPT_MAX-"],
             "fix_prompts":            state["fix_prompts"],
             # fix video

@@ -1,0 +1,12 @@
+{
+    "model_name":  "qwen21-viggle",
+    "unet_name":   "models/unet/qwen_image_2.1_int8_convrot.safetensors",
+    "clip_name":   "models/clip/qwen3vl_8b_int8_convrot.safetensors",
+    "vae_name":    "qwen_image_2.1_vae_bf16.safetensors",
+    "lora_path":   "models/loras/Qwen-Image-2.1-viggle-turbo-v0.2.1-6step-lora-r128.safetensors",
+    "steps":       6,
+    "hf_unet":     "Comfy-Org/Qwen-Image-2.1",
+    "hf_clip":     "Comfy-Org/Qwen-Image-2.1",
+    "hf_vae":      "Comfy-Org/Qwen-Image-2.1",
+    "hf_lora":     "Viggle/Qwen-Image-2.1-viggle-turbo"
+}

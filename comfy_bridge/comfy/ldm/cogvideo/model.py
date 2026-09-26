@@ -520,7 +520,7 @@ class CogVideoXTransformer3DModel(nn.Module):
     def _get_rotary_emb(self, h, w, t, device):
         """Compute CogVideoX 3D rotary positional embeddings.
 
-        For CogVideoX 1.5 (patch_size_t != None): uses "slice" mode  :  grid positions
+        For CogVideoX 1.5 (patch_size_t != None): uses "slice" mode — grid positions
         are integer arange computed at max_size, then sliced to actual size.
         For CogVideoX 1.0 (patch_size_t == None): uses "linspace" mode with crop coords
         scaled by spatial_interpolation_scale.
@@ -531,7 +531,7 @@ class CogVideoXTransformer3DModel(nn.Module):
         dim_w = d // 8 * 3
 
         if self.patch_size_t is not None:
-            # CogVideoX 1.5: "slice" mode  :  positions are simple integer indices
+            # CogVideoX 1.5: "slice" mode — positions are simple integer indices
             # Compute at max(sample_size, actual_size) then slice to actual
             base_h = self.patch_embed.sample_height // self.patch_size
             base_w = self.patch_embed.sample_width // self.patch_size

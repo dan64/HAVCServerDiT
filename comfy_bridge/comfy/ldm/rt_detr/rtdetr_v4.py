@@ -31,7 +31,7 @@ class ConvBNAct(nn.Module):
         super().__init__()
 
         self.conv = operations.Conv2d(ic, oc, k, s, (k - 1) // 2, groups=groups, bias=False, device=device, dtype=dtype)
-        self.bn   = nn.BatchNorm2d(oc, device=device, dtype=dtype)
+        self.bn   = operations.BatchNorm2d(oc, device=device, dtype=dtype)
         self.act  = nn.ReLU() if use_act else nn.Identity()
 
     def forward(self, x):
@@ -137,7 +137,7 @@ class HGNetv2(nn.Module):
 
 
 # ---------------------------------------------------------------------------
-# Encoder  :  HybridEncoder  (dfine version: RepNCSPELAN4 + SCDown PAN)
+# Encoder — HybridEncoder  (dfine version: RepNCSPELAN4 + SCDown PAN)
 # ---------------------------------------------------------------------------
 
 class ConvNormLayer(nn.Module):
@@ -177,7 +177,7 @@ class CSPLayer(nn.Module):
 
 
 class RepNCSPELAN4(nn.Module):
-    """CSP-ELAN block  :  the FPN/PAN block in RTv4's HybridEncoder."""
+    """CSP-ELAN block — the FPN/PAN block in RTv4's HybridEncoder."""
     def __init__(self, c1, c2, c3, c4, n=3, act='silu', device=None, dtype=None, operations=None):
         super().__init__()
         self.c = c3 // 2
@@ -274,7 +274,7 @@ class HybridEncoder(nn.Module):
             for ch in in_channels
         ])
 
-        # AIFI transformer  :  use _TransformerEncoder so keys are  encoder.0.layers.N.*
+        # AIFI transformer — use _TransformerEncoder so keys are  encoder.0.layers.N.*
         self.encoder = nn.ModuleList([
             _TransformerEncoder(num_encoder_layers, hidden_dim, nhead, dim_feedforward, device=device, dtype=dtype, operations=operations)
             for _ in range(len(use_encoder_idx))
@@ -291,7 +291,7 @@ class HybridEncoder(nn.Module):
             [RepNCSPELAN4(hidden_dim * 2, hidden_dim, hidden_dim * 2, round(exp * hidden_dim // 2), nb, act=act, device=device, dtype=dtype, operations=operations)
              for _ in range(len(in_channels) - 1)])
 
-        # bottom-up PAN  (dfine: nn.Sequential(SCDown)  :  keeps checkpoint key  .0.cv1/.0.cv2)
+        # bottom-up PAN  (dfine: nn.Sequential(SCDown) — keeps checkpoint key  .0.cv1/.0.cv2)
         self.downsample_convs = nn.ModuleList(
             [nn.Sequential(SCDown(hidden_dim, hidden_dim, 3, 2, device=device, dtype=dtype, operations=operations))
              for _ in range(len(in_channels) - 1)])
@@ -348,7 +348,7 @@ class HybridEncoder(nn.Module):
 
 
 # ---------------------------------------------------------------------------
-# Decoder  :  DFINETransformer
+# Decoder — DFINETransformer
 # ---------------------------------------------------------------------------
 
 def _deformable_attn_v2(value: list, spatial_shapes, sampling_locations: torch.Tensor, attention_weights: torch.Tensor, num_points_list: List[int]) -> torch.Tensor:
@@ -493,7 +493,7 @@ class Integral(nn.Module):
 
 
 class LQE(nn.Module):
-    """Location Quality Estimator  :  refines class scores using corner distribution."""
+    """Location Quality Estimator — refines class scores using corner distribution."""
     def __init__(self, k=4, hidden_dim=64, num_layers=2, reg_max=32, device=None, dtype=None, operations=None):
         super().__init__()
         self.k, self.reg_max = k, reg_max

@@ -4,7 +4,7 @@ Pixel-space DiT built on Qwen3-VL: the vision tower (Qwen35VisionModel)
 encodes ref images, the Qwen3-VL-8B decoder (Llama2_ with interleaved MRoPE)
 processes a unified text+image sequence, and 32x32 patch embed/unembed
 shims map raw RGB in and out of LLM hidden space. The Qwen3-VL deepstack
-mergers go unused  :  their weights are dropped at load.
+mergers go unused — their weights are dropped at load.
 """
 
 from dataclasses import dataclass, field

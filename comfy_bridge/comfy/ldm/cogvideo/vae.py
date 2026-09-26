@@ -458,7 +458,7 @@ class AutoencoderKLCogVideoX(nn.Module):
         enc = []
 
         # Process remainder frames first so only the first chunk can have an
-        # odd temporal dimension  :  where Downsample3D's first-frame-special
+        # odd temporal dimension — where Downsample3D's first-frame-special
         # handling in temporal compression is actually correct.
         if remainder > 0:
             chunk, conv_cache = self.encoder(x[:, :, :remainder], conv_cache=conv_cache)

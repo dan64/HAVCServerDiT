@@ -195,7 +195,7 @@ def load_viggle_pipeline(unet_path, clip_path, vae_name="qwen_image_2.1_vae_bf16
 _VIGGLE_SIGMA_NODES_2 = "1.0, 0.25"
 _VIGGLE_SIGMA_NODES_4 = "1.0, 0.875, 0.5, 0.25"
 _VIGGLE_SIGMA_NODES_6 = "1.0, 0.9375, 0.875, 0.75, 0.5, 0.25"  # v0.2.1-r128 LoRA, native step count
-_VIGGLE_SIGMA_NODES_8 = "1.0, 0.96875, 0.9375, 0.90625, 0.875, 0.75, 0.5, 0.25"
+_VIGGLE_SIGMA_NODES_8 = "1, 0.9375, 0.875, 0.75, 0.625, 0.5, 0.25, 0.125"
 
 _VIGGLE_SIGMA_SCHEDULES = {
     2: _VIGGLE_SIGMA_NODES_2,

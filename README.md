@@ -6,11 +6,15 @@ Hybrid Automatic Video Colorizer (HAVC) server that exposes a GPU-accelerated co
 - **nunchaku-qwen**: SVDQuant FP4/INT4 transformer via [Nunchaku](https://github.com/nunchaku-ai/nunchaku) : **4 sec/frame**¹, requires RTX 30/40/50 (16GB+ VRAM , 64GB RAM) & CUDA 13.0
 - **gguf-qwen**: ComfyUI-native GGUF pipeline (Q3_K_S, Q4_K_S, Q5_K_M, Q6_K, Q8_0) : **12 sec/frame**², runs on RTX 30/40/50 (12GB+ VRAM, 32GB+ RAM), zero ComfyUI GUI dependency
 - **longcat-gguf**: [LongCat-Image-Edit-Turbo](https://huggingface.co/meituan-longcat/LongCat-Image-Edit-Turbo) GGUF pipeline (Q3_K_M–Q8_0) : **~12 sec/frame**², runs on RTX 30/40/50 (12GB+ VRAM, 32GB+ RAM), better image quality than gguf-qwen, zero ComfyUI GUI dependency
-- **qwen21-viggle**: Qwen-Image-2.1 (native ComfyUI int8 ConvRot weights) + [Viggle-Turbo](https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo) LoRA : **4 sec/frame**¹ (`steps=2`) or ~8-11 sec/frame (`steps=6`, single-image, see [What's New](#-whats-new)), runs on RTX 30/40/50 (12GB+ VRAM, 32GB+ RAM), optional `enhance_prompt` (Qwen3-VL image-aware prompt rewriting), zero ComfyUI GUI dependency
+- **qwen21-viggle**: Qwen-Image-2.1 (native ComfyUI int8 ConvRot UNet) + [Viggle-Turbo](https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo) LoRA : **~6 sec/frame**¹ (`steps=2`) or ~8-11 sec/frame (`steps=6`, single-image, see [What's New](#-whats-new)), runs on RTX 30/40/50 (14GB+ VRAM, 32GB+ RAM), optional `enhance_prompt` (Qwen3-VL image-aware prompt rewriting), zero ComfyUI GUI dependency
 
 > ¹ Measured with **Fast Pipeline** (paired inference, two frames per forward pass) at the backend's fastest recommended step count. ² `gguf-qwen`/`longcat-gguf` don't support paired inference (fall back to per-image processing, see [What's New](#-whats-new)) — their figure is a genuine single-image time, not directly comparable to the Fast Pipeline figures above.
 
-> **Recommended**: **nunchaku-qwen** and **qwen21-viggle** are both recommended for production use — at their fastest usable step count (`steps=2` for both) they measure the same **4 sec/frame** via Fast Pipeline, but `qwen21-viggle` needs meaningfully less hardware (12GB+ VRAM / 32GB+ RAM vs. 16GB+ VRAM / 64GB+ RAM) for that speed. `gguf-qwen`/`longcat-gguf` remain the choice for VRAM-constrained setups where neither of the above fits, at a real speed cost (see the `⚠️ Experimental` note under GGUF below).
+> **Recommended**: **nunchaku-qwen** and **qwen21-viggle** are both recommended for production use, nunchaku-qwen at the fastest usable step count (`steps=2`) has an inference speed of about **4 sec/frame** using _Fast Pipeline_, **qwen21-viggle** at fastest usable step count (`steps=2`) has an inference speed of about **8 sec/frame**; using _Fast Pipeline_ the speed improves to about **6 sec/frame** (not 4 — the pair-mode working resolution was deliberately raised for this backend to avoid a color artifact, see the `⚠️ Fast Pipeline` note below). `qwen21-viggle` needs meaningfully less hardware (14GB+ VRAM / 32GB+ RAM vs. 16GB+ VRAM / 64GB+ RAM). `longcat-gguf` remain the choice for VRAM-constrained setups where neither of the above fits, at a real speed cost (see the `⚠️ Experimental` note under GGUF below).
+>
+> ⚠️ **Fast Pipeline + `qwen21-viggle`**: paired inference uses a higher working resolution for this backend specifically (`1280` vs. `1024` for single images and for the other backends, since [What's New](#-whats-new) 2026-09-27) — this fixes a color artifact previously seen on fine detail near the merge boundary (e.g. a hand rendered in tones close to the surrounding foliage), at the cost of some speed (~6 sec/frame instead of 4). A milder residual effect can still appear on secondary, color-ambiguous details (e.g. a flower's petals taking a noticeably different but still plausible hue between runs) — not a defect on the same order as the original artifact, more of the same color-hedging behavior described elsewhere in this README. The [Viggle-Turbo](https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo) LoRA is still an experimental release, and this residual effect may be a limitation of the LoRA itself. If maximum consistency matters more than speed, disable _Fast Pipeline_ for `qwen21-viggle` (~8 sec/frame, no longer speed-competitive with `nunchaku-qwen`) or spot-check the output before a long batch run.
+>
+> **Color stability vs. variety**: based on real-world use across thousands of frames, `nunchaku-qwen` tends to show more color variability between similar frames — can look more vivid, but with weaker frame-to-frame consistency — while `qwen21-viggle` is more conservative in its color choices and more stable, likely a consequence of the Viggle-Turbo LoRA's aggressive step-distillation, which tends to narrow the range of plausible outputs toward "safe" choices. For video work, where flickering color between consecutive frames is a visible defect, this makes `qwen21-viggle`'s conservatism a practical advantage rather than just a stylistic difference — worth factoring in alongside the speed/hardware trade-offs above. The same pattern shows up specifically in _Fast Pipeline_ (paired inference): when both frames share an object, `qwen21-viggle` consistently colors it the same way in both halves, while `nunchaku-qwen` is less reliable at this — the exact cause (the LoRA itself vs. something more general about the two pipelines) is not established.
 
 
 ---
@@ -36,7 +40,7 @@ git pull
 pip install -r GUI\requirements.txt
 
 # 4) Update vscmnet2 (if a newer wheel is available in packages/)
-pip install packages\vscmnet2-1.0.9-py3-none-any.whl
+pip install packages\vscmnet2-1.1.0-py3-none-any.whl
 
 # 5) Re-apply the Nunchaku patch
 python patch_nunchaku.py
@@ -101,13 +105,88 @@ pip show nunchaku    # Expected: 1.2.1+cu13.0torch2.10
 
 ## 📢 What's New
 
+### 2026-09-28 — qwen21-viggle: GGUF+mmproj CLIP as new default, `clip_mmproj` generalized, known limitation documented
+
+**New default CLIP for `qwen21-viggle`**: `Qwen3-VL-8B-Instruct-UD`
+(GGUF+mmproj, `unsloth/Qwen3-VL-8B-Instruct-GGUF`), loaded through a
+vendored `ComfyUI-GGUF-Reboot` custom node (the standard `ComfyUI-GGUF`
+does not support merging a separate mmproj file for the `qwen3vl`
+architecture — only `qwen2vl`, used by `gguf-qwen`/`longcat-gguf`).
+Replaces the `.safetensors` CLIP options evaluated (`int8_convrot`,
+`fp8_scaled`, `w4a8`) as the default: same disk footprint as the lightest
+of those (`w4a8`, ~5.9GB) but without a chromatic-drift issue found on
+subjects with a strong color convention (`w4a8` occasionally converged on
+the wrong hue where the other options didn't). The `int8_convrot`/`w4a8`
+files remain valid alternatives — see [Pipeline Configuration](#-pipeline-configuration).
+
+**`clip_mmproj`/`clip_mmproj_hf_name`** (config fields) generalized from
+`qwen21-viggle` to `gguf-qwen`/`longcat-gguf` too, replacing the old
+`mmproj_gguf` key (which was never actually read by any code — dead
+documentation only). This also closed a real gap: `longcat-gguf` never had
+*any* mechanism to auto-download its own mmproj file — it only worked
+because the file was already present from `gguf-qwen` sharing the same
+folder. A from-scratch `longcat-gguf`-only installation would have loaded
+its CLIP without a working vision tower.
+
+**Known limitation, extensively investigated**: on some frames, a human
+body part near a visually similar background (e.g. a hand close to
+foliage) can be rendered with the wrong color (blended into the
+background) instead of a natural skin tone — confirmed across the entire
+Qwen-Image-2.1/Viggle-Turbo family, including Viggle's own official demo
+app and `longcat-gguf`, and independent of which CLIP quantization/variant
+is used (`int8`, `fp8`, `w4a8`, and several GGUF text-encoder builds were
+tested). This appears to be a genuine limitation of the underlying models
+for this kind of ambiguous content, not a bug in this integration. If a
+frame is affected, `nunchaku-qwen`/`gguf-qwen` are unaffected by the same
+issue and can be used as a fallback.
+
+### 2026-09-27 — qwen21-viggle: higher working resolution for Fast Pipeline
+
+Paired inference (_Fast Pipeline_) for `qwen21-viggle` now uses a working
+resolution of **1280** instead of the usual 1024 (single-image and every
+other backend are unaffected). This fixes a color artifact found on frames
+with fine detail near the merge boundary — a hand, held up close to the
+camera, could be rendered in tones nearly indistinguishable from the
+background foliage instead of a natural skin tone. The cause was the
+reduced working resolution from paired inference combined with
+Viggle-Turbo's own limits on fine detail; raising it to 1280 resolves the
+artifact in every case tested, at a real but modest speed cost (~6
+sec/frame instead of 4 — see the recommendation note near the top of this
+README). 1536 was
+tested too and fixes the same artifact slightly more completely, at
+roughly double the extra cost; 1280 was chosen as the better trade-off
+after validation on thousands of real frames.
+
+### 2026-09-27 — vscmnet2 1.1.0 (proximity bias now a per-call parameter)
+
+Updated to `vscmnet2` 1.1.0. The _proximity-weighted memory matching_ feature added in 1.0.9 (see below) is no longer installation-wide only: `vs_cmnet2` now accepts `enable_proximity_bias`/`proximity_bias_alpha` directly, taking precedence over `vsslib/models.json` when passed explicitly for a single call.
+
+```python
+clip = vs_cmnet2(
+    clip,
+    clip_ref=ref_clip,
+    method=0,
+    enable_proximity_bias=True,
+    proximity_bias_alpha=0.5,
+)
+```
+
+`vs_cmnet2_recolor`/`vs_cmnet2dit` are unchanged — they still only pick up the installation-wide default from `vsslib/models.json`. Exposed in the GUI's **Encode/Merge** tab only (the tab backed by `vs_cmnet2`), in a new **CMNET2 Backbone** frame grouping **Backbone**, **Proximity Bias** and **Alpha** together: the latter two are automatically disabled when **Backbone = dinov2** (DINOv3-only feature) and re-enabled on switching back to **dinov3**. Unchecked always forces `enable_proximity_bias=False` for that run (an explicit override, not "leave it to `models.json`"). Not added to **Fix Video** (backed by `vs_cmnet2_recolor`, which doesn't accept these parameters).
+
+> **Existing installations, action needed**: the shipped DINOv3 checkpoint was renamed
+> `DINOv3FeatureV6_LocalAtten_p372402.pth` → `DINOv3FeatureV6_LocalAtten_p374099.pth`
+> (default `proximity_bias_alpha` also changed 0.7 → 0.5). Re-download the checkpoint
+> under the new name — see [DINOv3 backbone weights](GUI/README_GUI.md#dinov3-backbone-weights-required-default-since-108).
+> If the old file is left in place, `vscmnet2` fails fast at init with a clear error
+> listing the files actually present in the weights directory.
+
 ### 2026-09-26 — qwen21-viggle Backend
 
 A fourth model backend has been added: **qwen21-viggle** (Qwen-Image-2.1
 native ComfyUI weights + [Viggle-Turbo](https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo)
 LoRA). Uses native **int8 ConvRot** quantized weights (not GGUF) — GGUF
 quantization was evaluated and works, but is ~2× slower for this model, so
-it was not adopted. Runs on 12GB+ VRAM GPUs, ~8-11 sec/frame (the time
+it was not adopted. Runs on 14GB+ VRAM GPUs, ~8-11 sec/frame (the time
 scales little with the number of steps — a fixed text-encoding/VAE-decode
 cost dominates over sampling).
 
@@ -167,10 +246,10 @@ Updated to `vscmnet2` 1.0.9, which add _proximity-weighted memory matching_. By 
 {
   "cmnet2": {
     "dinov3": {
-      "checkpoint": "DINOv3FeatureV6_LocalAtten_p372402.pth",
+      "checkpoint": "DINOv3FeatureV6_LocalAtten_p374099.pth",
       "weights_dir": "dinov3-vitb16",
       "enable_proximity_bias": true,
-      "proximity_bias_alpha": 0.7
+      "proximity_bias_alpha": 0.5
     },
     "dinov2": {
       "checkpoint": "DINOv2FeatureV6_LocalAtten_s2_154000.pth"
@@ -339,7 +418,7 @@ See [GUI/README_GUI.md](GUI/README_GUI.md) for installation, setup, and usage in
 
 ## ✨ Features
 
-- 📦 **4 backends, one API** : nunchaku-qwen (FP4/INT4, 4 sec/frame) for speed, gguf-qwen and longcat-gguf (Q3, …, Q8, 12 sec/frame) for lower VRAM, qwen21-viggle (int8 ConvRot, ~8-11 sec/frame) with optional Qwen3-VL prompt rewriting
+- 📦 **4 backends, one API** : nunchaku-qwen (FP4/INT4, 4 sec/frame) for speed, gguf-qwen and longcat-gguf (Q3, …, Q8, 12 sec/frame) for lower VRAM, qwen21-viggle (int8 ConvRot UNet, ~8-11 sec/frame) with optional Qwen3-VL prompt rewriting
 - 🎨 **Batch colorization** : process entire directories of B&W images via filesystem paths
 - 🖼️ **Paired inference** : colorize two images in a single forward pass (faster, temporally consistent)
 - 📡 **In-memory RPC** : pass raw PNG frames over XML-RPC without touching the filesystem (ideal for video pipelines)
@@ -402,16 +481,20 @@ Choose the backend that matches your hardware:
 
 | Requirement | Details                            |
 | ----------- | ----------------------------------- |
-| **GPU**     | NVIDIA RTX 30/40/50  (12 GB+ VRAM) |
+| **GPU**     | NVIDIA RTX 30/40/50  (14 GB+ VRAM) |
 | **RAM**     | 32 GB+                             |
 | **CUDA**    | 13.0+                              |
 
-> Native ComfyUI int8 ConvRot weights (not GGUF — GGUF was evaluated but is
-> ~2× slower for this model). Requires `comfy-kitchen==0.2.35` and
-> `comfy-aimdo==0.5.5` exactly (pinned, not a minimum — both are compiled
-> packages and an untested newer build is not assumed safe). A fresh
-> `install.cmd` run sets these; an **existing** `.venv` needs an explicit
-> upgrade, see [Quick Update](#-quick-update-existing-installation).
+> Native ComfyUI int8 ConvRot weights for the **UNet** (not GGUF — a GGUF
+> UNet was evaluated but is ~2× slower for this model). The **CLIP/text
+> encoder**, unlike the UNet, uses GGUF+mmproj by default (`Qwen3-VL-8B-
+> Instruct-UD`, see [What's New](#-whats-new)) — a `.safetensors` CLIP
+> (`int8_convrot`/`w4a8`) remains a valid, simpler alternative, see
+> [Pipeline Configuration](#-pipeline-configuration). Requires
+> `comfy-kitchen==0.2.35` and `comfy-aimdo==0.5.5` exactly (pinned, not a
+> minimum — both are compiled packages and an untested newer build is not
+> assumed safe). A fresh `install.cmd` run sets these; an **existing**
+> `.venv` needs an explicit upgrade, see [Quick Update](#-quick-update-existing-installation).
 > All files are auto-downloaded on first run — see [What's New](#-whats-new).
 > Launch with `run_server_qwen21.cmd`.
 
@@ -715,7 +798,8 @@ Config example (`config/qwen_gguf_q4.json`):
     "quant":            "q4",
     "unet_gguf":        "models/unet/qwen-image-edit-2511-Q4_K_S.gguf",
     "clip_gguf":        "models/clip/Qwen2.5-VL-7B-Instruct-Q4_K_S.gguf",
-    "mmproj_gguf":      "models/clip/Qwen2.5-VL-7B-Instruct-mmproj-BF16.gguf",
+    "clip_mmproj":         "models/clip/Qwen2.5-VL-7B-Instruct-mmproj-BF16.gguf",
+    "clip_mmproj_hf_name": "mmproj-BF16.gguf",
     "vae_name":         "qwen_image_vae.safetensors",
     "lora_path":        "models/loras/Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors",
     "steps":            4,
@@ -725,6 +809,14 @@ Config example (`config/qwen_gguf_q4.json`):
     "hf_lora":          "lightx2v/Qwen-Image-Edit-2511-Lightning"
 }
 ```
+
+> `clip_mmproj_hf_name` exists because the mmproj file's name on HuggingFace
+> (a generic `mmproj-BF16.gguf`, shared across many unrelated repos) rarely
+> matches the locally-prefixed name you actually want on disk — it tells
+> the downloader what to fetch, `clip_mmproj` is where it ends up and what
+> the loader looks for locally. Omit it and the downloader falls back to
+> using `clip_mmproj`'s own filename as the remote name too, which only
+> works if they happen to match.
 
 #### LoRA (Lightning 4-step)
 
@@ -737,27 +829,40 @@ The LoRA is merged statically (not applied as an adapter), so there is no runtim
 
 ### qwen21-viggle Backend : `config/qwen21_viggle.json`
 
-A single config file — this backend has no quantization variants (int8
-ConvRot only):
+A single config file — this backend has no quantization variants for the
+UNet (int8 ConvRot only). The CLIP, unlike the UNet, can be either a
+`.safetensors` file or a GGUF+mmproj pair — the default uses GGUF+mmproj
+(see [What's New](#-whats-new)):
 
 ```json
 {
-    "model_name":  "qwen21-viggle",
-    "unet_name":   "models/unet/qwen_image_2.1_int8_convrot.safetensors",
-    "clip_name":   "models/clip/qwen3vl_8b_int8_convrot.safetensors",
-    "vae_name":    "qwen_image_2.1_vae_bf16.safetensors",
-    "lora_path":   "models/loras/Qwen-Image-2.1-viggle-turbo-v0.2.1-6step-lora-r128.safetensors",
-    "steps":       6,
-    "hf_unet":     "Comfy-Org/Qwen-Image-2.1",
-    "hf_clip":     "Comfy-Org/Qwen-Image-2.1",
-    "hf_vae":      "Comfy-Org/Qwen-Image-2.1",
-    "hf_lora":     "Viggle/Qwen-Image-2.1-viggle-turbo"
+    "model_name":          "qwen21-viggle",
+    "unet_name":           "models/unet/qwen_image_2.1_int8_convrot.safetensors",
+    "clip_name":           "models/clip/Qwen3-VL-8B-Instruct-UD-Q4_K_XL.gguf",
+    "clip_mmproj":         "models/clip/Qwen3-VL-8B-Instruct-mmproj-BF16.gguf",
+    "clip_mmproj_hf_name": "mmproj-BF16.gguf",
+    "vae_name":            "qwen_image_2.1_vae_bf16.safetensors",
+    "lora_path":           "models/loras/Qwen-Image-2.1-viggle-turbo-v0.2.1-6step-lora-r128.safetensors",
+    "steps":               6,
+    "hf_unet":             "Comfy-Org/Qwen-Image-2.1",
+    "hf_clip":             "unsloth/Qwen3-VL-8B-Instruct-GGUF",
+    "hf_vae":              "Comfy-Org/Qwen-Image-2.1",
+    "hf_lora":             "Viggle/Qwen-Image-2.1-viggle-turbo"
 }
 ```
 
-> Note the different key names from the GGUF format above: `unet_name`/
-> `clip_name` (not `unet_gguf`/`clip_gguf`) — these are plain `.safetensors`
-> paths, not GGUF files. `steps: 6` here only documents the LoRA's native
+> Note the different key names from the GGUF-backend format above: `unet_name`/
+> `clip_name` (not `unet_gguf`/`clip_gguf`) — but unlike the GGUF backend,
+> `clip_name` here can point to *either* a `.safetensors` file *or* a
+> `.gguf` file (the loader picks the right code path from the extension).
+> `clip_mmproj`/`clip_mmproj_hf_name` only apply when `clip_name` is a
+> `.gguf` file — omit both to use a `.safetensors` CLIP instead:
+>
+> ```json
+>     "clip_name":   "models/text_encoders/qwen3vl_8b_int8_convrot.safetensors",
+> ```
+>
+> `steps: 6` here only documents the LoRA's native
 > step count for anyone reading the file; the actual number of steps used
 > at inference time is the `steps` argument passed per-call to the
 > colorization RPC methods (see [Suggested Inference Steps](#-suggested-inference-steps)
@@ -770,8 +875,9 @@ ConvRot only):
 | `model_name`                              | ✅        | `"nunchaku-qwen"`, `"gguf-qwen"`, `"longcat-gguf"`, or `"qwen21-viggle"`                     |
 | `quant`                                   |          | **GGUF only**: quantization level (`"q3"`, `"q4"`, `"q5"`, `"q6"`, `"q8"`). Default: `"q4"`  |
 | `model_precision`                         | ✅        | **Nunchaku**: `"fp4"` (RTX 50) or `"int4"` (RTX 30/40). **GGUF/qwen21-viggle**: not used     |
-| `unet_gguf` / `clip_gguf` / `mmproj_gguf` | ✅        | **GGUF only**: local paths to the GGUF model files                                           |
-| `unet_name` / `clip_name`                 | ✅        | **qwen21-viggle only**: local paths to the `.safetensors` model files                        |
+| `unet_gguf` / `clip_gguf`                 | ✅        | **GGUF only**: local paths to the GGUF model files                                           |
+| `unet_name` / `clip_name`                 | ✅        | **qwen21-viggle only**: local paths to the model files — `unet_name` is always `.safetensors`, `clip_name` can be `.safetensors` or `.gguf` |
+| `clip_mmproj` / `clip_mmproj_hf_name`     |          | **GGUF/qwen21-viggle-with-GGUF-CLIP**: local path to the mmproj (vision tower) file / its filename on HuggingFace if different from the local one. Required for a GGUF CLIP to see images at all — without it the vision tower silently isn't loaded |
 | `model_rank`                              |          | **Nunchaku**: SVD rank (`"32"`). **GGUF/qwen21-viggle**: not used                            |
 | `model_inference_steps`                   |          | **Nunchaku**: diffusion steps (`"4"`). **GGUF/qwen21-viggle**: not used at load time          |
 | `cache_dir`                               |          | HuggingFace cache directory. Leave empty to use the default `~/.cache/huggingface`           |
@@ -1151,11 +1257,11 @@ qwen21-viggle` is not a thing), it always launches with
 > `enhance_prompt` (which adds ~15-20s/frame), try a direct,
 > explicitly anti-hedging prompt — it solves the same problem for free in
 > most cases:
-> > "Add colors to this black-and-white image, not to hedge about what
-> > colors might be present. For any subject, garment, object, or setting
-> > whose color is a matter of common knowledge or strong convention,
-> > assign the expected color directly and confidently. Colorize this
-> > image using natural colors. Strictly preserve all shapes, edges and
+> > "Add color to this black-and-white image without hesitation regarding
+> > the appropriate colors. For any subject, garment, object, or setting
+> > where the color is common knowledge or established by convention,
+> > confidently apply the expected color; otherwise use natural colors.
+> > Color the image by strictly preserving all shapes, outlines, and
 > > background details."
 >
 > Avoid naming specific example subjects in this prompt (e.g. "like a stop
@@ -1191,5 +1297,5 @@ Subsequent runs load from the local cache.
 - **Model**: [Qwen/Qwen-Image-Edit-2511](https://huggingface.co/Qwen/Qwen-Image-Edit-2511), [Qwen/Qwen-Image-2.1](https://huggingface.co/Comfy-Org/Qwen-Image-2.1), [LongCat-Image-Edit-Turbo](https://huggingface.co/meituan-longcat/LongCat-Image-Edit-Turbo)
 - **Viggle-Turbo LoRA**: [Viggle/Qwen-Image-2.1-viggle-turbo](https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo)
 - **Nunchaku quantization**: [Nunchaku / SVDQuant](https://github.com/mit-han-lab/nunchaku)
-- **GGUF dequantization kernels**: adapted from [ComfyUI-GGUF](https://github.com/city96/ComfyUI-GGUF) (Apache 2.0)
+- **GGUF dequantization kernels**: adapted from [ComfyUI-GGUF](https://github.com/city96/ComfyUI-GGUF) (Apache 2.0), Qwen3-VL mmproj support from the [ComfyUI-GGUF-Reboot](https://github.com/molbal/ComfyUI-GGUF) fork (molbal)
 - **Pipeline**: [Hugging Face Diffusers](https://github.com/huggingface/diffusers)

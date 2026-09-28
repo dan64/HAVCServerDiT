@@ -2,6 +2,8 @@
     "model_name": "longcat-gguf",
     "unet_gguf": "LongCat-Image-Edit-Turbo-Q8_0.gguf",
     "clip_gguf": "Qwen2.5-VL-7B-Instruct-Q4_K_M.gguf",
+    "clip_mmproj": "models/clip/Qwen2.5-VL-7B-Instruct-mmproj-BF16.gguf",
+    "clip_mmproj_hf_name": "mmproj-BF16.gguf",
     "vae_name": "lct_vae.safetensors",
     "steps": 8,
     "hf_unet": "vantagewithai/LongCat-Image-Edit-Turbo-GGUF",

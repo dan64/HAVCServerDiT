@@ -60,6 +60,7 @@ try:
         load_nunchaku_pipeline,
         load_gguf_pipeline,
         load_longcat_pipeline,
+        load_viggle_pipeline,
         process_image,
         process_image_pair,
         process_single_image,
@@ -69,12 +70,14 @@ try:
         upscale_with_lanczos,
         merge_two_images_with_gap,
         split_merged_output,
+        VIGGLE_PAIR_RESOLUTION,
     )
     _DIT_MAIN_AVAILABLE = True
 except ImportError as _e:
     load_nunchaku_pipeline    = None
     load_gguf_pipeline        = None
     load_longcat_pipeline     = None
+    load_viggle_pipeline      = None
     process_image             = None
     process_image_pair        = None
     process_single_image      = None
@@ -84,6 +87,7 @@ except ImportError as _e:
     upscale_with_lanczos      = None
     merge_two_images_with_gap = None
     split_merged_output       = None
+    VIGGLE_PAIR_RESOLUTION    = 1024
     _DIT_MAIN_AVAILABLE       = False
     import warnings
     warnings.warn(
@@ -218,6 +222,8 @@ class ColorizeService:
         hf_clip: str = "",
         hf_vae:  str = "",
         hf_lora: str = "",
+        clip_mmproj: str = "",
+        clip_mmproj_hf_name: str = "",
     ) -> dict:
         """
         Load the Nunchaku/Qwen pipeline.
@@ -261,6 +267,8 @@ class ColorizeService:
                         hf_clip=hf_clip,
                         hf_vae=hf_vae,
                         hf_lora=hf_lora,
+                        clip_mmproj=clip_mmproj,
+                        clip_mmproj_hf_name=clip_mmproj_hf_name,
                     )
                 elif model_name == "longcat-gguf":
                     pipe = load_longcat_pipeline(
@@ -272,6 +280,22 @@ class ColorizeService:
                         hf_clip=hf_clip,
                         hf_vae=hf_vae,
                         vae_name=vae_name,
+                        clip_mmproj=clip_mmproj,
+                        clip_mmproj_hf_name=clip_mmproj_hf_name,
+                    )
+                elif model_name == "qwen21-viggle":
+                    pipe = load_viggle_pipeline(
+                        model_name=model_name,
+                        unet_path=model_precision,
+                        clip_path=model_rank,
+                        lora_path=full_model_path,
+                        vae_name=vae_name,
+                        hf_unet=hf_unet,
+                        hf_clip=hf_clip,
+                        hf_vae=hf_vae,
+                        hf_lora=hf_lora,
+                        clip_mmproj=clip_mmproj,
+                        clip_mmproj_hf_name=clip_mmproj_hf_name,
                     )
                 else:
                     pipe = None
@@ -326,6 +350,7 @@ class ColorizeService:
         prompt: str,
         img_size: int = 0,
         steps: int = 2,
+        enhance_prompt: bool = False,
     ) -> dict:
         """
         Corresponds to process_image() in dit_colorize_main.py.
@@ -337,6 +362,8 @@ class ColorizeService:
         prompt    : text prompt for the model
         img_size  : 0 = original size, otherwise maximum long side in pixels
         steps     : inference steps (default 2)
+        enhance_prompt : rewrite the prompt with Qwen3-VL image-aware rewriting
+                         before colorizing (qwen21-viggle only, ignored otherwise)
 
         Returns
         -------
@@ -354,6 +381,7 @@ class ColorizeService:
                 prompt=prompt,
                 img_size=img_size,
                 steps=steps,
+                enhance_prompt=enhance_prompt,
             )
             skipped = (elapsed == 0.0)
             logging.info(f"colorize_image: {Path(in_path).name} -> {elapsed:.2f}s"
@@ -374,6 +402,7 @@ class ColorizeService:
         prompt: str,
         gap_px: int = 8,
         steps: int = 2,
+        enhance_prompt: bool = False,
     ) -> dict:
         """
         Corresponds to process_image_pair() in dit_colorize_main.py.
@@ -388,7 +417,7 @@ class ColorizeService:
             return {"ok": False, "elapsed": 0.0, "msg": "Pipeline not loaded"}
         # GGUF does not support paired inference: fall back to single-image processing
         if self._pipeline_model_name in ("gguf-qwen", "longcat-gguf"):
-            return self._colorize_pair_fallback_file(img1_path, img2_path, out_dir, prompt, gap_px, steps)
+            return self._colorize_pair_fallback_file(img1_path, img2_path, out_dir, prompt, gap_px, steps, enhance_prompt)
         try:
             elapsed = process_image_pair(
                 pipe=self._pipeline,
@@ -398,6 +427,7 @@ class ColorizeService:
                 prompt=prompt,
                 gap_px=gap_px,
                 steps=steps,
+                enhance_prompt=enhance_prompt,
             )
             logging.info(
                 f"colorize_image_pair: {Path(img1_path).name} + "
@@ -408,12 +438,12 @@ class ColorizeService:
             logging.exception("colorize_image_pair failed")
             return {"ok": False, "elapsed": 0.0, "msg": str(e)}
 
-    def _colorize_pair_fallback_file(self, img1_path, img2_path, out_dir, prompt, gap_px, steps):
+    def _colorize_pair_fallback_file(self, img1_path, img2_path, out_dir, prompt, gap_px, steps, enhance_prompt=False):
         """GGUF fallback: process two images individually, return combined result."""
         out1 = str(Path(out_dir) / (Path(img1_path).stem + ".jpg"))
         out2 = str(Path(out_dir) / (Path(img2_path).stem + ".jpg"))
-        res1 = self.colorize_image(img1_path, out1, prompt, steps=steps)
-        res2 = self.colorize_image(img2_path, out2, prompt, steps=steps)
+        res1 = self.colorize_image(img1_path, out1, prompt, steps=steps, enhance_prompt=enhance_prompt)
+        res2 = self.colorize_image(img2_path, out2, prompt, steps=steps, enhance_prompt=enhance_prompt)
         elapsed = (res1.get("elapsed", 0.0) or 0.0) + (res2.get("elapsed", 0.0) or 0.0)
         ok = res1.get("ok", False) and res2.get("ok", False)
         msg = res1.get("msg", "") or res2.get("msg", "")
@@ -428,6 +458,7 @@ class ColorizeService:
         out_dir: str,
         prompt: str,
         steps: int = 2,
+        enhance_prompt: bool = False,
     ) -> dict:
         """
         Corresponds to process_single_image() in dit_colorize_main.py.
@@ -446,6 +477,7 @@ class ColorizeService:
                 output_dir=Path(out_dir),
                 prompt=prompt,
                 steps=steps,
+                enhance_prompt=enhance_prompt,
             )
             logging.info(
                 f"colorize_single_image: {Path(img_path).name} -> {elapsed:.2f}s"
@@ -466,6 +498,7 @@ class ColorizeService:
         steps: int = 2,
         seed: int = 42,
         skip_bw: bool = False,
+        enhance_prompt: bool = False,
     ) -> dict:
         """
         Colorize a single B&W frame passed as raw PNG bytes.
@@ -508,7 +541,7 @@ class ColorizeService:
             img_in = resize_long_side(img_in, img_size) if img_size > 0 else img_in
 
             t0 = time.perf_counter()
-            colorized_lowres = _colorize_image(self._pipeline, img_in, prompt, steps, seed=seed)
+            colorized_lowres = _colorize_image(self._pipeline, img_in, prompt, steps, seed=seed, enhance_prompt=enhance_prompt)
             elapsed = time.perf_counter() - t0
 
             result = upscale_with_lanczos(colorized_lowres, orig_size)
@@ -531,6 +564,7 @@ class ColorizeService:
         prompt: str,
         gap_px: int = 8,
         steps: int = 2,
+        enhance_prompt: bool = False,
     ) -> dict:
         """
         Colorize a pair of B&W frames with a single inference pass.
@@ -562,7 +596,7 @@ class ColorizeService:
                     "msg": "Pipeline not loaded"}
         # GGUF does not support paired inference: fall back to individual colorization
         if self._pipeline_model_name in ("gguf-qwen", "longcat-gguf"):
-            return self._colorize_pair_fallback_mem(img1_data, img2_data, prompt, steps)
+            return self._colorize_pair_fallback_mem(img1_data, img2_data, prompt, steps, enhance_prompt)
         try:
             orig1 = _bytes_to_pil(img1_data)
             orig2 = _bytes_to_pil(img2_data)
@@ -579,23 +613,25 @@ class ColorizeService:
 
             # Only one dark: process the other one individually
             if dark1:
-                res = self.colorize_frame(img2_data, prompt, img_size=0, steps=2)
+                res = self.colorize_frame(img2_data, prompt, img_size=0, steps=2, enhance_prompt=enhance_prompt)
                 return {"ok": res["ok"],
                         "data1": _pil_to_bytes(orig1), "data2": res["data"],
                         "elapsed": res["elapsed"],
                         "skipped1": True, "skipped2": res["skipped"], "msg": res["msg"]}
             if dark2:
-                res = self.colorize_frame(img1_data, prompt, img_size=0, steps=2)
+                res = self.colorize_frame(img1_data, prompt, img_size=0, steps=2, enhance_prompt=enhance_prompt)
                 return {"ok": res["ok"],
                         "data1": res["data"], "data2": _pil_to_bytes(orig2),
                         "elapsed": res["elapsed"],
                         "skipped1": res["skipped"], "skipped2": True, "msg": res["msg"]}
 
-            # Both valid: convert to B&W, resize to 1024px long side
+            # Both valid: convert to B&W, resize to a working resolution
+            # (higher for qwen21-viggle in pair-mode, see VIGGLE_PAIR_RESOLUTION)
             bw1  = ImageEnhance.Color(orig1).enhance(0.0)
             bw2  = ImageEnhance.Color(orig2).enhance(0.0)
-            low1 = resize_long_side(bw1, 1024)
-            low2 = resize_long_side(bw2, 1024)
+            pair_resolution = VIGGLE_PAIR_RESOLUTION if self._pipeline_model_name == "qwen21-viggle" else 1024
+            low1 = resize_long_side(bw1, pair_resolution)
+            low2 = resize_long_side(bw2, pair_resolution)
 
             # Align heights with neutral padding (grey 127) if they differ
             if low1.height != low2.height:
@@ -607,7 +643,7 @@ class ColorizeService:
             merged_input = merge_two_images_with_gap(low1, low2, gap_px=gap_px)
 
             t0 = time.perf_counter()
-            colorized_merged = _colorize_image(self._pipeline, merged_input, prompt, steps=steps)
+            colorized_merged = _colorize_image(self._pipeline, merged_input, prompt, steps=steps, enhance_prompt=enhance_prompt, resolution=pair_resolution)
             elapsed = time.perf_counter() - t0
 
             # Resize back to merged-input dimensions, then split and upscale
@@ -627,10 +663,10 @@ class ColorizeService:
             return {"ok": False, "data1": b"", "data2": b"",
                     "elapsed": 0.0, "skipped1": False, "skipped2": False, "msg": str(e)}
 
-    def _colorize_pair_fallback_mem(self, img1_data, img2_data, prompt, steps):
+    def _colorize_pair_fallback_mem(self, img1_data, img2_data, prompt, steps, enhance_prompt=False):
         """GGUF fallback: colorize two frames individually, return combined result."""
-        res1 = self.colorize_frame(img1_data, prompt, steps=steps)
-        res2 = self.colorize_frame(img2_data, prompt, steps=steps)
+        res1 = self.colorize_frame(img1_data, prompt, steps=steps, enhance_prompt=enhance_prompt)
+        res2 = self.colorize_frame(img2_data, prompt, steps=steps, enhance_prompt=enhance_prompt)
         return {
             "ok": res1.get("ok", False) and res2.get("ok", False),
             "data1": res1.get("data", b""),
@@ -666,6 +702,7 @@ class ColorizeService:
         steps: int = 2,
         seed: int = 42,
         skip_bw: bool = False,
+        enhance_prompt: bool = False,
     ) -> dict:
         """
         Shared-memory variant of colorize_frame().
@@ -717,7 +754,7 @@ class ColorizeService:
                 img_in = resize_long_side(img_in, img_size) if img_size > 0 else img_in
 
                 t0 = time.perf_counter()
-                colorized_lowres = _colorize_image(self._pipeline, img_in, prompt, steps, seed=seed)
+                colorized_lowres = _colorize_image(self._pipeline, img_in, prompt, steps, seed=seed, enhance_prompt=enhance_prompt)
                 elapsed = time.perf_counter() - t0
 
                 result = upscale_with_lanczos(colorized_lowres, orig_size)
@@ -749,6 +786,7 @@ class ColorizeService:
         prompt: str,
         gap_px: int = 8,
         steps: int = 2,
+        enhance_prompt: bool = False,
     ) -> dict:
         """
         Shared-memory variant of colorize_frame_pair().
@@ -767,7 +805,7 @@ class ColorizeService:
             return self._colorize_pair_fallback_shm(
                 shm_in1_name, shm_out1_name, height1, width1,
                 shm_in2_name, shm_out2_name, height2, width2,
-                prompt, steps)
+                prompt, steps, enhance_prompt)
 
         try:
             import numpy as np
@@ -819,8 +857,9 @@ class ColorizeService:
 
                 bw1  = ImageEnhance.Color(orig1).enhance(0.0)
                 bw2  = ImageEnhance.Color(orig2).enhance(0.0)
-                low1 = resize_long_side(bw1, 1024)
-                low2 = resize_long_side(bw2, 1024)
+                pair_resolution = VIGGLE_PAIR_RESOLUTION if self._pipeline_model_name == "qwen21-viggle" else 1024
+                low1 = resize_long_side(bw1, pair_resolution)
+                low2 = resize_long_side(bw2, pair_resolution)
 
                 if low1.height != low2.height:
                     target_h = max(low1.height, low2.height)
@@ -832,7 +871,7 @@ class ColorizeService:
                 merged_input = merge_two_images_with_gap(low1, low2, gap_px=gap_px)
 
                 t0 = time.perf_counter()
-                colorized_merged = _colorize_image(self._pipeline, merged_input, prompt, steps)
+                colorized_merged = _colorize_image(self._pipeline, merged_input, prompt, steps, enhance_prompt=enhance_prompt, resolution=pair_resolution)
                 elapsed = time.perf_counter() - t0
 
                 resized = upscale_with_lanczos(colorized_merged, merged_input.size)
@@ -862,10 +901,10 @@ class ColorizeService:
                     "skipped1": False, "skipped2": False, "msg": str(e)}
 
     def _colorize_pair_fallback_shm(self, shm_in1_name, shm_out1_name, h1, w1,
-                                     shm_in2_name, shm_out2_name, h2, w2, prompt, steps):
+                                     shm_in2_name, shm_out2_name, h2, w2, prompt, steps, enhance_prompt=False):
         """GGUF fallback: colorize two frames individually via shared memory."""
-        res1 = self.colorize_frame_shm(shm_in1_name, shm_out1_name, h1, w1, prompt, steps=steps)
-        res2 = self.colorize_frame_shm(shm_in2_name, shm_out2_name, h2, w2, prompt, steps=steps)
+        res1 = self.colorize_frame_shm(shm_in1_name, shm_out1_name, h1, w1, prompt, steps=steps, enhance_prompt=enhance_prompt)
+        res2 = self.colorize_frame_shm(shm_in2_name, shm_out2_name, h2, w2, prompt, steps=steps, enhance_prompt=enhance_prompt)
         return {
             "ok": res1.get("ok", False) and res2.get("ok", False),
             "elapsed": float((res1.get("elapsed", 0.0) or 0.0) + (res2.get("elapsed", 0.0) or 0.0)),
@@ -931,6 +970,31 @@ def _load_pipeline_config(config_path: str) -> dict:
             "hf_clip": cfg.get("hf_clip", "unsloth/Qwen2.5-VL-7B-Instruct-GGUF"),
             "hf_vae":  cfg.get("hf_vae",  "Comfy-Org/Qwen-Image_ComfyUI"),
             "hf_lora": cfg.get("hf_lora", "lightx2v/Qwen-Image-Edit-2511-Lightning"),
+            "clip_mmproj": cfg.get("clip_mmproj", ""),
+            "clip_mmproj_hf_name": cfg.get("clip_mmproj_hf_name", ""),
+        }
+
+    # New format (qwen21-viggle, native ComfyUI int8 ConvRot weights)
+    if "unet_name" in cfg:
+        required = {"model_name", "unet_name", "clip_name", "vae_name", "lora_path", "steps"}
+        missing = required - cfg.keys()
+        if missing:
+            logging.error(f"Config missing keys: {', '.join(sorted(missing))}")
+            sys.exit(1)
+        return {
+            "model_name": model_name,
+            "quant": "",
+            "unet_gguf": cfg["unet_name"],   # reused as generic path slot, not actually GGUF
+            "clip_gguf": cfg["clip_name"],
+            "vae_name": cfg["vae_name"],
+            "lora_path": cfg["lora_path"],
+            "steps": int(cfg["steps"]),
+            "hf_unet": cfg.get("hf_unet", "Comfy-Org/Qwen-Image-2.1"),
+            "hf_clip": cfg.get("hf_clip", "Comfy-Org/Qwen-Image-2.1"),
+            "hf_vae":  cfg.get("hf_vae",  "Comfy-Org/Qwen-Image-2.1"),
+            "hf_lora": cfg.get("hf_lora", "Viggle/Qwen-Image-2.1-viggle-turbo"),
+            "clip_mmproj": cfg.get("clip_mmproj", ""),
+            "clip_mmproj_hf_name": cfg.get("clip_mmproj_hf_name", ""),
         }
 
     # Legacy format
@@ -1052,6 +1116,8 @@ def main():
             hf_clip=cfg.get("hf_clip", ""),
             hf_vae=cfg.get("hf_vae", ""),
             hf_lora=cfg.get("hf_lora", ""),
+            clip_mmproj=cfg.get("clip_mmproj", ""),
+            clip_mmproj_hf_name=cfg.get("clip_mmproj_hf_name", ""),
         )
         if not result["ok"]:
             logging.error(f"Failed to load pipeline: {result['msg']}")

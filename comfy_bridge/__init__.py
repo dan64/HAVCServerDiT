@@ -166,8 +166,16 @@ def colorize(pipeline, image, prompt, steps=4, seed=42):
     return Image.fromarray((img_np * 255).astype(np.uint8))
 
 
-def load_viggle_pipeline(unet_path, clip_path, vae_name="qwen_image_2.1_vae_bf16.safetensors", lora_path=None):
-    """Load Qwen-Image-2.1 (native ComfyUI int8 ConvRot) + Viggle-Turbo LoRA (unmerged)."""
+def load_viggle_pipeline(unet_path, clip_path, vae_name="qwen_image_2.1_vae_bf16.safetensors", lora_path=None, clip_mmproj=None):
+    """Load Qwen-Image-2.1 (native ComfyUI int8 ConvRot) + Viggle-Turbo LoRA (unmerged).
+
+    clip_path may be either the default safetensors text encoder (loaded via
+    the standard CLIPLoader node) or a GGUF text encoder -- in the latter
+    case the matching mmproj file is auto-discovered by gguf_clip_loader()
+    (ComfyUI-GGUF-Reboot, filename-containment heuristic)
+    from the same folder as clip_path; clip_mmproj isn't consumed here, it
+    only exists upstream to drive the mmproj auto-download.
+    """
     import importlib
     ViggleTurboLora = importlib.import_module("viggle_turbo").ViggleTurboLora
     import nodes as cn
@@ -184,7 +192,25 @@ def load_viggle_pipeline(unet_path, clip_path, vae_name="qwen_image_2.1_vae_bf16
             ViggleTurboLora().load(model=model, lora_name=os.path.basename(lora_path), strength=1.0), 0)
 
     logger.info("Loading CLIP: %s", clip_name)
-    clip = get_value_at_index(cn.CLIPLoader().load_clip(clip_name=clip_name, type="qwen_image", device="default"), 0)
+    if clip_path.lower().endswith(".gguf"):
+        _reboot_loader = importlib.import_module("ComfyUI-GGUF-Reboot.loader")
+        _reboot_ops = importlib.import_module("ComfyUI-GGUF-Reboot.ops")
+        import comfy.sd
+        import comfy.model_management
+        import folder_paths
+        clip_data = _reboot_loader.gguf_clip_loader(clip_path)
+        clip = comfy.sd.load_text_encoder_state_dicts(
+            clip_type=comfy.sd.CLIPType.QWEN_IMAGE,
+            state_dicts=[clip_data],
+            model_options={
+                "custom_operations": _reboot_ops.GGMLOps,
+                "initial_device": comfy.model_management.text_encoder_offload_device(),
+            },
+            embedding_directory=folder_paths.get_folder_paths("embeddings"),
+        )
+        logger.info("CLIP loaded (qwen_image, GGUF+mmproj via ComfyUI-GGUF-Reboot)")
+    else:
+        clip = get_value_at_index(cn.CLIPLoader().load_clip(clip_name=clip_name, type="qwen_image", device="default"), 0)
 
     logger.info("Loading VAE: %s", vae_name)
     vae = get_value_at_index(cn.VAELoader().load_vae(vae_name=vae_name), 0)
@@ -411,8 +437,8 @@ Return one strictly valid JSON object on a single line, nothing before or after:
 
 def _viggle_enhance_prompt(clip, image_tensor, prompt, seed=42):
     """Qwen3-VL image-aware prompt rewriting (mirrors the TextGenerate node's
-    execute(), without mtp/use_quantized_matmul -- decision in REPORT_07:
-    those are speed optimizations, not correctness, and comfy_bridge's
+    execute(), without mtp/use_quantized_matmul: those are speed optimizations,
+    not correctness, and comfy_bridge's
     clip.generate() doesn't have the mtp parameter). Falls back to the
     original prompt on any failure (JSON parse, empty result, exception).
     """
@@ -437,7 +463,7 @@ def _viggle_enhance_prompt(clip, image_tensor, prompt, seed=42):
     return rewritten if rewritten else prompt
 
 
-def colorize_viggle(pipeline, image, prompt, steps=6, seed=42, enhance_prompt=False):
+def colorize_viggle(pipeline, image, prompt, steps=6, seed=42, enhance_prompt=False, resolution=1024):
     """Qwen-Image-2.1 + Viggle-Turbo colorization (CFG-off, Viggle-Turbo sigma schedule).
 
     `steps` selects one of the precomputed sigma schedules in
@@ -468,13 +494,13 @@ def colorize_viggle(pipeline, image, prompt, steps=6, seed=42, enhance_prompt=Fa
 
         # negative_prompt is a required input on this node but is never consumed
         # downstream: BasicGuider/Guider_Basic only injects the "positive" cond
-        # (no CFG, distilled/turbo mode) -- see REPORT_01 sections 1 and 3.
+        # (no CFG, distilled/turbo mode).
         text_out = TextEncodeQwenImage21().EXECUTE_NORMALIZED(
             clip=pipeline["clip"],
             prompt=prompt,
             negative_prompt="",
             vae=pipeline["vae"],
-            resolution=1024,
+            resolution=resolution,
             images={"image_1": img_tensor},
         )
         positive = get_value_at_index(text_out, 0)

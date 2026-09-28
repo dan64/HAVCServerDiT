@@ -203,6 +203,8 @@ def load_all_configs():
         "frames_memory":  "20",
         "render_speed":   "auto",
         "backbone":       "dinov3",
+        "proximity_bias":       False,
+        "proximity_bias_alpha": "0.50",
         "crf":            "20.0",
         "merge_weight":   "0.40",
         "vbr_quality":    "27.00",
@@ -700,6 +702,8 @@ def orchestrator(init_values, window):
                 if not skipped:
                     tot_time += elapsed
                     count += 1
+                    if elapsed > 0:
+                        log_gui_only(f"✅ Single: {img_path.name} [{elapsed:.2f}s/image]")
                     color_img = Image.open(out_img_path).convert("RGB")
                     window.write_event_value("-PREVIEW_CLR-", color_img)
                 else:
@@ -725,10 +729,16 @@ def orchestrator(init_values, window):
             log_message("⚠️ No connection to RPC server.")
             return
 
+        model_name = values["-MODEL_NAME-"]
+        # qwen21-viggle works at a higher pair-mode resolution
+        # (VIGGLE_PAIR_RESOLUTION=1280, see dit_colorize_main.py) than the
+        # other backends (1024) - that headroom allows a wider gap between
+        # the two merged frames without eating into per-frame detail.
+        gap_px = 16 if model_name == "qwen21-viggle" else 8
+
         # Load pipeline if not already loaded
         if not rpc.is_pipeline_loaded():
             log_message("Loading AI pipeline on server...")
-            model_name = values["-MODEL_NAME-"]
             if model_name == "qwen21-viggle":
                 vcfg = load_viggle_config()
                 if vcfg is None:
@@ -812,7 +822,7 @@ def orchestrator(init_values, window):
                 if len(pair) == 2:
                     result = rpc.colorize_image_pair(
                         str(pair[0]), str(pair[1]),
-                        str(out_dir), prompt, gap_px=8, steps=steps, enhance_prompt=enhance_prompt
+                        str(out_dir), prompt, gap_px=gap_px, steps=steps, enhance_prompt=enhance_prompt
                     )
                     if not result.get("ok"):
                         log_message(f"⚠️ Pair {pair[0].name}+{pair[1].name}: {result.get('msg')}")
@@ -876,12 +886,15 @@ def orchestrator(init_values, window):
         render_speed = window["-RENDER_SPEED-"].get().strip() or "auto"
         memory_frames = window["-MEMORY_FRAMES-"].get().strip() or "20"
         backbone = window["-BACKBONE-"].get().strip() or "dinov3"
+        proximity_bias = "True" if (window["-PROXIMITY_BIAS-"].get() and backbone == "dinov3") else ""
+        proximity_alpha = window["-PROXIMITY_ALPHA-"].get().strip() or "0.50"
         encode_vpy = os.path.join(values["-SCRIPT_DIR-"], values["-ENCODE_VPY-"])
 
         vsp_cmd = (f'"{values["-VSPIPE-"]}" "{encode_vpy}" - '
                    f'-a "VideoPath={orig_video_path}" -a "RefDir={ref_dir}" '
                    f'-a "RenderSpeed={render_speed}" -a "MemoryFrames={memory_frames}" '
-                   f'-a "Backbone={backbone}" -a "BitDepth=10" '
+                   f'-a "Backbone={backbone}" -a "EnableProximityBias={proximity_bias}" '
+                   f'-a "ProximityBiasAlpha={proximity_alpha}" -a "BitDepth=10" '
                    f'--outputindex 0 -c y4m')
         x265_cmd = (f'"{values["-X265-"]}" --preset fast --input - '
                     f'--fps {fps_val} --output-depth 10 --y4m --profile main10 '
@@ -954,6 +967,8 @@ def orchestrator(init_values, window):
         render_speed = window["-RENDER_SPEED-"].get().strip() or "auto"
         memory_frames = window["-MEMORY_FRAMES-"].get().strip() or "20"
         backbone = window["-BACKBONE-"].get().strip() or "dinov3"
+        proximity_bias = "True" if (window["-PROXIMITY_BIAS-"].get() and backbone == "dinov3") else ""
+        proximity_alpha = window["-PROXIMITY_ALPHA-"].get().strip() or "0.50"
         encode_vpy = os.path.join(values["-SCRIPT_DIR-"], values["-ENCODE_VPY-"])
         x264_exe = os.path.join(
             Path(values["-X265-"]).parent.parent / "x264", "x264.exe")
@@ -961,7 +976,8 @@ def orchestrator(init_values, window):
         vsp_cmd = (f'"{values["-VSPIPE-"]}" "{encode_vpy}" - '
                    f'-a "VideoPath={orig_video_path}" -a "RefDir={ref_dir}" '
                    f'-a "RenderSpeed={render_speed}" -a "MemoryFrames={memory_frames}" '
-                   f'-a "Backbone={backbone}" -a "BitDepth=8" '
+                   f'-a "Backbone={backbone}" -a "EnableProximityBias={proximity_bias}" '
+                   f'-a "ProximityBiasAlpha={proximity_alpha}" -a "BitDepth=8" '
                    f'--outputindex 0 -c y4m')
         x264_cmd = (f'"{x264_exe}" --preset medium --demuxer y4m '
                     f'--fps {fps_val} --profile high '
@@ -1041,12 +1057,15 @@ def orchestrator(init_values, window):
         render_speed = window["-RENDER_SPEED-"].get().strip() or "auto"
         memory_frames = window["-MEMORY_FRAMES-"].get().strip() or "20"
         backbone = window["-BACKBONE-"].get().strip() or "dinov3"
+        proximity_bias = "True" if (window["-PROXIMITY_BIAS-"].get() and backbone == "dinov3") else ""
+        proximity_alpha = window["-PROXIMITY_ALPHA-"].get().strip() or "0.50"
         encode_vpy = os.path.join(values["-SCRIPT_DIR-"], values["-ENCODE_VPY-"])
 
         vsp_cmd = (f'"{values["-VSPIPE-"]}" "{encode_vpy}" - '
                    f'-a "VideoPath={orig_video_path}" -a "RefDir={ref_dir}" '
                    f'-a "RenderSpeed={render_speed}" -a "MemoryFrames={memory_frames}" '
-                   f'-a "Backbone={backbone}" -a "BitDepth=10" '
+                   f'-a "Backbone={backbone}" -a "EnableProximityBias={proximity_bias}" '
+                   f'-a "ProximityBiasAlpha={proximity_alpha}" -a "BitDepth=10" '
                    f'--outputindex 0 -c y4m')
         sharp_filter = window["-USE_SHARP-"].get()
         sharp = "--vpp-unsharp --vpp-edgelevel" if sharp_filter else ""
@@ -1220,6 +1239,7 @@ memory_values:     list[str] = [f"{x}" for x in range(10, 110, 10)]
 steps_values:      list[str] = ['2', '4', '6', '8']
 speed_values:    list[str] = ['auto', 'fast', 'medium', 'slow', 'slower']
 backbone_values: list[str] = ['dinov3', 'dinov2']
+proximity_alpha_values: list[str] = [f"{x/100:.2f}" for x in range(10, 110, 10)]
 model_list:        list[str] = ["nunchaku-qwen", "gguf-qwen", "longcat-gguf", "qwen21-viggle"]
 model_p_list:      list[str] = ["fp4", "int4", "q3", "q4", "q5", "q6", "q8"]
 model_r_list:      list[str] = ["32", "128"]
@@ -1560,10 +1580,19 @@ tab4_layout = [
      sg.Text("Render Speed:"),
      sg.Combo(speed_values, default_value=cfg.get("render_speed", "auto"),
               key="-RENDER_SPEED-", readonly=True, size=(8, 1)),
-     sg.Text("Backbone:"),
-     sg.Combo(backbone_values, default_value=cfg.get("backbone", "dinov3"),
-              key="-BACKBONE-", readonly=True, size=(8, 1))
      ],
+    [sg.Frame("CMNET2 Backbone", [
+        [sg.Text("Backbone:"),
+         sg.Combo(backbone_values, default_value=cfg.get("backbone", "dinov3"),
+                  key="-BACKBONE-", readonly=True, size=(8, 1), enable_events=True),
+         sg.Checkbox("Proximity Bias (DINOv3 only)", key="-PROXIMITY_BIAS-",
+                     default=cfg.get("proximity_bias", False),
+                     disabled=(cfg.get("backbone", "dinov3") == "dinov2")),
+         sg.Text("Alpha:"),
+         sg.Combo(proximity_alpha_values, default_value=cfg.get("proximity_bias_alpha", "0.50"),
+                  key="-PROXIMITY_ALPHA-", readonly=True, size=(6, 1),
+                  disabled=(cfg.get("backbone", "dinov3") == "dinov2"))],
+    ], expand_x=True)],
     [sg.Frame("NVEnc Merge Settings", [
         [sg.Text("Merge Weight:"),
          sg.Combo(merge_values, default_value=cfg.get("merge_weight","0.40"),
@@ -2694,6 +2723,12 @@ while True:
         is_viggle = (values["-MODEL_NAME-"] == "qwen21-viggle")
         window["-MODEL_PRECISION-"].update(disabled=is_viggle)
 
+    # ---- Backbone changed: Proximity Bias is DINOv3-only ----
+    if event == "-BACKBONE-":
+        is_dinov2 = (values["-BACKBONE-"] == "dinov2")
+        window["-PROXIMITY_BIAS-"].update(disabled=is_dinov2)
+        window["-PROXIMITY_ALPHA-"].update(disabled=is_dinov2)
+
     # ---- Run Server ----
     if event == "-RUN_SERVER-":
         model_name = values["-MODEL_NAME-"]
@@ -2840,6 +2875,8 @@ while True:
             "frames_memory":         values["-MEMORY_FRAMES-"],
             "render_speed":          values["-RENDER_SPEED-"],
             "backbone":              values["-BACKBONE-"],
+            "proximity_bias":        values["-PROXIMITY_BIAS-"],
+            "proximity_bias_alpha":  values["-PROXIMITY_ALPHA-"],
             "merge_weight":          values["-MERGE_WEIGHT-"],
             "vbr_quality":           values["-VBR_QUALITY-"],
             "use_sharp":             values["-USE_SHARP-"],

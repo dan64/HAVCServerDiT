@@ -11,10 +11,10 @@
     "fast_pipe": true,
     "fix_steps": "2",
     "fix_bw": false,
-    "fix_prompt_max": "30",
+    "fix_prompt_max": "50",
     "fix_prompts": [
         "color this image, natural colors.",
-		"Add color to this black-and-white image without hesitation regarding the appropriate colors. For any subject, garment, object, or setting where the color is common knowledge or established by convention, confidently apply the expected color; otherwise, use natural colors. Color the image, strictly preserve all shapes, outlines, and background details."
+	"Add color to this black-and-white image without hesitation regarding the appropriate colors. For any subject, garment, object, or setting where the color is common knowledge or established by convention, confidently apply the expected color; otherwise use natural colors. Color the image by strictly preserving all shapes, outlines, and background details."
     ],
     "fixv_base_dir": "C:/HAVCServerDiT/GUI/samples",
     "fixv_video": "",
@@ -28,7 +28,7 @@
     "fixv_backbone": "dinov3",
     "mkv_path": "C:/HAVCServerDiT/GUI/tools/MKVToolNix/mkvmerge.exe",
     "hf_cache": "",
-    "prompt": "Add color to this black-and-white image without hesitation regarding the appropriate colors. For any subject, garment, object, or setting where the color is common knowledge or established by convention, confidently apply the expected color; otherwise use natural colors. Color the image, strictly preserve all shapes, outlines, and background details.",
+    "prompt": "Add color to this black-and-white image without hesitation regarding the appropriate colors. For any subject, garment, object, or setting where the color is common knowledge or established by convention, confidently apply the expected color; otherwise use natural colors. Color the image by strictly preserving all shapes, outlines, and background details.",
     "shutdown_on_complete": false,
     "dupe_first_frame": true,
     "do_step1": true,
@@ -43,6 +43,8 @@
     "frames_memory": "20",
     "render_speed": "auto",
     "backbone": "dinov3",
+    "proximity_bias": false,
+    "proximity_bias_alpha": "0.50",
     "crf": "20.00",
     "merge_weight": "0.30",
     "vbr_quality": "26.00",

@@ -48,7 +48,10 @@ def _ensure_models(files: dict):
     import logging
     from huggingface_hub import hf_hub_download
     _log = logging.getLogger(__name__)
-    for name, (local_path, repo_id, hf_filename) in files.items():
+    for name, entry in files.items():
+        if entry is None:
+            continue
+        local_path, repo_id, hf_filename = entry
         if local_path is None:
             continue
         if os.path.exists(local_path):
@@ -78,7 +81,8 @@ def load_gguf_pipeline(model_name: str, unet_gguf_path: str, clip_gguf_path: str
                        hf_unet="unsloth/Qwen-Image-Edit-2511-GGUF",
                        hf_clip="unsloth/Qwen2.5-VL-7B-Instruct-GGUF",
                        hf_vae="Comfy-Org/Qwen-Image_ComfyUI",
-                       hf_lora="lightx2v/Qwen-Image-Edit-2511-Lightning"):
+                       hf_lora="lightx2v/Qwen-Image-Edit-2511-Lightning",
+                       clip_mmproj: str = "", clip_mmproj_hf_name: str = ""):
     """
     Load a GGUF-quantized Qwen Image Edit pipeline.
 
@@ -114,6 +118,8 @@ def load_gguf_pipeline(model_name: str, unet_gguf_path: str, clip_gguf_path: str
     clip_gguf_path = _os.path.join(_bridge_dir, clip_gguf_path) if not _os.path.isabs(clip_gguf_path) else clip_gguf_path
     if lora_path and not _os.path.isabs(lora_path):
         lora_path = _os.path.join(_bridge_dir, lora_path)
+    if clip_mmproj and not _os.path.isabs(clip_mmproj):
+        clip_mmproj = _os.path.join(_bridge_dir, clip_mmproj)
 
     from comfy_bridge import load_gguf_pipeline as comfy_load_gguf
 
@@ -126,11 +132,11 @@ def load_gguf_pipeline(model_name: str, unet_gguf_path: str, clip_gguf_path: str
         "clip": (clip_gguf_path, hf_clip, _os.path.basename(clip_gguf_path)),
         "vae":  (_vae_local, hf_vae, "split_files/vae/" + vae_name),
         "lora": (lora_path, hf_lora, _os.path.basename(lora_path)) if lora_path else None,
+        # mmproj: generalized -- remote filename can differ from the
+        # desired local name (e.g. generic "mmproj-BF16.gguf" upstream), driven by
+        # config instead of a hardcoded literal.
+        "mmproj": (clip_mmproj, hf_clip, clip_mmproj_hf_name or _os.path.basename(clip_mmproj)) if clip_mmproj else None,
     }
-    # mmproj  :  special handling: downloaded as mmproj-BF16.gguf, renamed locally
-    _mmproj_src = _os.path.join(_bridge, "models", "clip", "Qwen2.5-VL-7B-Instruct-mmproj-BF16.gguf")
-    if not _os.path.exists(_mmproj_src):
-        _files["mmproj"] = (_mmproj_src, hf_clip, "mmproj-BF16.gguf")
 
     if _auto:
         _ensure_models(_files)
@@ -292,6 +298,7 @@ def load_longcat_pipeline(model_name: str, model_precision: str = "", model_rank
                           hf_unet: str = "vantagewithai/LongCat-Image-Edit-Turbo-GGUF",
                           hf_clip: str = "unsloth/Qwen2.5-VL-7B-Instruct-GGUF",
                           hf_vae: str = "meituan-longcat/LongCat-Image-Edit-Turbo",
+                          clip_mmproj: str = "", clip_mmproj_hf_name: str = "",
                           **kwargs):
     """
     Load the LongCat-Image-Edit-Turbo GGUF pipeline via ComfyUI runtime.
@@ -303,6 +310,12 @@ def load_longcat_pipeline(model_name: str, model_precision: str = "", model_rank
     model_rank      : CLIP GGUF filename (e.g. Qwen2.5-VL-7B-Instruct-Q4_K_M.gguf)
     model_inference_steps : default inference steps (default "4")
     hf_unet/clip/vae : HuggingFace repo for auto-download
+    clip_mmproj / clip_mmproj_hf_name : optional mmproj GGUF for the CLIP's vision
+    tower -- same mechanism as gguf-qwen/qwen21-viggle. Unlike those
+    two, this function previously had NO mmproj handling at all (not even
+    hardcoded): on a fresh install using only longcat-gguf, the mmproj was never
+    auto-downloaded and gguf_mmproj_loader() would silently fall back to a
+    text-only CLIP (no vision tower merged).
     """
     if model_name != "longcat-gguf":
         return None
@@ -325,6 +338,9 @@ def load_longcat_pipeline(model_name: str, model_precision: str = "", model_rank
         hf_path = filename
         if folder == "vae": hf_path = "vae/diffusion_pytorch_model.safetensors"
         _files[tag] = (local, repo, hf_path)
+    if clip_mmproj:
+        _mmproj_local = clip_mmproj if _os.path.isabs(clip_mmproj) else _os.path.join(_bridge_dir, clip_mmproj)
+        _files["mmproj"] = (_mmproj_local, hf_clip, clip_mmproj_hf_name or _os.path.basename(_mmproj_local))
 
     if _auto:
         _ensure_models(_files)
@@ -335,6 +351,77 @@ def load_longcat_pipeline(model_name: str, model_precision: str = "", model_rank
     pipeline["_model_type"] = "longcat-gguf"
     pipeline["_colorize_fn"] = _colorize
     return pipeline
+
+
+def load_viggle_pipeline(model_name: str, unet_path: str, clip_path: str,
+                          lora_path: str = "", vae_name: str = "qwen_image_2.1_vae_bf16.safetensors",
+                          hf_unet="Comfy-Org/Qwen-Image-2.1",
+                          hf_clip="Comfy-Org/Qwen-Image-2.1",
+                          hf_vae="Comfy-Org/Qwen-Image-2.1",
+                          hf_lora="Viggle/Qwen-Image-2.1-viggle-turbo",
+                          clip_mmproj: str = "",
+                          clip_mmproj_hf_name: str = ""):
+    """
+    Load the Qwen-Image-2.1 pipeline (native ComfyUI int8 ConvRot weights)
+    with the Viggle-Turbo LoRA applied as an unmerged runtime hook.
+
+    clip_mmproj : optional path to a separate mmproj GGUF file, only used
+    when clip_path points to a GGUF text encoder (vs. the default
+    safetensors path). Downloaded from the same hf_clip repo as clip_path.
+    clip_mmproj_hf_name : optional, the mmproj filename as it exists on the
+    hf_clip repo, when it differs from clip_mmproj's local basename (e.g.
+    a generic "mmproj-BF16.gguf" upstream vs. a locally prefixed name).
+    Defaults to clip_mmproj's own basename when not given.
+    """
+    if model_name != "qwen21-viggle":
+        return None
+
+    import torch
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cudnn.allow_tf32 = True
+
+    import os as _os
+    _bridge_dir = _os.path.join(_os.path.dirname(__file__), "comfy_bridge")
+    unet_path = _os.path.join(_bridge_dir, unet_path) if not _os.path.isabs(unet_path) else unet_path
+    clip_path = _os.path.join(_bridge_dir, clip_path) if not _os.path.isabs(clip_path) else clip_path
+    if lora_path and not _os.path.isabs(lora_path):
+        lora_path = _os.path.join(_bridge_dir, lora_path)
+    if clip_mmproj and not _os.path.isabs(clip_mmproj):
+        clip_mmproj = _os.path.join(_bridge_dir, clip_mmproj)
+
+    from comfy_bridge import load_viggle_pipeline as _comfy_load_viggle, colorize_viggle as _colorize_viggle
+
+    _auto = _os.environ.get("COMFY_AUTO_DOWNLOAD", "1") == "1"
+    _vae_local = _os.path.join(_bridge_dir, "models", "vae", vae_name)
+    # hf_clip may point to a flat community GGUF repo (e.g. lmstudio-community/
+    # Qwen3-VL-8B-Instruct-GGUF, no subfolder) instead of the structured Comfy-Org
+    # repo -- mirror load_gguf_pipeline()'s convention (no prefix for GGUF clip
+    # files) rather than assuming the Comfy-Org "text_encoders/" layout always applies.
+    _clip_hf_filename = (
+        _os.path.basename(clip_path) if clip_path.lower().endswith(".gguf")
+        else "text_encoders/" + _os.path.basename(clip_path)
+    )
+    _files = {
+        "unet": (unet_path,  hf_unet, "diffusion_models/" + _os.path.basename(unet_path)),
+        "clip": (clip_path,  hf_clip, _clip_hf_filename),
+        "vae":  (_vae_local, hf_vae,  "vae/" + vae_name),
+        "lora": (lora_path,  hf_lora, _os.path.basename(lora_path)) if lora_path else None,
+        # mmproj: the remote filename can differ from the desired local one (e.g. a
+        # generic "mmproj-BF16.gguf" upstream vs. a locally prefixed name) -- same
+        # ad-hoc handling load_gguf_pipeline() already does for gguf-qwen's mmproj,
+        # generalized here via clip_mmproj_hf_name instead of a hardcoded literal.
+        # Falls back to clip_mmproj's own basename when not given (today's behavior).
+        "mmproj": (clip_mmproj, hf_clip, clip_mmproj_hf_name or _os.path.basename(clip_mmproj)) if clip_mmproj else None,
+    }
+    if _auto:
+        _ensure_models(_files)
+
+    pipeline = _comfy_load_viggle(unet_path, clip_path, lora_path=lora_path, vae_name=vae_name, clip_mmproj=clip_mmproj)
+    pipeline["_model_type"] = "qwen21-viggle"
+    pipeline["_colorize_fn"] = _colorize_viggle
+    return pipeline
+
+
 def upscale_with_lanczos(image, target_size):
     return image.resize(target_size, Image.Resampling.LANCZOS)
 
@@ -355,11 +442,17 @@ def resize_long_side(img: Image.Image, dim: int = 1024) -> Image.Image:
     new_h = ((new_h + SNAP - 1) // SNAP) * SNAP
     return img.resize((new_w, new_h), Image.Resampling.LANCZOS)
 
-def colorize_image(pipe, img: Image, prompt:str, steps: int = 2, seed: int=42) -> Image:
+def colorize_image(pipe, img: Image, prompt:str, steps: int = 2, seed: int=42, enhance_prompt: bool = False, resolution: int = None) -> Image:
     # LongCat pipeline (dict with _model_type marker)
     if isinstance(pipe, dict) and pipe.get("_model_type") == "longcat-gguf":
         _colorize_fn = pipe.get("_colorize_fn")
         return _colorize_fn(pipe, img, prompt=prompt, steps=steps, seed=seed)
+
+    # Qwen-Image-2.1 + Viggle-Turbo pipeline (dict with _model_type marker)
+    if isinstance(pipe, dict) and pipe.get("_model_type") == "qwen21-viggle":
+        _colorize_fn = pipe.get("_colorize_fn")
+        kwargs = {"resolution": resolution} if resolution is not None else {}
+        return _colorize_fn(pipe, img, prompt=prompt, steps=steps, seed=seed, enhance_prompt=enhance_prompt, **kwargs)
 
     # GGUF pipeline (dict)  :  comfy_bridge colorize
     if isinstance(pipe, dict):
@@ -406,7 +499,7 @@ def split_merged_output(colorized_merged: Image.Image, width1: int, gap_px: int 
     right = colorized_merged.crop((width1 + gap_px, 0, total_w, h))
     return left, right
 
-def process_image(input_path, output_path, pipe, prompt: str = None, img_size:int = 0, steps: int = 2, log_fn=None) -> float:
+def process_image(input_path, output_path, pipe, prompt: str = None, img_size:int = 0, steps: int = 2, log_fn=None, enhance_prompt: bool = False) -> float:
 
     if output_path.exists():
         if log_fn is not None:
@@ -420,14 +513,14 @@ def process_image(input_path, output_path, pipe, prompt: str = None, img_size:in
             log_fn(f'⚠️ Image: "{input_path}" too dark to be colorized')
         return 0
 
-    t_elapsed = process_image_standard(pipe, original, output_path, prompt, img_size=img_size, steps=steps)
+    t_elapsed = process_image_standard(pipe, original, output_path, prompt, img_size=img_size, steps=steps, enhance_prompt=enhance_prompt)
 
     if log_fn is not None:
         log_fn(f"✅ colored: {output_path} [{t_elapsed:.2f} sec.]")
 
     return t_elapsed
 
-def process_single_image(pipe, img_path: Path, output_dir: Path, prompt: str, steps: int = 2) -> float:
+def process_single_image(pipe, img_path: Path, output_dir: Path, prompt: str, steps: int = 2, enhance_prompt: bool = False) -> float:
     """Fallback for odd-numbered batches."""
     out_path = output_dir / (img_path.stem + ".jpg")
     original = Image.open(img_path).convert("RGB")
@@ -435,9 +528,9 @@ def process_single_image(pipe, img_path: Path, output_dir: Path, prompt: str, st
     if is_image_dark(original, threshold=9):
         return 0
 
-    return process_image_standard(pipe, original, out_path, prompt, steps=steps)
+    return process_image_standard(pipe, original, out_path, prompt, steps=steps, enhance_prompt=enhance_prompt)
 
-def process_image_standard(pipe, original, output_path, prompt, img_size: int = 1024, steps: int = 2) -> float:
+def process_image_standard(pipe, original, output_path, prompt, img_size: int = 1024, steps: int = 2, enhance_prompt: bool = False) -> float:
 
     bw = ImageEnhance.Color(original).enhance(0.0)
     orig_size = original.size
@@ -448,7 +541,7 @@ def process_image_standard(pipe, original, output_path, prompt, img_size: int = 
         bw_lowres = resize_long_side(bw, img_size)
 
     t_start = time.perf_counter()
-    colorized_lowres = colorize_image(pipe, bw_lowres, prompt, steps)
+    colorized_lowres = colorize_image(pipe, bw_lowres, prompt, steps, enhance_prompt=enhance_prompt)
     t_end = time.perf_counter()
 
     colorized_upscaled = upscale_with_lanczos(colorized_lowres, orig_size)
@@ -459,7 +552,16 @@ def process_image_standard(pipe, original, output_path, prompt, img_size: int = 
 # ----------------------------
 # Pair Processing
 # ----------------------------
-def process_image_pair(pipe, img1_path: Path, img2_path: Path, output_dir: Path, prompt: str, gap_px=16, steps: int = 2) -> float:
+VIGGLE_PAIR_RESOLUTION = 1280  # working resolution for qwen21-viggle in
+                                 # pair-mode only (vs 1024 for single-image
+                                 # and for the other backends) - mitigates
+                                 # fine-detail color artifacts near the
+                                 # merge boundary at the default resolution.
+                                 # 1280 chosen over 1536: same fix at ~47%
+                                 # time cost instead of ~105%, validated by
+                                 # the user on thousands of real frames.
+
+def process_image_pair(pipe, img1_path: Path, img2_path: Path, output_dir: Path, prompt: str, gap_px=16, steps: int = 2, enhance_prompt: bool = False) -> float:
     # Load originals
     orig1 = Image.open(img1_path).convert("RGB")
     orig2 = Image.open(img2_path).convert("RGB")
@@ -478,18 +580,20 @@ def process_image_pair(pipe, img1_path: Path, img2_path: Path, output_dir: Path,
         return 0
 
     if orig1_dark:
-        return process_image_standard(pipe, orig2, out2, prompt, steps=steps)
+        return process_image_standard(pipe, orig2, out2, prompt, steps=steps, enhance_prompt=enhance_prompt)
 
     if orig2_dark:
-        return process_image_standard(pipe, orig1, out1, prompt, steps=steps)
+        return process_image_standard(pipe, orig1, out1, prompt, steps=steps, enhance_prompt=enhance_prompt)
 
     # Convert to B&W
     bw1 = ImageEnhance.Color(orig1).enhance(0.0)
     bw2 = ImageEnhance.Color(orig2).enhance(0.0)
 
-    # Resize to 1024px long side
-    lowres1 = resize_long_side(bw1, 1024)
-    lowres2 = resize_long_side(bw2, 1024)
+    # Resize to a working resolution - higher for qwen21-viggle in pair-mode
+    # (mitigates fine-detail color artifacts near the merge boundary)
+    pair_resolution = VIGGLE_PAIR_RESOLUTION if (isinstance(pipe, dict) and pipe.get("_model_type") == "qwen21-viggle") else 1024
+    lowres1 = resize_long_side(bw1, pair_resolution)
+    lowres2 = resize_long_side(bw2, pair_resolution)
     #lowres1 = bw1
     #lowres2 = bw2
 
@@ -504,7 +608,7 @@ def process_image_pair(pipe, img1_path: Path, img2_path: Path, output_dir: Path,
 
     # Single inference
     t_start = time.perf_counter()
-    colorized_merged = colorize_image(pipe, merged_input, prompt, steps=steps)
+    colorized_merged = colorize_image(pipe, merged_input, prompt, steps=steps, enhance_prompt=enhance_prompt, resolution=pair_resolution)
     t_end = time.perf_counter()
 
     resized_colorized_merged = upscale_with_lanczos(colorized_merged, merged_input.size)

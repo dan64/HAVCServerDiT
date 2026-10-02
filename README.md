@@ -1381,6 +1381,7 @@ Subsequent runs load from the local cache.
 ## 🔗 Credits
 
 - **Model**: [Qwen/Qwen-Image-Edit-2511](https://huggingface.co/Qwen/Qwen-Image-Edit-2511), [Qwen/Qwen-Image-2.1](https://huggingface.co/Comfy-Org/Qwen-Image-2.1), [LongCat-Image-Edit-Turbo](https://huggingface.co/meituan-longcat/LongCat-Image-Edit-Turbo)
+- ****VapourSynth filter for video colorization with CMNET2****: [vs-cmnet2](https://github.com/dan64/vs-cmnet2)
 - **Viggle-Turbo LoRA**: [Viggle/Qwen-Image-2.1-viggle-turbo](https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo)
 - **Nunchaku quantization**: [Nunchaku / SVDQuant](https://github.com/mit-han-lab/nunchaku)
 - **GGUF dequantization kernels**: adapted from [ComfyUI-GGUF](https://github.com/city96/ComfyUI-GGUF) (Apache 2.0), Qwen3-VL mmproj support from the [ComfyUI-GGUF-Reboot](https://github.com/molbal/ComfyUI-GGUF) fork (molbal)

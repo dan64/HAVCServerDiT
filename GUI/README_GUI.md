@@ -26,9 +26,10 @@ and orchestrates a full video colorization pipeline: extraction → AI colorizat
   - [Tab 6 — Fix Video](#tab-6--fix-video)
 - [Workflow: Step by Step](#workflow-step-by-step)
   - [Step 1: Extract Reference Frames](#step-1-extract-reference-frames)
-  - [Step 2: Colorize Frames (AI)](#step-2-colorize-frames-ai)
-  - [Step 3: Encode Video](#step-3-encode-video)
-  - [Step 4: Merge (optional)](#step-4-merge-optional)
+  - [Step 2: Select Reference Frames](#step-2-select-reference-frames)
+  - [Step 3: Colorize Frames (AI)](#step-3-colorize-frames-ai)
+  - [Step 4: Encode Video](#step-4-encode-video)
+  - [Step 5: Merge (optional)](#step-5-merge-optional)
 - [Understanding the Merge Step](#understanding-the-merge-step)
 - [Settings Persistence](#settings-persistence)
 - [Credits](#credits)
@@ -45,21 +46,25 @@ Original Video
  (VapourSynth → vscmnet2 → reference frames in ref_tht10/)
       │
       ▼
- Step 2: COLORIZE
+ Step 2: SELECT (optional)
+ (VapourSynth → vscmnet2 → deduplicated reference frames in ref_tht10/)
+      │
+      ▼
+ Step 3: COLORIZE
  (RPC → HAVC DiT Server → colorized frames in ref_qwen/)
       │
       ▼
- Step 3: ENCODE
+ Step 4: ENCODE
  (VapourSynth → vscmnet2 → x265/x264/NVEnc → .h265/.h264 video)
       │
       ▼
- Step 4: MERGE (optional)
+ Step 5: MERGE (optional)
  (VapourSynth → vscmnet2 → blended .h265 → .mkv)
 ```
 
 Each step can be toggled on/off independently from the Dashboard. For example,
 if reference frames are already extracted you can skip Step 1 and run only
-Steps 2–4.
+Steps 2–5.
 
 ---
 
@@ -107,9 +112,10 @@ This installs:
 
 ### 3. Install `vscmnet2`
 
-The `vscmnet2` package provides the VapourSynth functions used by Steps 1, 3,
-and 4 (scene-change detection, edge-aware frame extraction, color merging,
-and encoding). It is available from [github.com/dan64/vs-cmnet2](https://github.com/dan64/vs-cmnet2):
+The `vscmnet2` package provides the VapourSynth functions used by Steps 1, 2,
+4, and 5 (edge-aware scene-change frame extraction, semantic frame
+deduplication, encoding, and color merging). It is available from
+[github.com/dan64/vs-cmnet2](https://github.com/dan64/vs-cmnet2):
 
 ```powershell
 pip install packages\vscmnet2-1.1.0-py3-none-any.whl
@@ -139,8 +145,9 @@ Remove-Item dinov3-vitb16.zip
 ```
 
 > Without these files, selecting **Backbone = dinov3** (the default) in the
-> Encode/Merge or Fix Video tab fails at pipeline start. Select **Backbone =
-> dinov2** instead if you only have the legacy DINOv2 weights below.
+> Encode/Merge, Fix Colors, or Fix Video tab fails at pipeline start. Select
+> **Backbone = dinov2** instead if you only have the legacy DINOv2 weights
+> below.
 
 #### DINOv2 backbone weights (legacy, optional)
 
@@ -278,12 +285,24 @@ The GUI has seven tabs plus a persistent status bar at the bottom.
 ![GUI Dashboard](https://github.com/dan64/HAVCServerDiT/blob/main/GUI/assets/gui_page1.jpg)
 
 - **Task checkboxes**: enable/disable each pipeline step
-- **START PIPELINE**: runs the selected steps sequentially
+- **START PIPELINE**: runs the selected steps sequentially. If **3. Colorize
+  Frames (AI)** is enabled and the client isn't connected to the DiT server
+  yet, the GUI starts it automatically (same as **Run Server**, GUI-managed
+  mode only — see below) and only starts the pipeline once it reports it's
+  actually online, instead of failing with a "not connected" error
 - **STOP**: gracefully interrupts the current step (sends stop signal to both
   subprocesses and the RPC server)
 - **Progress bar**: shows overall completion percentage
-- **Log window**: live output from VapourSynth, x265/NVEnc, and the RPC client
+- **Log window**: two tabs — **App Log** (live output from VapourSynth,
+  x265/NVEnc, and the RPC client) and **Server Log** (live output from the
+  RPC server itself, when started from **Run Server**, see
+  [Tab 2 — Colorization](#tab-2--colorization))
 - **Shutdown PC when finished**: triggers `shutdown /s /t 60` after completion
+- **Local DiT Server** frame: a shortcut mirroring Tab 2's **Run Server**
+  button and status text, so the server can be started/stopped without
+  leaving the Dashboard — it's the same button under a different key, using
+  whatever Model Name/Precision (and **External console** checkbox) is
+  currently set on Tab 2
 
 ### Tab 1 — Extraction
 
@@ -296,12 +315,32 @@ The GUI has seven tabs plus a persistent status bar at the bottom.
 | **Extract VPY**                                | VapourSynth script for frame extraction                                             |
 | **Threshold / tht_ssim / min_int / mult/freq** | Scene-change detection parameters                                                   |
 | **Ref Override**                               | Force re-extraction even if reference frames exist                                  |
+| **Select VPY**                                 | VapourSynth script for reference-frame selection (Step 2, see below)                |
+| **similarity_threshold / select_window**       | Selection parameters, see [Step 2: Select Reference Frames](#step-2-select-reference-frames) |
+| **Dry Run / Debug HTML / Move Files**          | Selection options, see below                                                        |
 | **Duplicate first frame**                      | Copies the second extracted frame to `ref_000000.jpg` (useful for frame 0 coverage) |
 | **Video Directory**                            | Folder containing the video to process                                              |
 | **Select Video**                               | Dropdown populated from the video directory                                         |
 
 After selecting a video, the **Video Technical Details** panel shows
 resolution, FPS, frame count, and pixel format.
+
+**Selection Settings** frame (used by Dashboard task **2. Select Reference
+Frames**):
+
+| Setting                  | Description                                                                                           |
+| ------------------------- | ------------------------------------------------------------------------------------------------------ |
+| **similarity_threshold** | Cosine similarity at/above which two candidate frames are merged into the same cluster (default `0.95`) |
+| **select_window**        | Clustering band width in candidate positions, not video frame numbers; `0` means global clustering (default `50`) |
+| **Dry Run**               | Write the cluster map without copying any representative file to the output folder                     |
+| **Debug HTML**            | Also write a `cluster_debug.html` report to the output folder                                           |
+| **Move Files**            | Move representative files instead of copying them (off by default — keeps `ref_tht10_temp/` as a full backup of all extracted candidates) |
+
+If `Debug HTML` is checked, in the output folder is written the file cluster_debug.html. This files contains all the reference clusters as shown in the image below
+
+![Reference Selection](https://github.com/dan64/HAVCServerDiT/blob/main/GUI/assets/ref-frames_selection_debug-view.jpg)
+
+for example in the Cluster 2, the reference frame #000145 was selected to represent all the references included in the Cluster 2. If the parameter similarity threshold is set above 0.95 will be selected smaller clusters, vice-versa if the threshold is set below 0.95 the similarity clusters will be bigger (will be available less reference frame to colorize).  
 
 ### Tab 2 — Colorization
 
@@ -312,7 +351,8 @@ resolution, FPS, frame count, and pixel format.
 | **RPC Host / Port**      | Server address (default: `127.0.0.1:8765`)                                                                                                                     |
 | **Connect button + LED** | Tests the RPC connection with a ping                                                                                                                           |
 | **Model / Precision**    | Pipeline configuration. Precision selects the GGUF quant level (`q3`–`q8`) or Nunchaku variant (`fp4`/`int4`). LongCat GGUF available via `longcat-gguf` model. Selecting **qwen21-viggle** auto-disables Precision (unused — model paths come from `config/qwen21_viggle.json`) |
-| **Run Server**           | Launch the server for the selected Model + Precision in a new terminal window — `start_server.cmd` for nunchaku/gguf/longcat, `run_server_qwen21.cmd` for qwen21-viggle |
+| **Run Server**           | Starts/stops the server for the selected Model + Precision as a process managed by the GUI, with its full output streamed live into the **Server Log** tab (Dashboard) — the button becomes **Stop Server** while running, and the status text next to it tracks *Starting server...* → *running on ...* → *stopped*. The GUI **connects automatically** once the server reports it's ready |
+| **External console**     | Reverts **Run Server** to its previous behavior: launches `start_server.cmd` (nunchaku/gguf/longcat) or `run_server_qwen21.cmd` (qwen21-viggle) in its own visible terminal window instead, with no control or logging from the GUI |
 | **Colorization Steps**   | Diffusion steps per frame (lower = faster). LongCat recommends 8 steps, Qwen 2 steps, qwen21-viggle 6 steps (its LoRA's native step count — `2`/`4`/`8` also available, experimental) |
 | **Fast Pipeline**        | Enables **paired inference**: two frames colorized in one forward pass (~2× faster, temporally consistent). Supported by nunchaku-qwen and qwen21-viggle; gguf-qwen/longcat-gguf fall back to per-image processing |
 | **Enhance Prompt**       | **qwen21-viggle only**: rewrites the prompt via Qwen3-VL before colorizing (image-aware, adds ~15-20s/frame) — no effect on other backends. Try a direct anti-hedging prompt first, see [main README](../README.md#-suggested-inference-steps) |
@@ -339,7 +379,7 @@ as frames are processed.
 | **Backbone**        | CMNET2 key-encoder backbone: `dinov3` (default, best quality) or `dinov2` (legacy) |
 | **Proximity Bias**  | DINOv3-only: favor temporally closer permanent-memory reference frames over purely content-similar ones (`vscmnet2` ≥ 1.1.0). Off by default; unchecked always forces it off for this run, overriding `vsslib/models.json` |
 | **Alpha**           | Strength of the proximity bias (`0.10`–`0.90`, default `0.50`), used only when **Proximity Bias** is checked |
-| **Merge Weight**    | Blend ratio for Step 4 (0.30 = 30% original, 0.75 = 75% original)      |
+| **Merge Weight**    | Blend ratio for Step 5 (0.30 = 30% original, 0.75 = 75% original)      |
 | **VBR Quality**     | NVEnc quality target (lower = better)                                  |
 | **NVEnc Sharpness** | Enables `--vpp-unsharp --vpp-edgelevel` on NVEnc                       |
 
@@ -405,6 +445,7 @@ colorizes a B&W target image using a color reference image as context.
 | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | **Reference Image (Color)** | Load a color reference image (drag & drop or Browse) that provides the color palette                                         |
 | **Target Image (B&W)**      | Load the B&W image to colorize via ComboBox, drag & drop, or Browse                                                          |
+| **Backbone**                | CMNET2 key-encoder backbone: `dinov3` (default, best quality) or `dinov2` (legacy) — applies in both single-image and batch mode |
 | **Colorize**                | Run CMNET2 colorization in a background thread. The first call loads the model (~5–10 s); subsequent calls reuse it (~1–2 s) |
 | **Overwrite**               | Overwrite the original target file with the colorized result                                                                 |
 | **Save As...**              | Save the colorized result to a new file (PNG / JPG)                                                                          |
@@ -491,10 +532,37 @@ The extraction parameters control how aggressively frames are selected:
 - **min_int** (`sc_min_int`): minimum frame interval between selections
 - **mult/freq** (`sc_mult_tht`): minimum frequency multiplier
 
-### Step 2: Colorize Frames (AI)
+### Step 2: Select Reference Frames
+
+Optional step, disabled by default. Deduplicates the candidate reference
+frames extracted in Step 1 by semantic similarity (DINOv3-based), reducing
+redundant near-identical frames before they reach colorization.
+
+Before running, the task checks that `ref_tht10/` (from Step 1) exists and
+is not empty — if it does not, the whole pipeline is stopped (not just this
+step, since downstream steps depend on `ref_tht10/`). It then:
+
+1. Renames `ref_tht10/` to `ref_tht10_temp/` (the full set of candidates —
+   if `ref_tht10_temp/` already exists from a previous run, the task stops
+   with an error rather than overwriting it; remove it manually first).
+2. Runs the selection script, reading candidates from `ref_tht10_temp/` and
+   writing the deduplicated representative frames to a newly created
+   `ref_tht10/` — the same folder name Step 3 (Colorize) reads from, so no
+   other step needs to change.
+
+`ref_tht10_temp/` is left in place afterward as a full backup of every
+extracted candidate (unless **Move Files** is checked).
+
+### Step 3: Colorize Frames (AI)
 
 The GUI connects to the HAVC DiT Server and sends each extracted frame for
 colorization. Results are saved to `ref_qwen/`.
+
+> Running this step from **START PIPELINE** no longer requires connecting
+> first: if the client isn't connected yet, the GUI starts the DiT server
+> for you (see **Run Server** in [Tab 2 — Colorization](#tab-2--colorization))
+> and waits until it's online before continuing — as long as **Run Server**
+> is in its default GUI-managed mode (**External console** unchecked).
 
 Two modes are available:
 
@@ -505,7 +573,7 @@ Two modes are available:
 
 The server's pipeline is loaded on demand (if not already loaded at boot).
 
-### Step 3: Encode Video
+### Step 4: Encode Video
 
 VapourSynth reads the original video and the colorized frames from
 `ref_qwen/`, then `vscmnet2` overlays the color onto the original luminance
@@ -521,7 +589,7 @@ The output is a raw `.h265` (x265/NVEnc) or `.h264` (x264) video stream. If
 MKVToolNix is configured, a `.mkv` container is created automatically and the
 raw stream is deleted.
 
-### Step 4: Merge (optional)
+### Step 5: Merge (optional)
 
 This step **only makes sense when the original video clip is already
 colorized** (e.g., a previous colorization pass or a naturally color source).
@@ -542,7 +610,7 @@ color clip is kept:
 | 0.50   | 50/50 — balanced blend                                 |
 | 0.74   | 74% original color, 26% DiT — original colors dominate |
 
-> If the original clip is black-and-white, **disable Step 4**.
+> If the original clip is black-and-white, **disable Step 5**.
 > Blending a B&W clip with a colorized one only desaturates the result.
 
 The merged output is saved as `[video]_cmnet2_dt-color_merged.mkv`.
@@ -577,6 +645,7 @@ startup and includes:
 - Script directory and script filenames
 - Model configuration (name, precision, rank, steps)
 - Extraction parameters
+- Selection parameters (similarity_threshold, select_window, Dry Run, Debug HTML, Move Files)
 - Encoding parameters (CRF, FPS, encoder choice)
 - Merge weight and VBR quality
 - Fix Colors reference/target image paths

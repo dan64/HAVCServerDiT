@@ -163,6 +163,7 @@ def load_all_configs():
         "steps":                  "2",
         "fast_pipe":              True,
         "enhance_prompt":         False,
+        "run_server_external":    False,
         # --- fix image ---
         "fix_steps":              "2",
         "fix_bw":                 True,
@@ -185,6 +186,7 @@ def load_all_configs():
         "fixc_ref_path":    r"",
         "fixc_target_path": r"",
         "fixc_batch":        False,
+        "fixc_backbone":     "dinov3",
         # --- encode ---
         "mkv_path":       r"",
         "hf_cache":       "",
@@ -193,13 +195,21 @@ def load_all_configs():
         "dupe_first_frame":     False,
         "do_step1":       False,
         "do_step2":       False,
-        "do_step3":       True,
-        "do_step4":       False,
+        "do_step3":       False,
+        "do_step4":       True,
+        "do_step5":       False,
         "sc_threshold":   "0.04",
         "sc_tht_ssim":    "0.0",
         "sc_min_int":     "15",
         "sc_mult_tht":    "10",
         "ref_override":   False,
+        # --- select reference frames ---
+        "select_script":  "extract_selected_refs.vpy",
+        "sel_tht_ssim":   "0.95",
+        "sel_window":     "50",
+        "sel_dry_run":    False,
+        "sel_debug_html": False,
+        "sel_move_files": False,
         "frames_memory":  "20",
         "render_speed":   "auto",
         "backbone":       "dinov3",
@@ -220,7 +230,18 @@ def load_all_configs():
     if os.path.exists(CONFIG_FILE):
         try:
             with open(CONFIG_FILE, "r") as f:
-                return {**defaults, **json.load(f)}
+                loaded = json.load(f)
+            # Migrate pre-"Select Reference Frames" task numbering: old step2
+            # (Colorize) / step3 (Encode) / step4 (Merge) shift to step3/4/5
+            # once the new step2 (Select) is inserted after Extract. Without
+            # this, an old do_step3=True (Encode) would be silently
+            # reinterpreted as the new do_step3 (Colorize) on next launch.
+            if "do_step2" in loaded and "do_step5" not in loaded:
+                loaded["do_step5"] = loaded.get("do_step4", False)
+                loaded["do_step4"] = loaded.get("do_step3", False)
+                loaded["do_step3"] = loaded.get("do_step2", False)
+                loaded["do_step2"] = False
+            return {**defaults, **loaded}
         except Exception:
             return defaults
     return defaults
@@ -370,6 +391,8 @@ state = {
     "stop_requested":  False,
     "rpc_client":      None,    # CMNET2RpcClient | None
     "rpc_connected":   False,
+    "pending_run_values": None,  # values snapshot from -RUN-, waiting on the
+                                  # DiT server it auto-started to come online
     "is_running":      False,
     "total_frames":    -1,
     "fix_prompts":     [],
@@ -396,6 +419,105 @@ state = {
 
 def log_gui_only(msg):
     window.write_event_value("-LOG-", msg)
+
+
+# ---------------------------------------------------------------------------
+# DIT SERVER PROCESS  (Tab 2 "Run Server", default mode)
+#
+# dit_rpc_server.py is launched as a real child process (python.exe -u
+# dit_rpc_server.py ..., hidden console, stdout+stderr piped) instead of a
+# visible external console window: a dedicated reader thread streams its
+# output line-by-line into the GUI's Server Log tab, and the process is
+# stopped from the GUI with proc.terminate() (CTRL_BREAK_EVENT - the
+# mechanism the "-STOP-" button elsewhere in this file uses for vspipe/
+# encode subprocesses - was tried first here too, but turned out unreliable
+# together with CREATE_NO_WINDOW: see _stop_server_process()).
+#
+# This was tried first as an in-process thread (importing dit_rpc_server and
+# calling serve_forever() inside a GUI thread), redirecting sys.stdout/
+# sys.stderr and even monkey-patching print() to capture its output - but
+# something down the heavy model-loading chain (torch/diffusers/nunchaku/
+# comfy_bridge) still swallowed most of it silently (very likely a native/
+# C-extension write straight to the OS file descriptor, which sits below
+# anything reachable from pure-Python stream/print patching). A real child
+# process sidesteps the whole problem: its stdout/stderr are real OS pipes,
+# so every byte it writes - Python or native - is captured, exactly as if
+# it were run in a console. It also fully isolates the heavy GPU/CUDA code
+# from the GUI process (no GIL contention, a crash there can't take the GUI
+# down with it). The "External console" checkbox keeps the previous fully
+# manual behavior (launch the .cmd in a visible console, fire-and-forget)
+# available unchanged.
+# ---------------------------------------------------------------------------
+state["server_handle"] = None  # {"proc": Popen, "thread": Thread}
+
+
+def _server_pipeline_config_path(server_dir: str, model_name: str, precision: str):
+    """Mirror the model_name/precision -> config JSON mapping already used by
+    start_server.cmd / run_server_qwen21.cmd, for the GUI-managed server."""
+    cfg_dir = os.path.join(server_dir, "config")
+    if model_name == "qwen21-viggle":
+        return os.path.join(cfg_dir, "qwen21_viggle.json")
+    if model_name == "nunchaku-qwen":
+        return os.path.join(cfg_dir, f"qwen_nunchaku_{precision}.json")
+    if model_name == "gguf-qwen":
+        return os.path.join(cfg_dir, f"qwen_gguf_{precision}.json")
+    if model_name == "longcat-gguf":
+        return os.path.join(cfg_dir, f"longcat_gguf_{precision}.json")
+    return None
+
+
+def _set_run_server_button(window, **kwargs):
+    """Update the "Run Server" button and its Dashboard mirror (-RUN_SERVER_DASH-,
+    see the "Local DiT Server" frame) together, so the two stay in sync
+    regardless of which one the user clicked."""
+    window["-RUN_SERVER-"].update(**kwargs)
+    window["-RUN_SERVER_DASH-"].update(**kwargs)
+
+
+def _set_server_status(window, text, text_color):
+    """Update the server status text and its Dashboard mirror (-SERVER_STATUS_DASH-)."""
+    window["-SERVER_STATUS-"].update(text, text_color=text_color)
+    window["-SERVER_STATUS_DASH-"].update(text, text_color=text_color)
+
+
+def _pump_server_output(proc, window, host, port):
+    """Reader thread: feed the child server process's stdout (stderr merged
+    in) into the GUI's Server Log, line by line, until it exits. Also
+    watches for dit_rpc_server.py's own "listening on ..." line (logged
+    right before it calls serve_forever()) to fire -SERVER_READY-, the cue
+    for the GUI to auto-connect instead of making the user click "Connect"
+    once the server has visibly finished loading."""
+    ready_sent = False
+    try:
+        for line in proc.stdout:
+            line = line.rstrip("\n")
+            window.write_event_value("-SERVER_LOG-", line)
+            if not ready_sent and "HAVC DiT Server listening on" in line:
+                ready_sent = True
+                window.write_event_value("-SERVER_READY-", (host, port))
+    except Exception:
+        pass
+    finally:
+        proc.wait()
+        window.write_event_value(
+            "-SERVER_LOG-", f"[Server] Process exited (code {proc.returncode}).")
+        window.write_event_value("-SERVER_STOPPED-", None)
+
+
+def _stop_server_process(proc, window):
+    """Stop the child server process. CTRL_BREAK_EVENT (tried first in an
+    earlier version) turned out unreliable together with CREATE_NO_WINDOW -
+    with no real console allocated, there's nothing to deliver the control
+    event to, so dit_rpc_server.py's serve_forever() never notices and the
+    process just keeps running. terminate() is immediate and safe here:
+    dit_rpc_server.py holds no state that needs a clean shutdown beyond its
+    listening socket, which the OS reclaims right away on process exit.
+    Runs off the GUI thread - _pump_server_output() notices the exit (stdout
+    EOF) and fires -SERVER_STOPPED-."""
+    try:
+        proc.terminate()
+    except Exception:
+        pass
 
 
 def update_status(window, message, type="info"):
@@ -452,6 +574,20 @@ def _connect_thread(host: str, port: int, window):
         window.write_event_value("-RPC_CONNECT_DONE-", (False, str(e)))
 
 
+def _start_rpc_connect(window, host: str, port):
+    """Shared by the "Connect" button and the GUI-managed server's
+    auto-connect (triggered once its log shows it's actually listening)."""
+    window["-RPC_HOST-"].update(str(host))
+    window["-RPC_PORT-"].update(str(port))
+    window["-CONNECT-"].update(disabled=True)
+    window["-RPC_LED-"].update("●", text_color="yellow")
+    window["-RPC_STATUS_TEXT-"].update("⏳ ...", text_color="yellow")
+    window["-LOG_BOX-"].print(f"[RPC] Connecting to {host}:{port}...")
+    threading.Thread(
+        target=_connect_thread, args=(host, port, window), daemon=True
+    ).start()
+
+
 # ---------------------------------------------------------------------------
 # TASK LOGIC — subprocess (EXTRACT, ENCODE, MERGE) — unchanged from
 # the original version, run locally on the client.
@@ -490,6 +626,20 @@ def run_vspipe_task(cmd, window, task_name, log_fn):
     window.write_event_value("-PROGRESS-", (100, f"100% {total}/{total}"))
     update_status(window, "Status: OK", "info")
     return proc.returncode
+
+
+def _launch_pipeline(window, run_values):
+    """Actually start the batch pipeline (orchestrator thread) - shared by
+    the immediate path in the "-RUN-" handler and the deferred path that
+    waits for an auto-started DiT server to come online first."""
+    window["-RUN-"].update(disabled=True)
+    window["-STOP-"].update(disabled=False)
+    window["-LOG_BOX-"].update("--- STARTING BATCH ---\n")
+    threading.Thread(
+        target=orchestrator,
+        args=(run_values, window),
+        daemon=True,
+    ).start()
 
 
 # ---------------------------------------------------------------------------
@@ -609,6 +759,58 @@ def orchestrator(init_values, window):
             else:
                 log_message("⚠️ Fewer than 2 frames found — skipping duplication.")
 
+    # ---- STEP 2: SELECT REFERENCE FRAMES ----
+    def do_select_references(values, window, orig_video_path):
+        ref_dir      = Path(values["-BASE_DIR-"]) / "ref_tht10"
+        ref_dir_temp = Path(values["-BASE_DIR-"]) / "ref_tht10_temp"
+        select_vpy = os.path.join(values["-SCRIPT_DIR-"], values["-SELECT_VPY-"])
+
+        if not ref_dir.is_dir() or not any(ref_dir.glob("*.jpg")):
+            if ref_dir_temp.is_dir() and any(ref_dir_temp.glob("*.jpg")):
+                raise RuntimeError(
+                    f'"{ref_dir}" not found, but "{ref_dir_temp}" already holds '
+                    'candidate frames — a previous Select Reference Frames run '
+                    f'likely failed after the rename step. Rename "{ref_dir_temp.name}" '
+                    f'back to "{ref_dir.name}" manually before retrying.')
+            raise RuntimeError(
+                f'"{ref_dir}" not found or empty — run Extraction (task #1) first.')
+        if ref_dir_temp.exists():
+            raise RuntimeError(
+                f'"{ref_dir_temp}" already exists — remove it manually before '
+                're-running Select Reference Frames.')
+
+        ref_dir.rename(ref_dir_temp)
+        log_message(f'ℹ️ Renamed "{ref_dir.name}" -> "{ref_dir_temp.name}"')
+        num_candidates = len(list(ref_dir_temp.glob("*.jpg")))
+
+        ScThtSSIM    = values["-SEL_THT_SSIM-"]
+        SelectWindow = values["-SEL_WINDOW-"]
+        DryRun       = "True" if values["-SEL_DRY_RUN-"] else ""
+        DebugHtml    = "True" if values["-SEL_DEBUG_HTML-"] else ""
+        MoveFiles    = "True" if values["-SEL_MOVE_FILES-"] else ""
+        vpy_args = (
+            f'-a "ScThtSSIM={ScThtSSIM}" -a "SelectWindow={SelectWindow}" '
+            f'-a "DryRun={DryRun}" -a "DebugHtml={DebugHtml}" -a "MoveFiles={MoveFiles}"'
+        )
+        cmd = (f'"{values["-VSPIPE-"]}" "{select_vpy}" . --progress '
+               f'-a "VideoPath={orig_video_path}" '
+               f'-a "RefDirIn={ref_dir_temp}" -a "RefDirOut={ref_dir}" {vpy_args}')
+        log_message(f'ℹ️ Starting reference selection with script: "{select_vpy}"')
+        ret = run_vspipe_task(cmd, window, "SELECT", log_message)
+
+        if ret != 0:
+            raise RuntimeError(
+                f"Reference selection script exited with code {ret} "
+                f'— "{ref_dir.name}" was not (fully) regenerated.')
+
+        num_selected  = len(list(ref_dir.glob("*.jpg"))) if ref_dir.is_dir() else 0
+        reduction_pct = (
+            (1 - num_selected / num_candidates) * 100 if num_candidates > 0 else 0.0)
+        log_message(
+            f"✅ [SELECT] Selected {num_selected} representative reference "
+            f"frames out of {num_candidates} candidates "
+            f"({reduction_pct:.1f}% reduction).")
+
     # ---- STEP 2a: COLORIZE (standard, one image at a time) ----
     def do_colorize(values, window):
         rpc = state.get("rpc_client")
@@ -669,7 +871,7 @@ def orchestrator(init_values, window):
             if state["stop_requested"]:
                 rpc.request_stop()
                 break
-            if not window["-DO_STEP2-"].get():
+            if not window["-DO_STEP3-"].get():
                 log_message("[COLORIZE] Task skipped by user.")
                 break
 
@@ -807,7 +1009,7 @@ def orchestrator(init_values, window):
             if state["stop_requested"]:
                 rpc.request_stop()
                 break
-            if not window["-DO_STEP2-"].get():
+            if not window["-DO_STEP3-"].get():
                 log_message("[COLORIZE] Task skipped by user.")
                 break
 
@@ -1152,9 +1354,10 @@ def orchestrator(init_values, window):
     try:
         tasks = []
         if init_values["-DO_STEP1-"]: tasks.append("EXTRACT")
-        if init_values["-DO_STEP2-"]: tasks.append("COLORIZE")
-        if init_values["-DO_STEP3-"]: tasks.append("ENCODE")
-        if init_values["-DO_STEP4-"]: tasks.append("MERGE")
+        if init_values["-DO_STEP2-"]: tasks.append("SELECT")
+        if init_values["-DO_STEP3-"]: tasks.append("COLORIZE")
+        if init_values["-DO_STEP4-"]: tasks.append("ENCODE")
+        if init_values["-DO_STEP5-"]: tasks.append("MERGE")
 
         orig_video_path = os.path.join(
             init_values["-BASE_DIR-"], init_values["-VIDEO_DROPDOWN-"])
@@ -1177,9 +1380,15 @@ def orchestrator(init_values, window):
                 else:
                     do_extraction(init_values, window, orig_video_path)
 
+            elif task == "SELECT":
+                if not window["-DO_STEP2-"].get():
+                    log_message("⚠️ Selection task cancelled")
+                else:
+                    do_select_references(init_values, window, orig_video_path)
+
             elif task == "COLORIZE":
                 fast_pipeline = bool(window["-FAST_PIPE-"].get())
-                if not window["-DO_STEP2-"].get():
+                if not window["-DO_STEP3-"].get():
                     log_message("⚠️ Colorization task cancelled")
                 else:
                     if fast_pipeline:
@@ -1188,7 +1397,7 @@ def orchestrator(init_values, window):
                         do_colorize(init_values, window)
 
             elif task == "ENCODE":
-                if not window["-DO_STEP3-"].get():
+                if not window["-DO_STEP4-"].get():
                     log_message("⚠️ Encoding task cancelled")
                 else:
                     selected_encoder = window["-ENCODER-"].get()
@@ -1203,7 +1412,7 @@ def orchestrator(init_values, window):
                             init_values, window, orig_video_path)
 
             elif task == "MERGE":
-                if not window["-DO_STEP4-"].get():
+                if not window["-DO_STEP5-"].get():
                     log_message("⚠️ Merge task cancelled")
                 else:
                     do_video_merge(
@@ -1249,6 +1458,9 @@ sc_tht_values:  list[str] = [f"{x/1000:.3f}" for x in range(20, 155, 5)]
 sc_ssim_values: list[str] = [f"{x/100:.2f}"  for x in range(0, 100, 5)]
 sc_int_values:  list[str] = [f"{x}" for x in range(5, 55, 5)]
 sc_mult_values: list[str] = [f"{x}" for x in range(0, 26, 1)]
+
+select_ssim_values:   list[str] = [f"{x/100:.2f}" for x in range(80, 101, 1)]
+select_window_values: list[str] = ["0", "10", "20", "30", "40", "50", "75", "100", "150", "200"]
 
 # ---------------------------------------------------------------------------  
 # Fix Image helpers  
@@ -1450,20 +1662,29 @@ tab1_layout = [
     [sg.Text("Pipeline Controller", font=("Any", 16, "bold"))],
     [sg.Frame("Tasks to Execute", [
         [sg.Checkbox("1. Extract Reference Frames",    key="-DO_STEP1-", default=cfg["do_step1"])],
-        [sg.Checkbox("2. Colorize Frames (AI)",        key="-DO_STEP2-", default=cfg["do_step2"])],
-        [sg.Checkbox("3. Encode Video (x265 / x264 / Nvenc)", key="-DO_STEP3-", default=cfg["do_step3"])],
-        [sg.Checkbox("4. Video Merge (NVEnc)",         key="-DO_STEP4-", default=cfg["do_step4"])],
+        [sg.Checkbox("2. Select Reference Frames",     key="-DO_STEP2-", default=cfg["do_step2"])],
+        [sg.Checkbox("3. Colorize Frames (AI)",        key="-DO_STEP3-", default=cfg["do_step3"])],
+        [sg.Checkbox("4. Encode Video (x265 / x264 / Nvenc)", key="-DO_STEP4-", default=cfg["do_step4"])],
+        [sg.Checkbox("5. Video Merge (NVEnc)",         key="-DO_STEP5-", default=cfg["do_step5"])],
     ], expand_x=True)],
     [sg.Checkbox("Shutdown PC when finished", key="-SHUTDOWN-",
-                 default=cfg["shutdown_on_complete"])],
+                 default=cfg["shutdown_on_complete"]),
+     sg.Frame("Local DiT Server", [
+         [sg.Button("Run Server", key="-RUN_SERVER_DASH-", button_color=("white", "#1a6b1a")),
+          sg.Text("stopped", key="-SERVER_STATUS_DASH-", size=(35, 1), expand_x=True)],
+     ], pad=((325, 0), (0, 0)))],
     [sg.Button("START PIPELINE", size=(20, 2), button_color="Green", key="-RUN-"),
      sg.Button("STOP", size=(10, 2), button_color="SaddleBrown",
                key="-STOP-", disabled=True)],
     [sg.ProgressBar(100, orientation='h', size=(20, 20),
                     key="-PBAR-", expand_x=True),
      sg.Text("0%", key="-PTEXT-", size=(15, 1))],
-    [sg.Multiline(size=(82, 12), key="-LOG_BOX-", autoscroll=True,
-                  expand_x=True, expand_y=True, font=("Courier New", 9))],
+    [sg.TabGroup([[
+        sg.Tab("App Log", [[sg.Multiline(size=(82, 12), key="-LOG_BOX-", autoscroll=True,
+                                          expand_x=True, expand_y=True, font=("Courier New", 9))]]),
+        sg.Tab("Server Log", [[sg.Multiline(size=(82, 12), key="-SERVER_LOG_BOX-", autoscroll=True,
+                                             expand_x=True, expand_y=True, font=("Courier New", 9))]]),
+    ]], expand_x=True, expand_y=True, key="-LOG_TABGROUP-")],
 ]
 
 # ---------------------------------------------------------------------------
@@ -1488,6 +1709,21 @@ tab2_layout = [
      sg.Text("mult/freq:"),
      sg.Combo(sc_mult_values, default_value=cfg["sc_mult_tht"],  key="-SC_MULT_THT-", readonly=True, size=(6,1)),
      sg.Checkbox("Ref Override", key="-REF_OVERRIDE-", default=cfg["ref_override"])],
+    [sg.HorizontalSeparator()],
+    [sg.Text("Select VPY:"),
+     sg.Combo(scan_files(cfg["script_dir"], "*extract_selected*.vpy"),
+              key="-SELECT_VPY-", expand_x=True, default_value=cfg["select_script"])],
+    [sg.Frame("Selection Settings", [
+        [sg.Text("similarity_threshold:"),
+         sg.Combo(select_ssim_values, default_value=cfg["sel_tht_ssim"],
+                  key="-SEL_THT_SSIM-", readonly=True, size=(6, 1)),
+         sg.Text("select_window:"),
+         sg.Combo(select_window_values, default_value=cfg["sel_window"],
+                  key="-SEL_WINDOW-", readonly=True, size=(6, 1)),
+         sg.Checkbox("Dry Run", key="-SEL_DRY_RUN-", default=cfg.get("sel_dry_run", False)),
+         sg.Checkbox("Debug HTML", key="-SEL_DEBUG_HTML-", default=cfg.get("sel_debug_html", False)),
+         sg.Checkbox("Move Files", key="-SEL_MOVE_FILES-", default=cfg.get("sel_move_files", False))],
+    ], expand_x=True)],
     [sg.HorizontalSeparator()],
     [sg.Checkbox("Create ref_000000.jpg from second frame",
                  key="-DUPE_FIRST_FRAME-", default=cfg["dupe_first_frame"])],
@@ -1526,7 +1762,7 @@ tab3_layout = [
          sg.Button("Connect", key="-CONNECT-", button_color=("white", "#1a6b1a")),
          sg.Text("●", key="-RPC_LED-", text_color="red",
                  font=("Any", 14, "bold")),
-         sg.Text("Non connesso", key="-RPC_STATUS_TEXT-", text_color="red",
+         sg.Text("Disconnected", key="-RPC_STATUS_TEXT-", text_color="red",
                  size=(12, 1))],
     ], expand_x=True)],
 
@@ -1537,7 +1773,13 @@ tab3_layout = [
          sg.Combo(model_list,      default_value=cfg["model_name"],           key="-MODEL_NAME-",     readonly=True, size=(18,1), enable_events=True),
          sg.Text("Precision:"),
          sg.Combo(model_p_list,    default_value=cfg["model_precision"],      key="-MODEL_PRECISION-",readonly=True, size=(6,1)),
-          sg.Button("Run Server", key="-RUN_SERVER-", button_color=("white", "#1a6b1a"))],
+          sg.Button("Run Server", key="-RUN_SERVER-", button_color=("white", "#1a6b1a")),
+          sg.Checkbox("External console", key="-RUN_SERVER_EXTERNAL-",
+                      default=cfg.get("run_server_external", False),
+                      tooltip="Launch the server in a separate console window (previous "
+                              "behavior) instead of controlling it from the GUI with its "
+                              "output in the Server Log tab."),
+          sg.Text("stopped", key="-SERVER_STATUS-", size=(45, 1), expand_x=True)],
         [sg.Text("Colorization Steps:"),
          sg.Combo(steps_values, default_value=cfg["steps"], key="-STEPS-", readonly=True, size=(6,1)),
          sg.Checkbox("Fast Pipeline", key="-FAST_PIPE-", default=cfg["fast_pipe"])],
@@ -1739,7 +1981,10 @@ tab7_layout = [
      sg.Text("(drag & drop)", font=("Any", 8))],
     [sg.Checkbox("Enable batch processing", key="-FIXC_BATCH-", default=False,
                  enable_events=True),
-     sg.Button("Clear", key="-FIXC_CLEAR-", disabled=True)],
+     sg.Button("Clear", key="-FIXC_CLEAR-", disabled=True),
+     sg.Text("Backbone:"),
+     sg.Combo(backbone_values, default_value=cfg.get("fixc_backbone", "dinov3"),
+              key="-FIXC_BACKBONE-", readonly=True, size=(8, 1))],
     [sg.Button("Load Image", key="-FIXC_TARGET_LOAD-"),
      sg.Combo([], key="-FIXC_TARGET_PATH-", expand_x=True, readonly=True, enable_events=True,
               default_value=""),
@@ -1941,9 +2186,11 @@ def _fixc_colorize_worker(values, window):
             window.write_event_value("-FIXC_LOG-", "⚠️ Both reference and target images must be loaded.")
             return
 
+        backbone = values["-FIXC_BACKBONE-"].strip() or "dinov3"
+
         window.write_event_value("-LOG-", "[Fix Colors] Colorizing...")
         t0 = time.time()
-        out = pil_cmnet2_colorize(ref_img, target_img, project_dir=_project_dir)
+        out = pil_cmnet2_colorize(ref_img, target_img, project_dir=_project_dir, backbone=backbone)
         elapsed = time.time() - t0
 
         # Batch mode: store output in memory
@@ -2188,6 +2435,12 @@ while True:
     if event in (sg.WIN_CLOSED, "Exit"):
         if state["current_process"]:
             state["current_process"].terminate()
+        handle = state.get("server_handle")
+        if handle and handle.get("proc") and handle["proc"].poll() is None:
+            try:
+                handle["proc"].terminate()
+            except Exception:
+                pass
         break
 
     # ---- Fix Image tab ----
@@ -2729,52 +2982,137 @@ while True:
         window["-PROXIMITY_BIAS-"].update(disabled=is_dinov2)
         window["-PROXIMITY_ALPHA-"].update(disabled=is_dinov2)
 
-    # ---- Run Server ----
-    if event == "-RUN_SERVER-":
+    # ---- Run Server (Tab 2 button, and its Dashboard mirror) ----
+    if event in ("-RUN_SERVER-", "-RUN_SERVER_DASH-"):
         model_name = values["-MODEL_NAME-"]
         precision = values["-MODEL_PRECISION-"]
+        rpc_host = values["-RPC_HOST-"].strip()
+        rpc_port = values["-RPC_PORT-"].strip()
         server_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        cmd_path = None
-        arg = ''
-        if model_name == "qwen21-viggle":
-            cmd_path = os.path.join(server_dir, 'run_server_qwen21.cmd')
-        elif model_name == "longcat-gguf":
-            longcat_quant_map = {"q3": "longcat-q3", "q4": "longcat-q4", "q5": "longcat-q5",
-                                 "q6": "longcat-q6", "q8": "longcat-q8"}
-            arg = longcat_quant_map.get(precision, "longcat-q4")
-            cmd_path = os.path.join(server_dir, 'start_server.cmd')
-        elif model_name == "nunchaku-qwen":
-            arg = precision
-            cmd_path = os.path.join(server_dir, 'start_server.cmd')
-        elif model_name == "gguf-qwen":
-            arg = precision
-            cmd_path = os.path.join(server_dir, 'start_server.cmd')
-        if cmd_path and os.path.isfile(cmd_path):
-            launch_args = ['cmd', '/c', 'start', 'Running HAVC Server - ' + model_name, cmd_path]
-            if arg:
-                launch_args.append(arg)
-            subprocess.Popen(
-                launch_args,
-                cwd=server_dir,
-                creationflags=subprocess.CREATE_NEW_CONSOLE,
-            )
-            window["-LOG_BOX-"].print(f'[Run Server] Launched: {cmd_path} {arg}'.rstrip())
-        elif cmd_path:
-            sg.popup_error(f'{os.path.basename(cmd_path)} not found at: {cmd_path}')
+
+        if values["-RUN_SERVER_EXTERNAL-"]:
+            # ---- External console: previous behavior, unchanged ----
+            cmd_path = None
+            arg = ''
+            if model_name == "qwen21-viggle":
+                cmd_path = os.path.join(server_dir, 'run_server_qwen21.cmd')
+            elif model_name == "longcat-gguf":
+                longcat_quant_map = {"q3": "longcat-q3", "q4": "longcat-q4", "q5": "longcat-q5",
+                                     "q6": "longcat-q6", "q8": "longcat-q8"}
+                arg = longcat_quant_map.get(precision, "longcat-q4")
+                cmd_path = os.path.join(server_dir, 'start_server.cmd')
+            elif model_name == "nunchaku-qwen":
+                arg = precision
+                cmd_path = os.path.join(server_dir, 'start_server.cmd')
+            elif model_name == "gguf-qwen":
+                arg = precision
+                cmd_path = os.path.join(server_dir, 'start_server.cmd')
+            if cmd_path and os.path.isfile(cmd_path):
+                launch_args = ['cmd', '/c', 'start', 'Running HAVC Server - ' + model_name, cmd_path]
+                if arg:
+                    launch_args.append(arg)
+                subprocess.Popen(
+                    launch_args,
+                    cwd=server_dir,
+                    creationflags=subprocess.CREATE_NEW_CONSOLE,
+                )
+                window["-LOG_BOX-"].print(f'[Run Server] Launched: {cmd_path} {arg}'.rstrip())
+            elif cmd_path:
+                sg.popup_error(f'{os.path.basename(cmd_path)} not found at: {cmd_path}')
+            else:
+                sg.popup_error('Unknown model/precision combination.')
+
         else:
-            sg.popup_error('Unknown model/precision combination.')
+            # ---- GUI-managed child process, output in "Server Log" ----
+            handle = state.get("server_handle")
+            if handle and handle.get("proc") and handle["proc"].poll() is None:
+                # Currently running -> Stop
+                _set_run_server_button(window, text="Stopping...", disabled=True)
+                _set_server_status(window, "stopping...", "yellow")
+                window["-SERVER_LOG_BOX-"].print("[Server] Stopping...")
+                threading.Thread(
+                    target=_stop_server_process, args=(handle["proc"], window),
+                    daemon=True,
+                ).start()
+            else:
+                # Not running -> Start
+                pipeline_config = _server_pipeline_config_path(server_dir, model_name, precision)
+                if not pipeline_config or not os.path.isfile(pipeline_config):
+                    sg.popup_error(f"Pipeline config not found:\n{pipeline_config}")
+                    # Unblocks a pipeline start left waiting on this server
+                    # (see -RUN-/pending_run_values) - nothing was actually
+                    # started, so this just re-enables the UI, no real stop.
+                    window.write_event_value("-SERVER_STOPPED-", None)
+                else:
+                    venv_python = os.path.join(server_dir, ".venv", "Scripts", "python.exe")
+                    python_exe = venv_python if os.path.isfile(venv_python) else "python"
+                    cmd = [python_exe, "-u",
+                           os.path.join(server_dir, "dit_rpc_server.py"),
+                           "--host", rpc_host, "--port", rpc_port,
+                           "--module-dir", server_dir,
+                           "--load-pipeline", "--pipeline-config", pipeline_config]
+                    try:
+                        proc = subprocess.Popen(
+                            cmd, cwd=server_dir,
+                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                            stdin=subprocess.DEVNULL, text=True, bufsize=1,
+                            encoding="utf-8", errors="replace",
+                            creationflags=(subprocess.CREATE_NEW_PROCESS_GROUP
+                                           | subprocess.CREATE_NO_WINDOW
+                                           if os.name == 'nt' else 0),
+                        )
+                    except Exception as e:
+                        sg.popup_error(f"Failed to start the server:\n{e}")
+                        window.write_event_value("-SERVER_STOPPED-", None)
+                    else:
+                        _set_run_server_button(
+                            window, text="Stop Server", button_color=("white", "#b71c1c"),
+                            disabled=False)
+                        window["-RUN_SERVER_EXTERNAL-"].update(disabled=True)
+                        _set_server_status(
+                            window, f"Starting server on {rpc_host}:{rpc_port}...", "yellow")
+                        window["-SERVER_LOG_BOX-"].print(
+                            f"[Server] Starting {model_name} ({precision})... (pid {proc.pid})")
+                        t = threading.Thread(
+                            target=_pump_server_output,
+                            args=(proc, window, rpc_host, rpc_port), daemon=True)
+                        state["server_handle"] = {"proc": proc, "thread": t}
+                        t.start()
+
+    if event == "-SERVER_LOG-":
+        window["-SERVER_LOG_BOX-"].print(values["-SERVER_LOG-"])
+
+    if event == "-SERVER_READY-":
+        _host, _port = values["-SERVER_READY-"]
+        _set_server_status(window, f"running on {_host}:{_port}", "lime")
+        window["-SERVER_LOG_BOX-"].print(
+            f"[Server] Ready — auto-connecting to {_host}:{_port}...")
+        _start_rpc_connect(window, _host, _port)
+
+    if event == "-SERVER_STOPPED-":
+        _set_run_server_button(
+            window, text="Run Server", button_color=("white", "#1a6b1a"), disabled=False)
+        window["-RUN_SERVER_EXTERNAL-"].update(disabled=False)
+        _set_server_status(window, "stopped", "white")
+        # The RPC client was talking to the server we just stopped -> reset
+        # the connection indicator too, it's no longer valid.
+        state["rpc_client"] = None
+        state["rpc_connected"] = False
+        window["-CONNECT-"].update(disabled=False)
+        window["-RPC_LED-"].update("●", text_color="red")
+        window["-RPC_STATUS_TEXT-"].update("Disconnected", text_color="red")
+        if state.get("pending_run_values") is not None:
+            # The server we auto-started for the pipeline died/failed before
+            # ever connecting - give up on the deferred start.
+            state["pending_run_values"] = None
+            window["-RUN-"].update(disabled=False)
+            sg.popup_error(
+                "The DiT server stopped before it finished starting.\n"
+                "Pipeline not started - check the Server Log tab for details.")
 
     # ---- RPC server connection ----
     if event == "-CONNECT-":
-        host = values["-RPC_HOST-"].strip()
-        port = values["-RPC_PORT-"].strip()
-        window["-CONNECT-"].update(disabled=True)
-        window["-RPC_LED-"].update("●", text_color="yellow")
-        window["-RPC_STATUS_TEXT-"].update("⏳ ...", text_color="yellow")
-        window["-LOG_BOX-"].print(f"[RPC] Connecting to {host}:{port}...")
-        threading.Thread(
-            target=_connect_thread, args=(host, port, window), daemon=True
-        ).start()
+        _start_rpc_connect(window, values["-RPC_HOST-"].strip(), values["-RPC_PORT-"].strip())
 
     if event == "-RPC_CONNECT_DONE-":
         ok, err_msg = values["-RPC_CONNECT_DONE-"]
@@ -2788,10 +3126,25 @@ while True:
             window["-RPC_STATUS_TEXT-"].update("❌ Error", text_color="red")
             update_status(window, "Status: RPC connection failed", "error")
 
+        pending = state.get("pending_run_values")
+        if pending is not None:
+            state["pending_run_values"] = None
+            if ok:
+                window["-LOG_BOX-"].print(
+                    "[Pipeline] DiT server connected — starting the pipeline.")
+                _launch_pipeline(window, pending)
+            else:
+                window["-RUN-"].update(disabled=False)
+                sg.popup_error(
+                    "Failed to connect to the auto-started DiT server:\n"
+                    f"{err_msg}\n\nPipeline not started.")
+
     # ---- Update script combos when dir changes ----
     if event == "-SCRIPT_DIR-":
         ev = scan_files(values["-SCRIPT_DIR-"], "cmnet2_extract_*.vpy")
         if ev: window["-EXTRACT_VPY-"].update(values=ev)
+        ev = scan_files(values["-SCRIPT_DIR-"], "*extract_selected*.vpy")
+        if ev: window["-SELECT_VPY-"].update(values=ev)
         ev = scan_files(values["-SCRIPT_DIR-"], "*encode_*.vpy")
         if ev:
             window["-ENCODE_VPY-"].update(values=ev)
@@ -2828,6 +3181,7 @@ while True:
             "x265_path":             values["-X265-"],
             "script_dir":            values["-SCRIPT_DIR-"],
             "extract_script":        values["-EXTRACT_VPY-"],
+            "select_script":         values["-SELECT_VPY-"],
             "encode_script":         values["-ENCODE_VPY-"],
             "base_dir":              values["-BASE_DIR-"],
             "model_name":            values["-MODEL_NAME-"],
@@ -2835,6 +3189,7 @@ while True:
             "steps":                 values["-STEPS-"],
             "fast_pipe":             values["-FAST_PIPE-"],
             "enhance_prompt":        values["-ENHANCE_PROMPT-"],
+            "run_server_external":   values["-RUN_SERVER_EXTERNAL-"],
             "fix_steps":              values["-FIX_STEPS-"],
             "fix_bw":                 values["-FIX_BW-"],
             "fix_batch":              values["-FIX_BATCH-"],
@@ -2856,6 +3211,7 @@ while True:
             "fixc_ref_path":          values["-FIXC_REF_PATH-"],
             "fixc_target_path":       values["-FIXC_TARGET_PATH-"],
             "fixc_batch":             values["-FIXC_BATCH-"],
+            "fixc_backbone":          values["-FIXC_BACKBONE-"],
             "mkv_path":              values["-MKV_PATH-"],
             "hf_cache":              values["-CACHE_DIR-"],
             "prompt":                values["-PROMPT-"],
@@ -2865,11 +3221,17 @@ while True:
             "do_step2":              values["-DO_STEP2-"],
             "do_step3":              values["-DO_STEP3-"],
             "do_step4":              values["-DO_STEP4-"],
+            "do_step5":              values["-DO_STEP5-"],
             "sc_threshold":          values["-SC_THT-"],
             "sc_tht_ssim":           values["-SC_THT_SSIM-"],
             "sc_min_int":            values["-SC_MIN_INT-"],
             "sc_mult_tht":           values["-SC_MULT_THT-"],
             "ref_override":          values["-REF_OVERRIDE-"],
+            "sel_tht_ssim":          values["-SEL_THT_SSIM-"],
+            "sel_window":            values["-SEL_WINDOW-"],
+            "sel_dry_run":           values["-SEL_DRY_RUN-"],
+            "sel_debug_html":        values["-SEL_DEBUG_HTML-"],
+            "sel_move_files":        values["-SEL_MOVE_FILES-"],
             "crf":                   values["-CRF-"],
             "encoder":               values["-ENCODER-"],
             "frames_memory":         values["-MEMORY_FRAMES-"],
@@ -2895,20 +3257,37 @@ while True:
         if not values["-VIDEO_DROPDOWN-"]:
             sg.popup_error("Select a video file first!")
             continue
-        if (values["-DO_STEP2-"] and not state["rpc_connected"]):
-            sg.popup_error(
-                "The Colorization task is selected but the client\n"
-                "is not connected to the RPC server.\n\n"
-                "Go to the '2. Colorization' tab and click Connect.")
+        if values["-DO_STEP3-"] and not state["rpc_connected"]:
+            if values["-RUN_SERVER_EXTERNAL-"]:
+                # External console: the GUI has no way to know when that
+                # separate, unobserved process becomes ready, so it can't
+                # auto-start-and-wait for it - same manual flow as before.
+                sg.popup_error(
+                    "The Colorization task is selected but the client\n"
+                    "is not connected to the RPC server.\n\n"
+                    "Go to the '2. Colorization' tab and click Connect.")
+                continue
+            # GUI-managed mode: start the DiT server automatically (unless
+            # already starting/running) and hold the pipeline start until it
+            # actually comes online - resumed from -RPC_CONNECT_DONE-.
+            state["pending_run_values"] = values.copy()
+            window["-RUN-"].update(disabled=True)
+            window["-LOG_BOX-"].print(
+                "[Pipeline] Colorize task selected but the DiT server isn't "
+                "connected — starting it automatically, please wait...")
+            handle = state.get("server_handle")
+            server_already_running = bool(
+                handle and handle.get("proc") and handle["proc"].poll() is None)
+            if server_already_running:
+                # Running but not connected (e.g. a dropped connection) -
+                # reconnect directly, don't send another "Run Server" click
+                # or it would be interpreted as Stop.
+                _start_rpc_connect(
+                    window, values["-RPC_HOST-"].strip(), values["-RPC_PORT-"].strip())
+            else:
+                window.write_event_value("-RUN_SERVER-", None)
             continue
-        window["-RUN-"].update(disabled=True)
-        window["-STOP-"].update(disabled=False)
-        window["-LOG_BOX-"].update("--- STARTING BATCH ---\n")
-        threading.Thread(
-            target=orchestrator,
-            args=(values, window),
-            daemon=True,
-        ).start()
+        _launch_pipeline(window, values)
 
     # ---- Stop ----
     if event == "-STOP-":

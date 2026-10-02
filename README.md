@@ -105,7 +105,89 @@ pip show nunchaku    # Expected: 1.2.1+cu13.0torch2.10
 
 ## 📢 What's New
 
-### 2026-09-28 — qwen21-viggle: GGUF+mmproj CLIP as new default, `clip_mmproj` generalized, known limitation documented
+### 2026-10-02 — Run Server managed by the GUI, with a live Server Log (GUI)
+
+**Run Server** (Tab 2, Colorization) now starts and stops the RPC server
+itself instead of just launching a `.cmd` file in its own terminal window:
+the server runs as a hidden child process controlled by the GUI, and its
+full output streams live into a new **Server Log** tab — right next to the
+existing log, now labeled **App Log** — in the Dashboard. The button
+becomes **Stop Server** while it's running, and a status line next to it
+tracks the sequence: *Starting server on ...* → *running on ...* (once the
+server actually reports it's listening) → *stopped*.
+
+Once the server reports it's ready, the GUI **connects automatically** —
+no need to also click **Connect** on Tab 2. Closing the GUI (or clicking
+**Stop Server**) always shuts the process down cleanly; the RPC connection
+indicator resets to *Disconnected* at the same time, since the server it
+was talking to is gone.
+
+A new **External console** checkbox next to the button restores the
+previous behavior exactly (a separate visible console window, started and
+left running independently of the GUI) for anyone who prefers it or needs
+to keep an eye on the raw console.
+
+A **Local DiT Server** frame on the Dashboard mirrors the **Run Server**
+button and its status text, so the server can be started/stopped without
+switching to Tab 2.
+
+**START PIPELINE** also uses this: if the **3. Colorize Frames (AI)** task
+is enabled and the client isn't connected yet, the GUI starts the DiT
+server automatically (same as clicking **Run Server**) and holds the
+pipeline start until it reports it's actually online, instead of just
+failing with "not connected". This only applies when **Run Server** is
+GUI-managed (**External console** unchecked) — with an external console
+there's no way for the GUI to know when that separate process is ready, so
+the previous behavior (an error asking to connect manually) still applies
+there.
+
+### 2026-10-01 — Select Reference Frames task (GUI)
+
+A new optional Dashboard task, **2. Select Reference Frames**, has been added
+between **Extract** and **Colorize** — every task after it, is renumbered
+(Colorize/Encode/Merge become tasks 3/4/5). It deduplicates the reference
+frames extracted in Step 1 by semantic similarity (DINOv3-based, via
+`vscmnet2.vs_select_reference_frames()`), reducing redundant near-identical
+candidates before they reach colorization — useful for long or slow-changing
+scenes where scene-change detection alone still produces many visually
+similar frames.
+
+The task renames `ref_tht10/` (produced by Extraction) to `ref_tht10_temp/`,
+then writes the deduplicated representative frames back to a freshly created
+`ref_tht10/` — the same folder Colorize already reads from, so no other step
+changes. `ref_tht10_temp/` is kept as a full backup of every extracted
+candidate unless **Move Files** is checked. If `ref_tht10/` is missing/empty,
+or `ref_tht10_temp/` already exists from an interrupted previous run, the
+task stops the entire pipeline with an error rather than guessing or
+overwriting anything.
+
+New **Selection Settings** frame in the GUI's Extraction tab exposes
+`similarity_threshold`, `select_window`, and the `Dry Run`/`Debug HTML`/
+`Move Files` options.  If `Debug HTML` is checked, in the output folder is written the file cluster_debug.html. This files contains all the reference clusters as shown in the image below
+
+![Reference Selection](https://github.com/dan64/HAVCServerDiT/blob/main/GUI/assets/ref-frames_selection_debug-view.jpg)
+
+for example in the Cluster 2, the reference frame #000145 was selected to represent all the references included in the Cluster 2. If the parameter similarity threshold is set above 0.95 will be selected smaller clusters, vice-versa if the threshold is set below 0.95 the similarity clusters will be bigger (will be available less reference frame to colorize). 
+
+This _deduplication_ of keyframes will improve color consistency and _accelerate_ the coloring process, as fewer images will need to be colored.    
+
+See [GUI README: Step 2](GUI/README_GUI.md#step-2-select-reference-frames)
+for the full workflow and recovery steps if a run is interrupted.
+
+> Existing `gui_cmnet2_settings.json` files are migrated automatically on
+> next load — no manual action needed.
+
+### 2026-09-30 — Fix Colors: Backbone selection (GUI)
+
+The **Fix Colors** tab (Tab 5) now exposes a **Backbone** combo (`dinov3` /
+`dinov2`), passed as the `backbone` parameter of `vscmnet2.pil_cmnet2_colorize()`
+— the same choice already available in **Encode/Merge** (Tab 3) and **Fix
+Video** (Tab 6), now consistent across all three tabs that drive CMNET2.
+Previously the tab always used the `vscmnet2` default (`dinov3`) with no way
+to select the legacy DINOv2 backbone. Applies in both single-image and batch
+mode. Persisted in `gui_cmnet2_settings.json` as `fixc_backbone`.
+
+### 2026-09-29 — qwen21-viggle: GGUF+mmproj CLIP as new default, `clip_mmproj` generalized, known limitation documented
 
 **New default CLIP for `qwen21-viggle`**: `Qwen3-VL-8B-Instruct-UD`
 (GGUF+mmproj, `unsloth/Qwen3-VL-8B-Instruct-GGUF`), loaded through a
@@ -140,7 +222,7 @@ for this kind of ambiguous content, not a bug in this integration. If a
 frame is affected, `nunchaku-qwen`/`gguf-qwen` are unaffected by the same
 issue and can be used as a fallback.
 
-### 2026-09-27 — qwen21-viggle: higher working resolution for Fast Pipeline
+### 2026-09-28 — qwen21-viggle: higher working resolution for Fast Pipeline
 
 Paired inference (_Fast Pipeline_) for `qwen21-viggle` now uses a working
 resolution of **1280** instead of the usual 1024 (single-image and every
@@ -230,8 +312,10 @@ often achieves the same result without the extra cost — see the
 
 The GUI Tab 2 (Colorization) supports this backend: selecting
 **qwen21-viggle** from Model Name auto-disables the (unused) Precision
-combo, reads model paths from `config/qwen21_viggle.json`, and **Run
-Server** launches `run_server_qwen21.cmd` instead of `start_server.cmd`.
+combo and reads model paths from `config/qwen21_viggle.json`. **Run
+Server** manages the equivalent of `run_server_qwen21.cmd` directly (see
+[What's New, 2026-09-30](#-whats-new)) — or launches that same `.cmd` file
+in its own console when the **External console** checkbox is ticked.
 An **Enhance Prompt** checkbox is available in Tab 2 and Tab 4 (Fix Image).
 
 ### 2026-09-25 — x264 encoder option (GUI)
@@ -292,10 +376,11 @@ Launch via `run_server_longcat.cmd` (Q4_K_M) or `start_server.cmd longcat` (Q4),
 > Custom nodes `CFGNorm`, `FluxKontextMultiReferenceLatentMethod`, and
 > `TextEncodeQwenImageEditPlus` are included in `comfy_bridge/comfy_extras/`.
 
-The GUI Tab 2 (Colorization) now includes a **Run Server** button that launches
-`start_server.cmd` with the selected Model Name + Precision directly, opening a
-new terminal window. This replaces the need to manually find and run the right
-`.cmd` file.
+The GUI Tab 2 (Colorization) now includes a **Run Server** button that manages
+the server for the selected Model Name + Precision directly — see
+[What's New, 2026-09-30](#-whats-new) for how it's started/stopped/logged, and
+the **External console** checkbox for opening a plain terminal window instead.
+This replaces the need to manually find and run the right `.cmd` file.
 
 ### 2026-07-01 — Batch Processing for Fix Image & Fix Colors (GUI)
 
@@ -342,6 +427,7 @@ Key features:
 - **Save / Overwrite**: save the colorized result as PNG/JPG or overwrite the original target file
 - **Full-resolution preservation**: images are always kept at original resolution in memory; resizing only applies to previews
 - **Delayed import**: `vscmnet2` is imported only when Colorize is clicked (does not block GUI startup)
+- **Backbone selection** (`dinov3` / `dinov2`, since 2026-09-28): passed to `vscmnet2.pil_cmnet2_colorize()` — same combo already available in Encode/Merge (Tab 3) and Fix Video (Tab 6)
 
 > **Prerequisite**: `vscmnet2` must be installed with model weights and checkpoints present (see [GUI README](GUI/README_GUI.md#3-install-vscmnet2)). No RPC connection needed.
 
@@ -1238,7 +1324,7 @@ start_server.cmd int4
 qwen21-viggle` is not a thing), it always launches with
 `config/qwen21_viggle.json` (the only config available for this backend).
 
-> **GUI shortcut**: From the desktop GUI, go to Tab 2 (Colorization), pick a Model + Precision, and click **Run Server** — a terminal window opens with the correct `.cmd` file/arguments for the selected Model Name (`run_server_qwen21.cmd` when `qwen21-viggle` is selected, `start_server.cmd` with the right arguments otherwise).
+> **GUI shortcut**: From the desktop GUI, go to Tab 2 (Colorization), pick a Model + Precision, and click **Run Server** — the GUI starts the server itself, with live output in the **Server Log** tab and auto-connect once it's ready (see [What's New, 2026-09-30](#-whats-new)). Tick **External console** first to instead open a plain terminal window with the correct `.cmd` file/arguments for the selected Model Name (`run_server_qwen21.cmd` when `qwen21-viggle` is selected, `start_server.cmd` with the right arguments otherwise).
 
 ---
 

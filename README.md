@@ -171,7 +171,7 @@ for example in the Cluster 2, the reference frame #000145 was selected to repres
 
 This _deduplication_ of keyframes will improve color consistency and _accelerate_ the coloring process, as fewer images will need to be colored.    
 
-See [GUI README: Step 2](GUI/README_GUI.md#step-2-select-reference-frames)
+See [GUI README: Tab 1](GUI/README_GUI.md#tab-1--extraction)
 for the full workflow and recovery steps if a run is interrupted.
 
 > Existing `gui_cmnet2_settings.json` files are migrated automatically on

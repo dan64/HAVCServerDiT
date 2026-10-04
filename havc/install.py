@@ -4,9 +4,9 @@ Principio guida: "install = update da stato vuoto". Ogni passo verifica prima di
 agire e salta ciò che è già a posto (vedi installer/PHASE0_SPEC.md §4).
 
 Esempi:
-    havc-install --env-dir .venv --plan
-    havc-install --env-dir .venv --assets-dir packages --wheel dist\\havc-0.1.0-py3-none-any.whl
-    havc-install --env-dir .venv --only venv,pip --json-progress
+    havc-install --install-dir C:/HAVC --plan
+    havc-install --install-dir C:/HAVC --runtime-zip runtime.tar.gz --assets-dir packages --wheel dist\\havc-0.1.0-py3-none-any.whl
+    havc-install --install-dir C:/HAVC --only runtime,venv,pip --json-progress
 """
 
 from __future__ import annotations
@@ -24,6 +24,8 @@ from typing import Callable, Optional
 from . import __version__, paths
 from .lockfile import read_lock, read_pins_file
 from .progress import Progress, force_utf8
+from .runtime import (RUNTIME, download_archive, extract_archive, probe_version,
+                      sha256_of, runtime_python as find_runtime_python)
 
 TORCH_INDEX = "https://download.pytorch.org/whl/cu130"
 PIP_MIN = (24, 0)  # sotto questa soglia il passo `pip` aggiorna pip
@@ -37,14 +39,32 @@ class BootstrapError(RuntimeError):
 
 @dataclasses.dataclass
 class Ctx:
-    env_dir: Path
+    install_dir: Path
     progress: Progress
     dry_run: bool = False
     plan_only: bool = False
     assets_dir: Optional[Path] = None
     wheel: Optional[Path] = None
     python: Optional[Path] = None
-    resolved_python: Optional[Path] = None
+    runtime_zip: Optional[Path] = None
+    use_system_python: bool = False
+
+    @property
+    def env_dir(self) -> Path:
+        """Il venv dell'installazione (creato dal runtime provisionato)."""
+        return self.install_dir / "venv"
+
+    @property
+    def runtime_dir(self) -> Path:
+        return self.install_dir / "runtime"
+
+    @property
+    def runtime_python(self) -> Path:
+        return find_runtime_python(self.install_dir)
+
+    @property
+    def cache_dir(self) -> Path:
+        return self.install_dir / "cache"
 
     @property
     def venv_python(self) -> Path:
@@ -54,6 +74,12 @@ class Ctx:
 
     def venv_exists(self) -> bool:
         return (self.env_dir / "pyvenv.cfg").is_file() and self.venv_python.is_file()
+
+    def env_python(self) -> Optional[Path]:
+        """Interprete per creare il venv: runtime provisionato, altrimenti --python/3.12 di sistema."""
+        if not self.use_system_python and self.runtime_python.is_file():
+            return self.runtime_python
+        return self.python or find_python312()
 
     # ---------------------------------------------------------------- run --
     def run(self, cmd, *, capture: Optional[bool] = None, check: bool = True,
@@ -191,37 +217,90 @@ def build_steps() -> list[Step]:
 
     # -- 1. preflight ------------------------------------------------------
     def preflight_run(c: Ctx) -> str:
-        if sys.version_info[:2] != (3, 12):
+        if sys.version_info[:2] < (3, 9):
             raise BootstrapError(
-                f"il bootstrap richiede Python 3.12 (trovato {sys.version.split()[0]})",
-                "avvia con `py -3.12 -m havc.install ...`",
+                f"il bootstrap richiede Python >= 3.9 (trovato {sys.version.split()[0]})"
             )
         if not req_dir.is_dir():
             raise BootstrapError(
                 f"lockfile non trovato: {req_dir}",
                 "esegui dal checkout del progetto o reinstalla la wheel `havc`",
             )
-        c.resolved_python = c.python or find_python312()
-        if c.resolved_python is None:
-            raise BootstrapError(
-                "interprete Python 3.12 non trovato",
-                "installa Python 3.12 oppure passa --python <percorso>",
-            )
-        return f"Python host: {c.resolved_python}"
+        nota = "" if sys.version_info[:2] == (3, 12) else \
+            " (il venv userà il runtime 3.12 provisionato)"
+        return f"host: {sys.version.split()[0]}{nota}"
 
-    # -- 2. venv -----------------------------------------------------------
+    # -- 2. runtime (Python provisionato) ----------------------------------
+    def runtime_check(c: Ctx) -> Optional[str]:
+        if c.use_system_python:
+            return "uso il Python di sistema (--use-system-python)"
+        found = probe_version(c.runtime_python)
+        if found == RUNTIME["python"]:
+            return f"runtime Python {found} già presente"
+        return None
+
+    def runtime_run(c: Ctx) -> str:
+        if c.dry_run:
+            c.progress.event(
+                "log", level="dry-run",
+                message=f"[dry-run] runtime: archivio -> {c.cache_dir / RUNTIME['name']}; "
+                        f"estrazione in {c.runtime_dir}; venv da {c.runtime_python}",
+            )
+            return "dry-run"
+        if c.runtime_zip is not None:
+            if not c.runtime_zip.is_file():
+                raise BootstrapError(f"archivio runtime non trovato: {c.runtime_zip}")
+            archive = c.runtime_zip
+        else:
+            cached = c.cache_dir / RUNTIME["name"]
+            if cached.is_file() and sha256_of(cached) == RUNTIME["sha256"]:
+                archive = cached
+                c.progress.event("log", level="out",
+                                 message=f"uso l'archivio in cache: {cached}")
+            else:
+                c.progress.event("log", level="out",
+                                 message=f"scarico il runtime: {RUNTIME['url']}")
+                try:
+                    download_archive(RUNTIME["url"], cached, progress=c.progress)
+                except Exception as exc:
+                    raise BootstrapError(
+                        f"download del runtime fallito: {exc}",
+                        "verifica la connessione; oppure usa --runtime-zip con un archivio locale",
+                    )
+                archive = cached
+        digest = sha256_of(archive)
+        if digest != RUNTIME["sha256"]:
+            raise BootstrapError(
+                f"sha256 del runtime non corrisponde: {digest} != {RUNTIME['sha256']}",
+                "riscarica l'archivio; se persiste, il file sorgente è cambiato",
+            )
+        target = c.runtime_dir / "python"
+        if target.exists():
+            shutil.rmtree(target)
+        c.progress.event("log", level="out", message=f"estrazione in {c.runtime_dir} …")
+        extract_archive(archive, c.runtime_dir)
+        found = probe_version(c.runtime_python)
+        if found != RUNTIME["python"]:
+            raise BootstrapError(
+                f"runtime inatteso dopo l'estrazione: {found!r} (atteso {RUNTIME['python']})"
+            )
+        return f"runtime Python {found} in {c.runtime_dir}"
+
+    # -- 3. venv -----------------------------------------------------------
     def venv_check(c: Ctx) -> Optional[str]:
         return "venv già presente" if c.venv_exists() else None
 
     def venv_run(c: Ctx) -> str:
-        if c.resolved_python is None:
-            c.resolved_python = c.python or find_python312()
-        if c.resolved_python is None:
-            raise BootstrapError("interprete Python 3.12 non trovato")
-        c.run([c.resolved_python, "-m", "venv", str(c.env_dir)])
-        return str(c.env_dir)
+        base = c.env_python()
+        if base is None:
+            raise BootstrapError(
+                "nessun Python utilizzabile per creare il venv",
+                "abilita il runtime provisionato (default) oppure passa --python <3.12>",
+            )
+        c.run([base, "-m", "venv", str(c.env_dir)])
+        return f"{c.env_dir} (da {base})"
 
-    # -- 3. pip ------------------------------------------------------------
+    # -- 4. pip ------------------------------------------------------------
     def pip_check(c: Ctx) -> Optional[str]:
         version = pip_version(c)
         if version is not None and version >= PIP_MIN:
@@ -232,7 +311,7 @@ def build_steps() -> list[Step]:
         c.run([c.venv_python, "-m", "pip", "install", "--upgrade", "pip"])
         return "pip aggiornato"
 
-    # -- 4. torch ----------------------------------------------------------
+    # -- 5. torch ----------------------------------------------------------
     def torch_check(c: Ctx) -> Optional[str]:
         return "torch già alla versione pinnata" if not c.unmet(torch_pins) else None
 
@@ -241,7 +320,7 @@ def build_steps() -> list[Step]:
                "--index-url", TORCH_INDEX])
         return "PyTorch 2.10.0+cu130"
 
-    # -- 5. nunchaku -------------------------------------------------------
+    # -- 6. nunchaku -------------------------------------------------------
     def nunchaku_check(c: Ctx) -> Optional[str]:
         want = lock.get("nunchaku")
         if want and c.dist_version("nunchaku") == want:
@@ -252,7 +331,7 @@ def build_steps() -> list[Step]:
         c.run([c.venv_python, "-m", "pip", "install", "-r", nunchaku_txt])
         return str(lock.get("nunchaku", "nunchaku"))
 
-    # -- 6. torch-repin ----------------------------------------------------
+    # -- 7. torch-repin ----------------------------------------------------
     def repin_check(c: Ctx) -> Optional[str]:
         return "torch invariato dopo nunchaku" if not c.unmet(torch_pins) else None
 
@@ -261,7 +340,7 @@ def build_steps() -> list[Step]:
                "--index-url", TORCH_INDEX, "--force-reinstall"])
         return "re-pin torch 2.10.0+cu130"
 
-    # -- 7. patch ----------------------------------------------------------
+    # -- 8. patch ----------------------------------------------------------
     def patch_check(c: Ctx) -> Optional[str]:
         if c.dist_version("nunchaku") is None:
             return "nunchaku non installato"
@@ -276,7 +355,7 @@ def build_steps() -> list[Step]:
         c.run([c.venv_python, str(script)])
         return "patch nunchaku applicata"
 
-    # -- 8. diffusers ------------------------------------------------------
+    # -- 9. diffusers ------------------------------------------------------
     def diffusers_check(c: Ctx) -> Optional[str]:
         want = lock.get("diffusers")
         if want and c.dist_version("diffusers") == want:
@@ -293,7 +372,7 @@ def build_steps() -> list[Step]:
         c.run([c.venv_python, "-m", "pip", "install", str(wheel)])
         return wheel.name
 
-    # -- 9. deps -----------------------------------------------------------
+    # -- 10. deps ----------------------------------------------------------
     def deps_check(c: Ctx) -> Optional[str]:
         return "dipendenze core già a posto" if not c.unmet(core_pins) else None
 
@@ -301,7 +380,7 @@ def build_steps() -> list[Step]:
         c.run([c.venv_python, "-m", "pip", "install", "-r", core_txt])
         return "dipendenze core"
 
-    # -- 10. wheel del progetto -------------------------------------------
+    # -- 11. wheel del progetto -------------------------------------------
     def wheel_check(c: Ctx) -> Optional[str]:
         if c.wheel is None:
             return "nessuna wheel del progetto fornita"
@@ -314,7 +393,7 @@ def build_steps() -> list[Step]:
                "--no-deps", str(c.wheel)])
         return c.wheel.name
 
-    # -- 11. verify --------------------------------------------------------
+    # -- 12. verify --------------------------------------------------------
     def verify_run(c: Ctx) -> str:
         env = dict(os.environ)
         if c.dist_version("havc") is None:
@@ -344,9 +423,12 @@ def build_steps() -> list[Step]:
         return "doctor: tutti i check OK"
 
     return [
-        Step("preflight", "Verifiche preliminari (Python 3.12, lockfile)", "",
+        Step("preflight", "Verifiche preliminari (host, lockfile)", "",
              lambda c: None, preflight_run),
-        Step("venv", "Virtualenv di destinazione", "python -m venv",
+        Step("runtime", "Runtime Python 3.12 (python-build-standalone)",
+             "scarica/verifica/estrae l'archivio pinnato",
+             runtime_check, runtime_run),
+        Step("venv", "Virtualenv di destinazione", "python -m venv dal runtime",
              venv_check, venv_run),
         Step("pip", "Aggiornamento pip", "pip install --upgrade pip",
              pip_check, pip_run),
@@ -411,10 +493,15 @@ def main(argv=None) -> int:
                     "(install = update da stato vuoto).",
         epilog="Specifica: installer/PHASE0_SPEC.md",
     )
-    parser.add_argument("--env-dir", required=True, type=Path,
-                        help="virtualenv di destinazione (obbligatorio; nulla viene toccato fuori da qui)")
+    parser.add_argument("--install-dir", required=True, type=Path,
+                        help="cartella dell'installazione: runtime/, venv/, cache/ "
+                             "(obbligatorio; nulla viene toccato fuori da qui)")
     parser.add_argument("--python", type=Path, default=None,
-                        help="interprete 3.12 con cui creare il venv (default: rilevato)")
+                        help="interprete con cui creare il venv (default: runtime provisionato)")
+    parser.add_argument("--runtime-zip", type=Path, default=None,
+                        help="usa un archivio runtime locale invece di scaricarlo (verificato via sha256)")
+    parser.add_argument("--use-system-python", action="store_true",
+                        help="salta il provisioning del runtime e usa il Python di sistema (sviluppo)")
     parser.add_argument("--assets-dir", type=Path, default=None,
                         help="cartella con le wheel locali (default: packages/ del checkout)")
     parser.add_argument("--wheel", type=Path, default=None,
@@ -448,13 +535,15 @@ def main(argv=None) -> int:
             assets_dir = root / "packages"
 
     ctx = Ctx(
-        env_dir=args.env_dir.resolve(),
+        install_dir=args.install_dir.resolve(),
         progress=progress,
         dry_run=args.dry_run,
         plan_only=args.plan,
         assets_dir=assets_dir.resolve() if assets_dir else None,
         wheel=args.wheel.resolve() if args.wheel else None,
         python=args.python,
+        runtime_zip=args.runtime_zip.resolve() if args.runtime_zip else None,
+        use_system_python=args.use_system_python,
     )
     ok = run_steps(ctx, steps, only)
     return 0 if ok else 1

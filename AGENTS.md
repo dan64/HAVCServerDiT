@@ -52,6 +52,13 @@ esterni. Obiettivo di questo filone di lavoro:
   branch dedicato `feature/installer` in un **worktree separato**
   (`D:\PProjects\HAVCServerDiT_installer`), così la cartella principale resta
   operativa. I `.cmd` e i workflow esistenti restano invariati.
+- **D5 — Runtime Python provisionato e pinnato; git escluso** (04-10). Niente
+  Python di sistema e niente embed ufficiale (verificato: privo di
+  tkinter/venv/ensurepip). Si usa una build **python-build-standalone**
+  (Astral) `3.12.15 install_only_stripped` — 21 MB, sha256 `6fba7f2a…`,
+  verificato anche contro il `digest` GitHub — da mirrorare come asset di una
+  release con tag dedicato (`runtime-312`). L'installer **non installa git**:
+  all'utente finale non serve (né per installare né per aggiornare).
 
 ---
 
@@ -220,3 +227,13 @@ Fase 0: run end-to-end su VM/Sandbox pulita, prima release di prova con
   verde** sull'ambiente `_dev` (inclusi patch nunchaku e CUDA), `--plan` e run
   reale parziale idempotente. Prossimi: end-to-end su VM/Sandbox, release di
   prova con `release.json`, flusso di update incrementale.
+- **2026-10-04 (3)** — **Provisioning del runtime implementato (D5).** Nuovo
+  passo `runtime` in `havc-install`: archivio python-build-standalone 3.12.15
+  pinnato (versione + sha256), download via `urllib` → verifica → estrazione in
+  `<install>\runtime\python`; varianti `--runtime-zip` (staged/offline),
+  cache locale, `--use-system-python` (sviluppo); nuovo flag `--install-dir`
+  (sostituisce `--env-dir`). Verifiche: estrazione locale e download reale
+  (21 MB) con sha256 ok, venv creato dal runtime con tkinter funzionante
+  (`venv: 3.12.15 | tkinter 8.6`), idempotenza, rifiuto con sha256 errato
+  (exit 1), eventi JSON. Resta da fare: upload del mirror (`runtime-312`) su
+  ok dell'utente; poi `RUNTIME["url"]` passa al mirror.

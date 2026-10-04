@@ -56,6 +56,10 @@ lo schema è già fissato qui.
   nella wheel, poi il checkout. `dit_colorize_main.py` continua a risolvere
   `comfy_bridge/` come sibling del proprio file — vale sia nel repo sia in
   `site-packages`.
+- **Layout di installazione** (root gestita dal bootstrap/manager):
+  `<install>\runtime\python\` (runtime Python provisionato, §4-bis),
+  `<install>\venv\` (ambiente), `<install>\cache\` (archivi scaricati e
+  verificati).
 - Modelli: comportamento invariato (auto-download sotto
   `comfy_bridge/models/…` dentro il venv; `COMFYUI_MODELS_DIR` forzato da
   `comfy_bridge/_bootstrap.py`). Il passaggio a una cartella modelli utente
@@ -96,36 +100,60 @@ rieseguire il bootstrap è l'operazione di *update* e di *repair*.
 
 Passi, nell'ordine:
 
-1. `preflight` — Python host 3.12, lockfile presente, risoluzione dell'interprete;
-2. `venv` — crea il venv di destinazione se manca;
-3. `pip` — aggiorna pip solo se sotto la soglia minima;
-4. `torch` — `pip install -r requirements/torch.txt --index-url <CUDA 13.0>`;
-5. `nunchaku` — `pip install -r requirements/nunchaku.txt`;
-6. `torch-repin` — `--force-reinstall` **solo se** nunchaku ha spostato torch
+1. `preflight` — host Python ≥ 3.9, lockfile presente;
+2. `runtime` — provisioning del Python 3.12 (§4-bis): usa `--runtime-zip`, la
+   copia in `<install-dir>\cache\` (se lo sha256 corrisponde) o scarica
+   l'archivio pinnato; verifica sha256; estrae in `<install-dir>\runtime\python`;
+   controlla la versione finale;
+3. `venv` — crea il venv di destinazione dal runtime (se manca);
+4. `pip` — aggiorna pip solo se sotto la soglia minima;
+5. `torch` — `pip install -r requirements/torch.txt --index-url <CUDA 13.0>`;
+6. `nunchaku` — `pip install -r requirements/nunchaku.txt`;
+7. `torch-repin` — `--force-reinstall` **solo se** nunchaku ha spostato torch
    (il check confronta le versioni: più mirato del re-pin incondizionato di
    `install.cmd`);
-7. `patch` — applica la patch di compatibilità nunchaku (skip se già applicata
+8. `patch` — applica la patch di compatibilità nunchaku (skip se già applicata
    o se nunchaku non è installato);
-8. `diffusers` — installa la wheel locale (cercata in `--assets-dir`,
+9. `diffusers` — installa la wheel locale (cercata in `--assets-dir`,
    default `packages/`);
-9. `deps` — `pip install -r requirements/core.txt`;
-10. `wheel` — installa la wheel del progetto (`--wheel`, con `--no-deps`);
-11. `verify` — esegue `havc doctor --json` **nel venv di destinazione**;
+10. `deps` — `pip install -r requirements/core.txt`;
+11. `wheel` — installa la wheel del progetto (`--wheel`, con `--no-deps`);
+12. `verify` — esegue `havc doctor --json` **nel venv di destinazione**;
     un FAIL qui è un errore del bootstrap.
 
-Flag: `--env-dir` (obbligatorio), `--python`, `--assets-dir`, `--wheel`,
-`--only a,b`, `--plan`, `--dry-run`, `--json-progress`.
+Flag: `--install-dir` (obbligatorio), `--python`, `--runtime-zip`,
+`--use-system-python`, `--assets-dir`, `--wheel`, `--only a,b`, `--plan`,
+`--dry-run`, `--json-progress`.
 
 Exit code: `0` = ok (anche se tutto era già a posto), `1` = passo fallito,
 `2` = errore d'uso.
 
-Sicurezza: non tocca nulla fuori da `--env-dir` (a parte la cache pip);
+Sicurezza: non tocca nulla fuori da `--install-dir` (a parte la cache pip);
 nessun privilegio di amministratore; nessuna cancellazione.
+
+### Provisioning del runtime (§4-bis)
+
+Il passo `runtime` installa un Python **python-build-standalone** (Astral;
+x86_64 Windows per ora), pinnato per versione e sha256 nelle costanti `RUNTIME`
+di `havc/runtime.py`. Perché questa build: l'embed ufficiale di python.org è
+privo di tkinter (serve alla GUI), venv ed ensurepip — la build scelta include
+tutto (tkinter 8.6, venv, ensurepip, pip) e si estrae senza installer né
+registry. Lo sha256 pinnato è verificato anche contro il `digest` ufficiale
+dell'asset GitHub (2026-10-04).
+
+**Da fare**: mirror dell'archivio come asset di una release con tag dedicato
+(es. `runtime-312`); finché non esiste, `RUNTIME["url"]` punta all'upstream
+(immutabile per tag).
 
 Modalità operative:
 
 - **checkout** (default): gira dal repo, `--assets-dir` default `packages/`;
-- **staged**: `--assets-dir`/`--wheel` puntano a file scaricati a mano;
+- **staged**: `--assets-dir`/`--wheel`/`--runtime-zip` puntano a file locali;
+- **macchina pulita (flusso manager)**: il manager estrae il runtime
+  dall'asset pinnato, installa la wheel nel runtime
+  (`runtime\python -m pip install --no-deps havc-*.whl`) e lancia
+  `runtime\python -m havc.install --install-dir <root>` — il bootstrap non
+  richiede quindi un Python preesistente;
 - **remota** (futuro, stesso schema): il manager scarica wheel e asset dal
   manifest `release.json` e invoca gli stessi passi.
 
@@ -172,9 +200,10 @@ qui.**
 
 Campi: `schema`, `channel`, `app`, `app_version`, `published_at`,
 `requires_python`, `requires_env_rebuild`, `bootstrap_min_version`,
-`wheels[]` (`name`, `url`, `sha256`, `size`, `kind`, `install`),
-`assets[]` (wheel di terze parti, es. diffusers), `weights[]` e `tools[]`
-(riservati alle fasi GUI, per ora vuoti), `notes_url`.
+`runtime` (`name`, `url`, `sha256`, `python`, `kind`, `mirror_of` — la build
+Python provisionata, §4-bis), `wheels[]` (`name`, `url`, `sha256`, `size`,
+`kind`, `install`), `assets[]` (wheel di terze parti, es. diffusers),
+`weights[]` e `tools[]` (riservati alle fasi GUI, per ora vuoti), `notes_url`.
 
 Regole: **sha256 obbligatori** per ogni artefatto; `requires_env_rebuild` a
 `true` quando cambia la versione di Python o il lock in modo sostanziale
@@ -219,11 +248,16 @@ Verificato il 2026-10-04 (in questo branch):
 - install in venv pulito (`--no-deps`) + esecuzione di `havc-doctor` e
   `havc-install --plan`;
 - `havc doctor` eseguito contro l'ambiente di riferimento `_dev`;
-- esecuzione reale dei primi passi (`--only preflight,venv,pip`) in un venv
-  usa-e-getta.
+- provisioning del runtime: estrazione da `--runtime-zip` e creazione del venv
+  dal runtime (`venv: 3.12.15 | tkinter 8.6`), idempotenza alla riesecuzione;
+- download reale dell'archivio (21 MB) via `urllib` con verifica sha256
+  (controllata anche contro il `digest` ufficiale GitHub); rifiuto con sha256
+  errato (exit 1); uso della cache e di `--use-system-python`.
 
 Da fare prima di chiudere la Fase 0:
 
+- **upload del mirror del runtime** come asset di una release con tag dedicato
+  (`runtime-312`) — su ok dell'utente; poi `RUNTIME["url"]` passa al mirror;
 - run **end-to-end su VM/Sandbox pulita** (senza e con GPU): bootstrap completo
   + `havc doctor` verde;
 - prova del passo `--wheel` con la wheel buildata;

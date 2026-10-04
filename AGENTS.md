@@ -60,6 +60,14 @@ esterni. Obiettivo di questo filone di lavoro:
   `runtime-312` (asset invariato; download dal mirror verificato end-to-end).
   L'installer **non installa git**:
   all'utente finale non serve (né per installare né per aggiornare).
+- **D6 — La GUI è il front-end di default dell'installazione** (04-10). Il
+  launcher principale (`HAVC.cmd` / `HAVC.vbs`, doppio click) apre la GUI, che
+  gestisce il server come già fa dal 2026-09-30; il server console resta
+  disponibile con `HAVC-Server.cmd [int4|fp4|q3|q4|longcat|qwen21]`.
+  Layout: `<install>\gui` (GUI + scripts + settings pre-seedati),
+  `<install>\config` (condivise da GUI e server), `<install>\tools`
+  (x265/x264/mkvmerge — NVEncC ancora da integrare: è un `.7z`). I launcher
+  sono generati dal bootstrap (ASCII, scritti con CRLF).
 
 ---
 
@@ -277,3 +285,15 @@ Fase 0: run end-to-end su VM/Sandbox pulita, prima release di prova con
   release `v0.1.0-alpha` aggiornati (`--clobber`); run finale tutto verde con
   `havc doctor` a 15 pacchetti conformi e console script (`havc-server.exe`,
   `havc-doctor.exe`) presenti nel venv.
+- **2026-10-04 (9)** — **GUI integrata nell'installazione (front-end di
+  default, D6).** Nuovi passi del bootstrap: `configs`, `gui` (file + `.vpy`
+  dalla copia nella wheel), `gui-deps` (FreeSimpleGUI/tkinterdnd2/
+  tkinter-embed/Send2Trash/VapourSynth==74 + wheel `vscmnet2` e
+  `spatial_correlation_sampler`), `tools` (tools.zip pinnato v1.0.0, sha256),
+  `gui-settings` (pre-seed solo se assente), `launchers` (`HAVC.cmd`/`.vbs` →
+  GUI, `HAVC-Server.cmd`, `HAVC-Doctor.cmd`). Verifiche su
+  `D:\HAVCServerDiT_Test`: tutto verde (`havc doctor` a **22 pacchetti** + check
+  `gui`), rerun tutto-skip, launcher CRLF verificati, import GUI ok, smoke di
+  avvio senza errori. Asset `v0.1.0-alpha` aggiornati (wheel con GUI,
+  `vscmnet2`, `spatial_correlation_sampler`, `release.json`). Da fare: NVEncC
+  (è un `.7z`), avvio GUI dal manager C#, wiring remoto degli asset.

@@ -46,7 +46,10 @@ lo schema è già fissato qui.
   - `comfy_bridge/**` (runtime ComfyUI vendored: file `.py` + dati, incluse le
     cartelle non importabili come `custom_nodes/ComfyUI-GGUF*`);
   - `config/*.json` → `havc/configs/`;
-  - `requirements/*.txt` → `havc/requirements/`.
+  - `requirements/*.txt` → `havc/requirements/`;
+  - GUI → `havc/gui/` (`CMNET2_colorize_client_GUI.py`,
+    `load_image_DtD_GUI.py`, `scripts/*.vpy`): è il **front-end di default**
+    dell'installazione (vedi §4, passi 12-17).
 - **Esclusi dalla wheel** (esplicito e reversibile in `setup.py`, costante
   `COPIES`): cache Python (`.pyc`, `__pycache__`), backup (`.bak`/`.orig`/`.rej`)
   e — dal 2026-10-04 — **`comfy_bridge/blueprints/`** (96 file / 3,1 MB di
@@ -67,7 +70,11 @@ lo schema è già fissato qui.
 - **Layout di installazione** (root gestita dal bootstrap/manager):
   `<install>\runtime\python\` (runtime Python provisionato, §4-bis),
   `<install>\venv\` (ambiente), `<install>\cache\` (archivi scaricati e
-  verificati).
+  verificati), `<install>\config\` (config di pipeline, condivise da GUI e
+  server), `<install>\gui\` (GUI + `scripts/*.vpy` + `gui_cmnet2_settings.json`),
+  `<install>\tools\` (x265/x264/mkvmerge; NVEncC ancora da integrare),
+  `<install>\work\` (cartella di lavoro di default), launcher nella radice
+  (**front-end di default: la GUI**).
 - Modelli: comportamento invariato (auto-download sotto
   `comfy_bridge/models/…` dentro il venv; `COMFYUI_MODELS_DIR` forzato da
   `comfy_bridge/_bootstrap.py`). Il passaggio a una cartella modelli utente
@@ -129,12 +136,24 @@ Passi, nell'ordine:
    default `packages/`);
 10. `deps` — `pip install -r requirements/core.txt`;
 11. `wheel` — installa la wheel del progetto (`--wheel`, con `--no-deps`);
-12. `verify` — esegue `havc doctor --json` **nel venv di destinazione**;
+12. `configs` — copia le config di pipeline in `<install>\config` (solo mancanti);
+13. `gui` — copia i file GUI in `<install>\gui` (script principale, helper,
+    `scripts/*.vpy` — dalla copia inclusa nella wheel o dal checkout);
+14. `gui-deps` — `pip install -r requirements/gui.txt` + wheel `vscmnet2` e
+    `spatial_correlation_sampler` da `--assets-dir`;
+15. `tools` — estrae `tools.zip` (x265/x264/mkvmerge) in `<install>\tools`;
+    archivio pinnato (Release v1.0.0, sha256 verificato) o `--tools-zip`;
+16. `gui-settings` — pre-seeda `gui_cmnet2_settings.json` (solo se assente):
+    percorsi di `scripts/`, `vspipe`, tool e cartella di lavoro;
+17. `launchers` — scrive i launcher in `<install>`: `HAVC.cmd`/`HAVC.vbs`
+    (**front-end di default = GUI**), `HAVC-Server.cmd` (server con scelta
+    modello), `HAVC-Doctor.cmd`;
+18. `verify` — esegue `havc doctor --json` **nel venv di destinazione**;
     un FAIL qui è un errore del bootstrap.
 
 Flag: `--install-dir` (obbligatorio), `--python`, `--runtime-zip`,
-`--use-system-python`, `--assets-dir`, `--wheel`, `--only a,b`, `--plan`,
-`--dry-run`, `--json-progress`.
+`--tools-zip`, `--use-system-python`, `--assets-dir`, `--wheel`, `--only a,b`,
+`--plan`, `--dry-run`, `--json-progress`.
 
 Exit code: `0` = ok (anche se tutto era già a posto), `1` = passo fallito,
 `2` = errore d'uso.
@@ -233,7 +252,9 @@ Esempio completo: `installer/release.example.json`.
 
 Check (in ordine): `env` (venv attivo), `python` (3.12), `packages` (tutti i
 pin del lock soddisfatti), `nunchaku-patch`, `cuda` (import torch + GPU
-visibile), `gpu` (`nvidia-smi`: nome, driver, VRAM), `havc` (versione e path).
+visibile), `gpu` (`nvidia-smi`: nome, driver, VRAM), `gui` (GUI presente
+accanto al venv — warn, non fail, per installazioni server-only), `havc`
+(versione e path).
 
 - Status: `ok` / `warn` / `fail` / `skip`; exit code `0` se nessun `fail`.
 - `--json` = report macchina-leggibile (un oggetto JSON);
@@ -287,7 +308,15 @@ Verificato il 2026-10-04 (in questo branch):
   Il test ha trovato e fatto correggere: (a) check di skip e `verify`
   sensibili al CWD (un checkout/`havc.egg-info` nel CWD ombreggiava il venv —
   ora i processi figli girano con CWD neutrale); (b) pin `diffusers` mancante
-  nel lock (aggiunto `requirements/assets.txt`).
+  nel lock (aggiunto `requirements/assets.txt`);
+- **GUI come front-end dell'installazione** (2026-10-04): passi
+  `configs/gui/gui-deps/tools/gui-settings/launchers` provati sul folder di
+  test — launcher con CRLF verificati, settings pre-seedati, tool esterni
+  estratti da `tools.zip`, import delle dipendenze GUI ok (FreeSimpleGUI,
+  tkinterdnd2, VapourSynth, vscmnet2), smoke di avvio della GUI senza errori;
+  `havc doctor` a **22 pacchetti** con check `gui` verde; rerun
+  completamente idempotente. Asset di `v0.1.0-alpha` aggiornati (wheel con GUI,
+  `vscmnet2`, `spatial_correlation_sampler`, `release.json`).
 
 Da fare prima di chiudere la Fase 0:
 

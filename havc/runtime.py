@@ -22,14 +22,14 @@ import zipfile
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
-# Runtime pinnato. Dopo l'upload del mirror su GitHub (release con tag
-# dedicato, es. `runtime-312`) `url` punterà al *nostro* asset; `mirror_of`
-# resta l'URL upstream. Lo sha256 è verificato anche contro il `digest`
-# ufficiale dell'asset GitHub di Astral (2026-10-04).
+# Runtime pinnato. `url` punta al *nostro* mirror (release `runtime-312`,
+# pubblicata il 2026-10-04, asset invariato); `mirror_of` è l'URL upstream.
+# Lo sha256 è stato verificato contro il `digest` ufficiale GitHub di
+# entrambi gli asset e con un download end-to-end dal mirror (2026-10-04).
 # ---------------------------------------------------------------------------
 RUNTIME = {
     "name": "cpython-3.12.15+20261003-x86_64-pc-windows-msvc-install_only_stripped.tar.gz",
-    "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261003/cpython-3.12.15%2B20261003-x86_64-pc-windows-msvc-install_only_stripped.tar.gz",
+    "url": "https://github.com/dan64/HAVCServerDiT/releases/download/runtime-312/cpython-3.12.15+20261003-x86_64-pc-windows-msvc-install_only_stripped.tar.gz",
     "mirror_of": "https://github.com/astral-sh/python-build-standalone/releases/download/20261003/cpython-3.12.15%2B20261003-x86_64-pc-windows-msvc-install_only_stripped.tar.gz",
     "sha256": "6fba7f2ae506facf41d457ea8293c7497910a675c69a4e954875169410a50402",
     "python": "3.12.15",

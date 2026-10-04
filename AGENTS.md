@@ -56,8 +56,9 @@ esterni. Obiettivo di questo filone di lavoro:
   Python di sistema e niente embed ufficiale (verificato: privo di
   tkinter/venv/ensurepip). Si usa una build **python-build-standalone**
   (Astral) `3.12.15 install_only_stripped` — 21 MB, sha256 `6fba7f2a…`,
-  verificato anche contro il `digest` GitHub — da mirrorare come asset di una
-  release con tag dedicato (`runtime-312`). L'installer **non installa git**:
+  verificato anche contro il `digest` GitHub — mirrorato il 04-10 nella release
+  `runtime-312` (asset invariato; download dal mirror verificato end-to-end).
+  L'installer **non installa git**:
   all'utente finale non serve (né per installare né per aggiornare).
 
 ---
@@ -237,3 +238,7 @@ Fase 0: run end-to-end su VM/Sandbox pulita, prima release di prova con
   (`venv: 3.12.15 | tkinter 8.6`), idempotenza, rifiuto con sha256 errato
   (exit 1), eventi JSON. Resta da fare: upload del mirror (`runtime-312`) su
   ok dell'utente; poi `RUNTIME["url"]` passa al mirror.
+- **2026-10-04 (4)** — **Mirror del runtime pubblicato.** Release `runtime-312`
+  su GitHub con l'asset pinnato (22.011.023 byte; sha256 confermato dal
+  `digest` GitHub). `RUNTIME["url"]` ora punta al mirror; download end-to-end
+  dal mirror verificato (sha256 ok); `v1.0.0` resta la release "Latest".

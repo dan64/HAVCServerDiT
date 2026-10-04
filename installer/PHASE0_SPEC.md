@@ -141,9 +141,9 @@ tutto (tkinter 8.6, venv, ensurepip, pip) e si estrae senza installer né
 registry. Lo sha256 pinnato è verificato anche contro il `digest` ufficiale
 dell'asset GitHub (2026-10-04).
 
-**Da fare**: mirror dell'archivio come asset di una release con tag dedicato
-(es. `runtime-312`); finché non esiste, `RUNTIME["url"]` punta all'upstream
-(immutabile per tag).
+**Fatto (2026-10-04)**: il mirror è pubblicato come release `runtime-312`
+(asset invariato, sha256 verificato anche dal `digest` GitHub e con un download
+end-to-end dal mirror); `RUNTIME["url"]` punta al mirror.
 
 Modalità operative:
 
@@ -252,12 +252,12 @@ Verificato il 2026-10-04 (in questo branch):
   dal runtime (`venv: 3.12.15 | tkinter 8.6`), idempotenza alla riesecuzione;
 - download reale dell'archivio (21 MB) via `urllib` con verifica sha256
   (controllata anche contro il `digest` ufficiale GitHub); rifiuto con sha256
-  errato (exit 1); uso della cache e di `--use-system-python`.
+  errato (exit 1); uso della cache e di `--use-system-python`;
+- **mirror pubblicato** (release `runtime-312`) e download end-to-end **dal
+  mirror** verificato (sha256 ok); `RUNTIME["url"]` punta al mirror.
 
 Da fare prima di chiudere la Fase 0:
 
-- **upload del mirror del runtime** come asset di una release con tag dedicato
-  (`runtime-312`) — su ok dell'utente; poi `RUNTIME["url"]` passa al mirror;
 - run **end-to-end su VM/Sandbox pulita** (senza e con GPU): bootstrap completo
   + `havc doctor` verde;
 - prova del passo `--wheel` con la wheel buildata;

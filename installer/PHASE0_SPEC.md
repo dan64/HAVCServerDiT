@@ -202,9 +202,13 @@ Il manager C# (Fase 1) consuma questi eventi per UI/progress; `--plan
 
 ## 6. `release.json` — contratto di release
 
-Allegato a ogni release GitHub. Generazione: script locale in Fase 0, poi CI
-(GitHub Actions) al tag. **L'installer/manager non conosce versioni: le legge
-qui.**
+Allegato a ogni release GitHub. Generazione:
+`python installer/make_release.py --tag vX.Y.Z --artifacts-dir <dir>` — calcola
+sha256/dimensioni dagli artefatti locali e legge versione e blocco `runtime`
+dalle fonti uniche (`havc/__init__.py`, `havc/runtime.py`); `--verify
+<manifest>` ricontrolla un manifest esistente contro gli artefatti. CI
+(GitHub Actions) al tag in seguito. **L'installer/manager non conosce versioni:
+le legge qui.**
 
 Campi: `schema`, `channel`, `app`, `app_version`, `published_at`,
 `requires_python`, `requires_env_rebuild`, `bootstrap_min_version`,
@@ -265,15 +269,18 @@ Verificato il 2026-10-04 (in questo branch):
   mirror** verificato (sha256 ok); `RUNTIME["url"]` punta al mirror;
 - esclusione di `comfy_bridge/blueprints/` dalla wheel: −96 file / −389.901
   byte (11.034.021 → 10.644.120); contenuti riverificati (407 file
-  comfy_bridge, 0 voci 'blueprint', tutti i file chiave presenti).
+  comfy_bridge, 0 voci 'blueprint', tutti i file chiave presenti);
+- generatore `release.json` (`installer/make_release.py`): generazione su
+  staging (wheel `havc` + asset diffusers), `--verify` ok, rifiuto di
+  `--version` incoerente, verifica fallita su artefatto troncato (exit 1).
 
 Da fare prima di chiudere la Fase 0:
 
 - run **end-to-end su VM/Sandbox pulita** (senza e con GPU): bootstrap completo
   + `havc doctor` verde;
 - prova del passo `--wheel` con la wheel buildata;
-- prima release di prova con `release.json` generato + verifica del flusso di
-  update incrementale tra due versioni.
+- prima release di prova (manifest già generato in `dist/staging-v0.1.0/`,
+  fuori dal repo) + verifica del flusso di update incrementale tra due versioni.
 
 ---
 

@@ -251,3 +251,10 @@ Fase 0: run end-to-end su VM/Sandbox pulita, prima release di prova con
   deterministica). Da confermare col run end-to-end in VM: se un percorso reale
   dovesse mai richiedere i blueprint, basta togliere la voce da `COPIES` in
   `setup.py`.
+- **2026-10-04 (6)** — **Generatore `release.json`** (`installer/make_release.py`):
+  scansiona gli artefatti, calcola sha256/dimensioni, legge versione e blocco
+  `runtime` dalle fonti uniche, scrive il manifest; `--verify` ricontrolla un
+  manifest esistente. Test: generazione su staging (wheel `havc` 0.1.0 +
+  diffusers), verify ok, rifiuto di `--version` incoerente, verify fallita su
+  artefatto troncato (exit 1). Staging pronto in `dist/staging-v0.1.0/`
+  (fuori dal repo) per la prima release di prova.

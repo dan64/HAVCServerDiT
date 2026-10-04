@@ -164,7 +164,7 @@ Altri fatti rilevanti:
 - App C# **self-contained single-file** (nessun runtime .NET da installare); UI wizard + progresso + log + bottoni "Apri GUI", "Avvia server", "Controlla aggiornamenti", "Ripara".
 - Al primo avvio: preflight (GPU/VRAM/spazio disco via `nvidia-smi`), scelta backend suggerita dalla GPU, componenti, cartelle; crea scorciatoie (Start Menu/desktop) e voce di disinstallazione. L'utente finale **non vede mai git**.
 - **Inno Setup: NON come motore.** Inno non ha un downloader nativo e questa installazione *è* fatta di download (GB); usarlo con Pascal Script significherebbe riscrivere peggio il bootstrap. Al massimo, in Fase 2, guscio esterno opzionale (copia file del manager + `[Run]`); non richiede di riprogettare nulla.
-- **Provisioning Python** (pollo-uovo del bootstrap): raccomandato l'**installer ufficiale python.org 3.12 silenzioso per-utente** (`/quiet InstallAllUsers=0 PrependPath=0` — include tkinter, che serve alla GUI, e non richiede admin). L'**embeddable zip è sconsigliato** (niente tkinter → GUI rotta). `uv`/python-build-standalone da valutare (veloce), ma verificare che i build includano tkinter.
+- **Provisioning Python** (pollo-uovo del bootstrap): ~~raccomandato l'installer ufficiale python.org 3.12 silenzioso per-utente~~ → **risolto il 04-10 (D5)**: build **python-build-standalone** pinnata (versione + sha256, mirror `runtime-312`), estratta in `<install>\runtime\python`; include tkinter 8.6, venv ed ensurepip. Niente Python di sistema. L'**embeddable zip resta escluso** (verificato: privo di tkinter/venv/ensurepip).
 
 ---
 

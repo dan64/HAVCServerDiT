@@ -178,7 +178,7 @@ Il manager (exe scaricato, o `<install>\HAVCManager.exe`) all'avvio cerca
 un'installazione esistente: `--install-dir` esplicito →
 `HKCU\Software\HAVCServerDiT\InstallDir` → default
 `%LOCALAPPDATA%\HAVCServerDiT` (con `install.json` valido). Trovata →
-schermata *Aggiorna / Ripara / Disinstalla / Apri*; non trovata → wizard di
+schermata *Update / Repair / Uninstall / Open*; non trovata → wizard di
 prima installazione.
 
 ### 6.2 Prima installazione (flusso a due stadi)
@@ -187,7 +187,7 @@ prima installazione.
    bloccante); spazio: install ≥ ~15 GB (indicativo), models con avviso sotto
    ~50 GB (D10); connettività al manifest (se offline: opzione manifest
    locale).
-2. **Cartelle**: install dir (default `%LOCALAPPDATA%\HAVCServerDiT`); **models
+2. **Folders**: install dir (default `%LOCALAPPDATA%\HAVCServerDiT`); **models
    dir** con proposta automatica (§7); opzioni scorciatoie (Start Menu ON,
    desktop opzionale).
 3. **Manifest**: fetch `release.json` (override `--manifest`/`--release-tag`
@@ -201,13 +201,13 @@ prima installazione.
 7. **Chiusura**: scorciatoie (Start Menu: "HAVC" → `HAVC.vbs`; "HAVC Manager"
    → `HAVCManager.exe`), registrazione disinstallazione, copia del manager in
    `<install>\HAVCManager.exe`, scrittura `install.json`, pagina finale
-   (Apri GUI / Avvia server / cartella di lavoro / log).
+   (*Open GUI* / *Start server* / *Open work folder* / *log*).
 
 ### 6.3 Update incrementale (con rollback)
 
 1. **Lock istanze** (§6.6).
-2. Fetch manifest; se `app_version` == `install.json.app_version` → "già
-   aggiornato"; se `requires_env_rebuild` → §6.7.
+2. Fetch manifest; se `app_version` == `install.json.app_version` → *already
+   up to date*; se `requires_env_rebuild` → §6.7.
 3. Download delta: nuova wheel (sha256) e asset il cui sha256 differisce
    dalla cache; la wheel precedente resta in cache.
 4. Stadio 1 (bootstrap nel runtime) → stadio 2 (run bootstrap con la nuova
@@ -227,7 +227,7 @@ macchina dell'update, senza download nuovo. Usato anche per completare un
 
 ### 6.5 Disinstallazione
 
-Conferma; checkbox "elimina anche la cartella modelli" (**default OFF**, D10);
+Conferma; checkbox *Also delete the models folder* (**default OFF**, D10);
 lock istanze; rimozione: scorciatoie, chiave `Uninstall`,
 `Software\HAVCServerDiT`, cartella di installazione. Il manager si
 auto-rimuove: copia di sé in `%TEMP%`, rilancio da lì, rimozione di
@@ -237,8 +237,8 @@ auto-rimuove: copia di sé in `%TEMP%`, rilancio da lì, rimozione di
 
 Prima di qualunque run che tocchi venv/torch: enumerare i processi con
 eseguibile sotto `<install>` (python.exe/pythonw.exe del venv o runtime). Se
-presenti: dialog "Chiudi GUI/server per continuare" con *Riprova* / *Termina
-ora* (kill con conferma). Mai procedere con istanze attive.
+presenti: dialog *Close the GUI/server to continue* con *Retry* /
+*Terminate now* (kill con conferma). Mai procedere con istanze attive.
 
 ### 6.7 `requires_env_rebuild` — v0: blocco esplicito
 
@@ -271,30 +271,36 @@ rimozione) è Fase 2.
 
 ## 8. UI (WPF)
 
+**Tutte le stringhe UI sono in inglese** (titoli delle schermate, pulsanti,
+dialog, messaggi); quelle citate qui sotto sono i testi di riferimento
+(stringhe centralizzate in `.resx`).
+
 Schermate v0 (wizard):
 
-1. **Avvio/Rilevamento** — installazione esistente: Aggiorna / Ripara /
-   Disinstalla / Apri; altrimenti Benvenuto.
+1. **Start** — installazione esistente: *Update / Repair / Uninstall /
+   Open*; altrimenti **Welcome** (*Start installation*).
 2. **Preflight** — esiti dei check + suggerimento backend
    (`backend_default`; euristica su VRAM, indicativa).
-3. **Cartelle** — install dir, models dir (proposta + avviso spazio),
+3. **Folders** — install dir, models dir (proposta + avviso spazio),
    scorciatoie.
-4. **Componenti** — *Server+GUI* (fisso in v0); riga informativa: pesi DINOv2
-   inclusi.
-5. **Riepilogo** — cosa verrà scaricato.
-6. **Progresso** — barra + lista dei 21 passi con stato (in attesa / in corso /
-   saltato / ok / errore), log espandibile, pulsante Annulla (termina a fine
-   passo corrente; lo stato resta recuperabile con *Ripara*).
-7. **Fine** — Apri GUI · Avvia server · Apri cartella lavoro · Mostra log.
+4. **Components** — *Server+GUI* (fisso in v0); riga informativa: *DINOv2
+   weights included*.
+5. **Summary** — cosa verrà scaricato.
+6. **Progress** — barra + lista dei 21 passi con stato (*pending* / *running* /
+   *skipped* / *ok* / *error*), log espandibile, pulsante *Cancel* (termina a
+   fine passo corrente; lo stato resta recuperabile con *Repair*).
+7. **Finish** — *Open GUI* · *Start server* · *Open work folder* · *Show log*.
 
 Finestra principale (installato): stato (versione app, esito ultima verifica,
-cartella modelli, spazio), pulsanti **Apri GUI**, **Avvia server** (scelta
-modello, default `backend_default`), **Controlla aggiornamenti**, **Ripara**,
-**Disinstalla**, **Log**; sezione *Informazioni* con link al download del
-manager aggiornato (v0: link, niente auto-update).
+cartella modelli, spazio), pulsanti **Open GUI**, **Start server** (scelta
+modello, default `backend_default`), **Check for updates**, **Repair**,
+**Uninstall**, **Log**; sezione *About* con link al download del manager
+aggiornato (v0: link, niente auto-update).
 
-Dialog update: nuova versione + note → conferma → progress → esito; in caso di
-rollback, messaggio dedicato + log.
+Dialog principali: *Update available* (versione + note), *Close the GUI/server
+to continue* (§6.6), *Update failed — rolled back*, *Update failed* (stato
+`dirty`), conferma di disinstallazione (con checkbox *Also delete the models
+folder*); in caso di rollback, messaggio dedicato + log.
 
 ---
 
@@ -305,7 +311,7 @@ rollback, messaggio dedicato + log.
 - output bootstrap per run: `<install>\logs\bootstrap-<ts>.jsonl` (eventi
   grezzi);
 - ogni errore in UI: messaggio + `remediation` (dal bootstrap) + pulsante
-  "Apri log";
+  *Open log*;
 - la finestra principale mostra l'esito dell'ultima verifica (`last_verify`).
 
 ---
@@ -326,8 +332,7 @@ rollback, messaggio dedicato + log.
 ## 11. Distribuzione e aggiornamento del manager
 
 - Asset della release: `HAVC-Setup-<ver>.exe` (+ `release.json`); note con
-  avvertenza SmartScreen (D1: "Windows ha protetto il PC" → *Ulteriori
-  informazioni* → *Esegui comunque*) e sha256 pubblicati.
+  avvertenza SmartScreen (D1: *Windows protected your PC* → *More info* → *Run anyway*) e sha256 pubblicati.
 - URL manifest di default:
   `https://github.com/dan64/HAVCServerDiT/releases/latest/download/release.json`;
   per i test: `--release-tag <tag>` oppure `--manifest <file|url>`.
@@ -363,7 +368,7 @@ rollback, messaggio dedicato + log.
 ## 13. Milestone Fase 1
 
 - **M1** — skeleton: soluzione `manager/`, Core (manifest, downloader, runner),
-  UI minima "Avvia installazione".
+  UI minima *Start installation*.
 - **M2** — prima installazione end-to-end (preflight, cartelle, download, due
   stadi, progresso, chiusura, disinstallazione).
 - **M3** — update incrementale + rollback + ripara (sul test install) + lock

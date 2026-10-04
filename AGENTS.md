@@ -26,8 +26,8 @@ worktree `D:\PProjects\HAVCServerDiT_installer`; la cartella principale
 `D:\PProjects\HAVCServerDiT` è rimasta su `main` e operativa (la sua vecchia
 copia locale di `AGENTS.md`, superata, è stata rimossa il 04-10: finché il
 branch non arriva su `main`, la memoria è solo qui). Ultimo commit pushato:
-`7dc346a`; commit locali non pushati: decisioni Fase 1 (D8–D11), conversione
-lingua del codice, mirror nunchaku.
+`7dc346a`; da lì si procede a **commit locali** — push rimandati finché non
+c'è "qualcosa di stabile" (regola in §9).
 
 **Installazione di test completa**: `D:\HAVCServerDiT_Test` — stack server +
 GUI + tool (x265/x264/mkvmerge/NVEncC) + vscmnet2 con plugin e pesi (DINOv3 +
@@ -309,6 +309,10 @@ storico.*
 - **Lingua delle stringhe utente**: **inglese** — UI del manager e messaggi
   visibili di bootstrap/doctor (decisione del 04-10); altre lingue solo in
   seguito, con stringhe centralizzate.
+- **Push**: rimandati per scelta dell'autore (04-10) finché non c'è
+  "qualcosa di stabile"; il tracciamento delle modifiche sono i **commit
+  locali** (si committa man mano, senza attese; il push solo su segnale
+  dell'autore).
 - Non duplicare qui l'architettura del progetto (vive in `_dev/AGENTS.md`);
   questo file resta focalizzato su installer/wheel/update/release.
 

@@ -19,6 +19,36 @@
 
 ---
 
+## 0. Come riprendere (handoff — stato al 2026-10-04, chiusura sessione)
+
+**Dove sta il lavoro**: branch `feature/installer` (pushato, in sync con
+GitHub) nel worktree `D:\PProjects\HAVCServerDiT_installer`; la cartella
+principale `D:\PProjects\HAVCServerDiT` è rimasta su `main` e operativa.
+Ultimo commit della sessione: `960479a`.
+
+**Installazione di test completa**: `D:\HAVCServerDiT_Test` — stack server +
+GUI + tool (x265/x264/mkvmerge/NVEncC) + vscmnet2 con plugin e pesi (DINOv3 +
+DINOv2). Controllo rapido: `D:\HAVCServerDiT_Test\venv\Scripts\havc-doctor.exe`
+(9 check attesi verdi); per usarla: doppio click su `HAVC.vbs` dalla radice.
+
+**Release coinvolte** (repo `dan64/HAVCServerDiT`):
+- `runtime-312` — mirror del runtime Python (python-build-standalone pinnato)
+- `v1.0.0` — `tools.zip` + **`NVEncC_9.17_x64.zip`** (aggiunto il 04-10)
+- `v0.1.0-alpha` — release di prova dell'installer (wheel `havc`, diffusers,
+  vscmnet2, spatial_correlation_sampler, `release.json`)
+
+**Prossimi passi, in ordine**:
+1. Test del **flusso di update incrementale** tra due versioni (usa
+   `v0.1.0-alpha`; è l'ultimo item sostanziale della Fase 0)
+2. (Facoltativo, pre-release) run su VM/Sandbox "macchina pulita"
+3. **Fase 1: manager C#** (wizard grafico, update/repair) — vedi §4c e §6
+
+**Regola d'oro per riprendere**: `havc-install` è idempotente e convergente —
+rieseguirlo su `D:\HAVCServerDiT_Test` deve finire tutto-skip; usarlo come
+primo smoke per verificare che l'ambiente di lavoro è integro.
+
+---
+
 ## 1. Obiettivo
 
 Il progetto è **gratuito e open source**. L'installazione attuale è troppo
@@ -180,11 +210,13 @@ l'update dell'ambiente è indipendente (e resta il punto forte della separazione
   eventuale guscio Inno opzionale, uninstaller. *Stima grezza: ~1 settimana.*
 - **Fase 3 — (solo se mai) firma del codice.** Nessun impatto sull'architettura.
 
-**Stato Fase 0 (04-10):** avviata sul branch `feature/installer`. Spec:
-`installer/PHASE0_SPEC.md`. Primi componenti implementati e verificati
-(wheel `havc`, lockfile, `havc-install`, `havc doctor`). Prossimi passi della
-Fase 0: run end-to-end su VM/Sandbox pulita, prima release di prova con
-`release.json`, verifica dell'update incrementale.
+**Stato Fase 0 (04-10, chiusura sessione):** **completata salvo il test del
+flusso di update**. Realizzati e verificati: wheel `havc` (+GUI, +comfy_bridge),
+lockfile unico, `havc-install` (21 passi: runtime pinnato, stack server, GUI,
+tool esterni, plugin+pesi vs-cmnet2), `havc doctor` (9 check), generatore
+`release.json`, release di prova `v0.1.0-alpha`, installazione di test completa
+in `D:\HAVCServerDiT_Test`. Spec: `installer/PHASE0_SPEC.md`. Restano della
+Fase 0: verifica dell'update incrementale (+ eventuale run su VM pulita).
 
 ---
 
@@ -197,8 +229,9 @@ Fase 0: run end-to-end su VM/Sandbox pulita, prima release di prova con
    guscio in Fase 2.
 3. **UI C#:** **WPF** (raccomandato, solo-Windows) vs Avalonia (se un domani
    cross-platform).
-4. **Provisioning Python:** python.org silenzioso per-utente (raccomandato) vs
-   `uv` (da verificare tkinter).
+4. ~~Provisioning Python~~ → **risolta il 04-10 (D5)**: build
+   python-build-standalone pinnata (mirror `runtime-312`); niente python.org,
+   niente embed (privo di tkinter/venv).
 5. **Default del wizard:** componenti preselezionati (proposta: *Server+GUI*) e
    default cartella modelli.
 6. **Wheel nunchaku patchata vendorizzata** (eliminerebbe il post-step di patch
@@ -327,3 +360,11 @@ Fase 0: run end-to-end su VM/Sandbox pulita, prima release di prova con
   (weights/ + models/checkpoints/), sha256 spot-check ok, dimensioni identiche
   al byte; rerun idempotente. Il folder di test ora ha tutti e tre i set
   (DINOv3, DINOv2, plugin).
+- **2026-10-04 (13)** — **Sessione chiusa.** Stato consolidato nella nuova §0
+  ("Come riprendere"). In questa sessione: Fase 0 portata a completamento
+  sostanziale — packaging wheel (con GUI e comfy_bridge), runtime pinnato
+  (D5), provisioning completo di vs-cmnet2 (plugin + pesi DINOv3/DINOv2, D7),
+  NVEncC pubblicato e integrato, GUI come front-end di default (D6) con
+  launcher, generatore `release.json`, release di prova `v0.1.0-alpha`,
+  installazione di test completa e verificata in `D:\HAVCServerDiT_Test`.
+  Prossimo: test del flusso di update, poi Fase 1 (manager C#).

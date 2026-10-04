@@ -127,18 +127,18 @@ To complete the installation of this filter is necessary to install the models, 
 
 Since `vscmnet2` 1.0.8, CMNET2 uses the **DINOv3 ViT-B/16** key-encoder backbone
 by default (the **Backbone** setting in the GUI). Download these two files
-(from the [CMNET2 v1.2.0](https://github.com/dan64/cmnet2/releases/tag/v1.2.0)
+(from the [CMNET2 v1.3.0](https://github.com/dan64/cmnet2/releases/tag/v1.3.0)
 and [v1.1.0](https://github.com/dan64/cmnet2/releases/tag/v1.1.0) releases
 respectively) and place them under `.venv\Lib\site-packages\vscmnet2\weights\`:
 
 | File                                      | Destination                              | Download                                                                                                      |
 | ------------------------------------------ | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `DINOv3FeatureV6_LocalAtten_p374099.pth`   | `vscmnet2\weights\`                       | [download](https://github.com/dan64/cmnet2/releases/download/v1.2.0/DINOv3FeatureV6_LocalAtten_p374099.pth)   |
+| `DINOv3FeatureV6_LocalAtten_p374099.pth`   | `vscmnet2\weights\`                       | [download](https://github.com/dan64/cmnet2/releases/download/v1.3.0/DINOv3FeatureV6_LocalAtten_p374099.pth)   |
 | `dinov3-vitb16.zip` (extract in place)     | `vscmnet2\weights\dinov3-vitb16\`         | [download](https://github.com/dan64/cmnet2/releases/download/v1.1.0/dinov3-vitb16.zip)                        |
 
 ```powershell
 # from the repository root, with the venv active
-Invoke-WebRequest https://github.com/dan64/cmnet2/releases/download/v1.2.0/DINOv3FeatureV6_LocalAtten_p374099.pth -OutFile .venv\Lib\site-packages\vscmnet2\weights\DINOv3FeatureV6_LocalAtten_p374099.pth
+Invoke-WebRequest https://github.com/dan64/cmnet2/releases/download/v1.3.0/DINOv3FeatureV6_LocalAtten_p374099.pth -OutFile .venv\Lib\site-packages\vscmnet2\weights\DINOv3FeatureV6_LocalAtten_p374099.pth
 Invoke-WebRequest https://github.com/dan64/cmnet2/releases/download/v1.1.0/dinov3-vitb16.zip -OutFile dinov3-vitb16.zip
 Expand-Archive dinov3-vitb16.zip -DestinationPath .venv\Lib\site-packages\vscmnet2\weights\
 Remove-Item dinov3-vitb16.zip

@@ -141,19 +141,25 @@ Passi, nell'ordine:
     `scripts/*.vpy` — dalla copia inclusa nella wheel o dal checkout);
 14. `gui-deps` — `pip install -r requirements/gui.txt` + wheel `vscmnet2` e
     `spatial_correlation_sampler` da `--assets-dir`;
-15. `tools` — estrae `tools.zip` (x265/x264/mkvmerge) in `<install>\tools`;
+15. `cmnet2-plugins` — estrae `plugins_win.zip` (vs-cmnet2 v1.0.0, sha256)
+    in `vscmnet2\plugins\`;
+16. `cmnet2-weights` — scarica il checkpoint DINOv3 (`cmnet2` v1.3.0) e
+    `dinov3-vitb16.zip` (v1.1.0, estratto) in `vscmnet2\weights\`;
+17. `cmnet2-dinov2` — pesi DINOv2 legacy (`cmnet2` v1.0.0), **saltato di
+    default**; si attiva con `--with-dinov2`;
+18. `tools` — estrae `tools.zip` (x265/x264/mkvmerge) in `<install>\tools`;
     archivio pinnato (Release v1.0.0, sha256 verificato) o `--tools-zip`;
-16. `gui-settings` — pre-seeda `gui_cmnet2_settings.json` (solo se assente):
+19. `gui-settings` — pre-seeda `gui_cmnet2_settings.json` (solo se assente):
     percorsi di `scripts/`, `vspipe`, tool e cartella di lavoro;
-17. `launchers` — scrive i launcher in `<install>`: `HAVC.cmd`/`HAVC.vbs`
+20. `launchers` — scrive i launcher in `<install>`: `HAVC.cmd`/`HAVC.vbs`
     (**front-end di default = GUI**), `HAVC-Server.cmd` (server con scelta
     modello), `HAVC-Doctor.cmd`;
-18. `verify` — esegue `havc doctor --json` **nel venv di destinazione**;
+21. `verify` — esegue `havc doctor --json` **nel venv di destinazione**;
     un FAIL qui è un errore del bootstrap.
 
 Flag: `--install-dir` (obbligatorio), `--python`, `--runtime-zip`,
-`--tools-zip`, `--use-system-python`, `--assets-dir`, `--wheel`, `--only a,b`,
-`--plan`, `--dry-run`, `--json-progress`.
+`--tools-zip`, `--with-dinov2`, `--use-system-python`, `--assets-dir`,
+`--wheel`, `--only a,b`, `--plan`, `--dry-run`, `--json-progress`.
 
 Exit code: `0` = ok (anche se tutto era già a posto), `1` = passo fallito,
 `2` = errore d'uso.
@@ -253,7 +259,8 @@ Esempio completo: `installer/release.example.json`.
 Check (in ordine): `env` (venv attivo), `python` (3.12), `packages` (tutti i
 pin del lock soddisfatti), `nunchaku-patch`, `cuda` (import torch + GPU
 visibile), `gpu` (`nvidia-smi`: nome, driver, VRAM), `gui` (GUI presente
-accanto al venv — warn, non fail, per installazioni server-only), `havc`
+accanto al venv — warn, non fail, per installazioni server-only), `cmnet2`
+(plugin e pesi DINOv3 se `vscmnet2` è installato — warn), `havc`
 (versione e path).
 
 - Status: `ok` / `warn` / `fail` / `skip`; exit code `0` se nessun `fail`.
@@ -316,12 +323,21 @@ Verificato il 2026-10-04 (in questo branch):
   tkinterdnd2, VapourSynth, vscmnet2), smoke di avvio della GUI senza errori;
   `havc doctor` a **22 pacchetti** con check `gui` verde; rerun
   completamente idempotente. Asset di `v0.1.0-alpha` aggiornati (wheel con GUI,
-  `vscmnet2`, `spatial_correlation_sampler`, `release.json`).
+  `vscmnet2`, `spatial_correlation_sampler`, `release.json`);
+- **vs-cmnet2 completata dall'installer** (2026-10-04): passi `cmnet2-plugins`,
+  `cmnet2-weights`, `cmnet2-dinov2` — plugin (vs-cmnet2 v1.0.0) e pesi DINOv3
+  (cmnet2 v1.3.0/v1.1.0) scaricati con verifica sha256 e depositati in
+  `vscmnet2\`; dimensioni identiche al byte all'installazione di riferimento;
+  rerun idempotente; `havc doctor` a **9 check verdi** (incluso `cmnet2`);
+  dry-run del flag `--with-dinov2` verificato. Corretto il link morto in
+  `GUI/README_GUI.md` (il checkpoint DINOv3 sta nella v1.3.0, non v1.2.0).
 
 Da fare prima di chiudere la Fase 0:
 
 - verifica del flusso di update incrementale tra due versioni (la release di
   prova `v0.1.0-alpha` è pronta per questo);
+- (opz.) prova con download reale dei pesi DINOv2 legacy (`--with-dinov2`
+  finora verificato solo in dry-run);
 - (facoltativo, pre-release) run su VM/Sandbox "macchina pulita" per le
   assunzioni fuori dallo stack (niente Python/git/cache preesistenti).
 

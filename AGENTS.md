@@ -68,6 +68,13 @@ esterni. Obiettivo di questo filone di lavoro:
   `<install>\config` (condivise da GUI e server), `<install>\tools`
   (x265/x264/mkvmerge — NVEncC ancora da integrare: è un `.7z`). I launcher
   sono generati dal bootstrap (ASCII, scritti con CRLF).
+- **D7 — vs-cmnet2 completata dall'installer** (04-10): plugin e pesi
+  scaricati automaticamente e pinnati (sha256) — `plugins_win.zip`
+  (vs-cmnet2 v1.0.0), checkpoint DINOv3 + `dinov3-vitb16.zip` (cmnet2
+  **v1.3.0**/v1.1.0), pesi DINOv2 legacy (cmnet2 v1.0.0) opzionali dietro
+  `--with-dinov2`. Attenzione: il link "v1.2.0" nei README (GUI e vs-cmnet2)
+  è morto — corretto qui in `GUI/README_GUI.md`, da correggere anche nel
+  README di vs-cmnet2.
 
 ---
 
@@ -297,3 +304,12 @@ Fase 0: run end-to-end su VM/Sandbox pulita, prima release di prova con
   avvio senza errori. Asset `v0.1.0-alpha` aggiornati (wheel con GUI,
   `vscmnet2`, `spatial_correlation_sampler`, `release.json`). Da fare: NVEncC
   (è un `.7z`), avvio GUI dal manager C#, wiring remoto degli asset.
+- **2026-10-04 (10)** — **vs-cmnet2 completata automaticamente (D7).** Nuovi
+  passi `cmnet2-plugins` (31 MB), `cmnet2-weights` (~1,05 GB: checkpoint
+  DINOv3 da cmnet2 v1.3.0 + `dinov3-vitb16.zip` da v1.1.0) e `cmnet2-dinov2`
+  (legacy, `--with-dinov2`, ~740 MB). Download con verifica sha256 + cache;
+  check di idempotenza su presenza/dimensione. Verifiche su
+  `D:\HAVCServerDiT_Test`: download reali ok, dimensioni identiche al byte
+  all'installazione di riferimento, rerun tutto-skip, `havc doctor` a 9 check
+  verdi (nuovo check `cmnet2`), dry-run del flag DINOv2 ok. Fix del link
+  morto (v1.2.0→v1.3.0) in `GUI/README_GUI.md`.

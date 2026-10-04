@@ -336,14 +336,16 @@ Verificato il 2026-10-04 (in questo branch):
   (100,6 MB) caricato nella Release v1.0.0 accanto a `tools.zip` (digest
   verificato); passo `tools` esteso (gestisce entrambi gli archivi, estrazione
   "flat" supportata); download reale + estrazione provati (22 file),
-  `NVEncC64.exe --version` → 9.17 (r3600); rerun idempotente.
+  `NVEncC64.exe --version` → 9.17 (r3600); rerun idempotente;
+- **Pesi DINOv2 legacy provati davvero** (2026-10-04): passo `cmnet2-dinov2`
+  con `--with-dinov2` — 4 file (~720 MB) scaricati da cmnet2 v1.0.0, sha256
+  verificati (spot-check sul checkpoint da 494 MB), dimensioni identiche al
+  byte; rerun idempotente.
 
 Da fare prima di chiudere la Fase 0:
 
 - verifica del flusso di update incrementale tra due versioni (la release di
   prova `v0.1.0-alpha` è pronta per questo);
-- (opz.) prova con download reale dei pesi DINOv2 legacy (`--with-dinov2`
-  finora verificato solo in dry-run);
 - (facoltativo, pre-release) run su VM/Sandbox "macchina pulita" per le
   assunzioni fuori dallo stack (niente Python/git/cache preesistenti).
 

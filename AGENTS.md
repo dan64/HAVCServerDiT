@@ -322,3 +322,8 @@ Fase 0: run end-to-end su VM/Sandbox pulita, prima release di prova con
   Verifiche su `D:\HAVCServerDiT_Test`: download reale + estrazione (22 file),
   `NVEncC64.exe --version` → 9.17 (r3600), rerun "tool esterni già presenti".
   Release v1.0.0: corpo aggiornato con la nota dell'asset.
+- **2026-10-04 (12)** — **Pesi DINOv2 legacy provati davvero**
+  (`--with-dinov2`): 4 file (~720 MB) da cmnet2 v1.0.0 scaricati e depositati
+  (weights/ + models/checkpoints/), sha256 spot-check ok, dimensioni identiche
+  al byte; rerun idempotente. Il folder di test ora ha tutti e tre i set
+  (DINOv3, DINOv2, plugin).

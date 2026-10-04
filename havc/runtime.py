@@ -94,26 +94,28 @@ def download_archive(url: str, dest: Path, progress=None) -> None:
     tmp.replace(dest)
 
 
-def extract_archive(archive: Path, dest: Path) -> None:
-    """Estrae mantenendo la radice `python/` dell'archivio (tar.gz/tgz/tar/zip)."""
+def extract_archive(archive: Path, dest: Path, required_root: str = "python") -> None:
+    """Estrae mantenendo la radice richiesta dell'archivio (tar.gz/tgz/tar/zip)."""
     name = archive.name.lower()
     dest.mkdir(parents=True, exist_ok=True)
     if name.endswith((".tar.gz", ".tgz", ".tar")):
         with tarfile.open(archive, "r:*") as tar:
-            _require_python_root(tar.getnames())
+            _require_root(tar.getnames(), required_root)
             try:
                 tar.extractall(dest, filter="data")  # PEP 706 (3.12+)
             except TypeError:
                 tar.extractall(dest)
     elif name.endswith(".zip"):
         with zipfile.ZipFile(archive) as zf:
-            _require_python_root(zf.namelist())
+            _require_root(zf.namelist(), required_root)
             zf.extractall(dest)
     else:
         raise ValueError(f"formato archivio non supportato: {archive.name}")
 
 
-def _require_python_root(names) -> None:
+def _require_root(names, required_root: str) -> None:
     normalized = [n.replace("\\", "/") for n in names]
-    if not any(n.startswith("python/") for n in normalized):
-        raise ValueError("layout archivio inatteso: manca la radice 'python/'")
+    prefix = required_root.rstrip("/") + "/"
+    if not any(n.startswith(prefix) or n.rstrip("/") == required_root
+               for n in normalized):
+        raise ValueError(f"layout archivio inatteso: manca la radice '{required_root}/'")

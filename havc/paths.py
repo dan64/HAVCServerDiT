@@ -55,3 +55,15 @@ def find_patch_script() -> Path | None:
         if candidate.is_file():
             return candidate
     return None
+
+
+def gui_source_dir() -> Path | None:
+    """Cartella GUI (script principale + scripts/*.vpy): copia inclusa nel
+    pacchetto (`havc/gui`) oppure checkout del repo (`GUI/`)."""
+    packaged = package_dir() / "gui"
+    if (packaged / "CMNET2_colorize_client_GUI.py").is_file():
+        return packaged
+    root = repo_root()
+    if root is not None and (root / "GUI" / "CMNET2_colorize_client_GUI.py").is_file():
+        return root / "GUI"
+    return None

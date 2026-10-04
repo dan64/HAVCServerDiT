@@ -9,6 +9,7 @@ sono pacchetti Python "classici" vengono copiati dentro la wheel:
                                                     file dati e cartelle non
                                                     importabili, es.
                                                     custom_nodes/ComfyUI-GGUF*)
+    GUI/ (script+scripts) ->  havc/gui/            (GUI: front-end di default)
 
 Esclusioni volute: cache Python, backup degli editor/script e
 `comfy_bridge/blueprints/` (materiale della UI ComfyUI, non referenziato dal
@@ -36,6 +37,16 @@ COPIES = (
     ("comfy_bridge", "comfy_bridge", ("blueprints",)),
 )
 
+# File singoli e gruppi della GUI da includere nella wheel (la GUI viene
+# installata in <install>\gui dai passi `gui`/`gui-deps` di havc-install).
+EXTRA_FILES = (
+    ("GUI/CMNET2_colorize_client_GUI.py", "havc/gui/CMNET2_colorize_client_GUI.py"),
+    ("GUI/load_image_DtD_GUI.py", "havc/gui/load_image_DtD_GUI.py"),
+)
+EXTRA_GLOBS = (
+    ("GUI/scripts", "havc/gui/scripts", "*.vpy"),
+)
+
 
 class build_py(_build_py):
     def run(self):
@@ -55,6 +66,24 @@ class build_py(_build_py):
             if target.exists():
                 shutil.rmtree(target)
             self._copy_tree(src, target, exclude_dirs)
+        for src_rel, dst_rel in EXTRA_FILES:
+            src = root / src_rel
+            if not src.is_file():
+                raise SystemExit(f"setup.py: file sorgente mancante: {src}")
+            target = lib / dst_rel
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, target)
+        for src_rel, dst_rel, pattern in EXTRA_GLOBS:
+            src = root / src_rel
+            if not src.is_dir():
+                raise SystemExit(f"setup.py: cartella sorgente mancante: {src}")
+            target = lib / dst_rel
+            if target.exists():
+                shutil.rmtree(target)
+            for path in sorted(src.glob(pattern)):
+                out = target / path.name
+                out.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(path, out)
 
     @staticmethod
     def _copy_tree(src: Path, dst: Path, exclude_dirs: tuple = ()) -> None:

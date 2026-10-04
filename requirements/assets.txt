@@ -1,4 +1,6 @@
 # Wheel "asset" installate da file locali (non dal lock di un indice).
 # Le versioni qui dichiarate sono l'atteso per i check di idempotenza del
-# bootstrap e per `havc doctor`; l'installazione usa la wheel in packages/.
+# bootstrap e per `havc doctor`; l'installazione usa le wheel in packages/.
 diffusers==0.37.0.dev0
+vscmnet2==1.2.1
+spatial_correlation_sampler==0.5.0

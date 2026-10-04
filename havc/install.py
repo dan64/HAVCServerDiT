@@ -5,7 +5,7 @@ agire e salta ciò che è già a posto (vedi installer/PHASE0_SPEC.md §4).
 
 Esempi:
     havc-install --install-dir C:/HAVC --plan
-    havc-install --install-dir C:/HAVC --runtime-zip runtime.tar.gz --assets-dir packages --wheel dist\\havc-0.1.0-py3-none-any.whl
+    havc-install --install-dir C:/HAVC --runtime-zip runtime.tar.gz --tools-zip tools.zip --assets-dir packages --wheel dist\\havc-0.1.0-py3-none-any.whl
     havc-install --install-dir C:/HAVC --only runtime,venv,pip --json-progress
 """
 
@@ -31,6 +31,93 @@ from .runtime import (RUNTIME, download_archive, extract_archive, probe_version,
 TORCH_INDEX = "https://download.pytorch.org/whl/cu130"
 PIP_MIN = (24, 0)  # sotto questa soglia il passo `pip` aggiorna pip
 
+# Tool esterni (x265/x264/mkvmerge) — archivio pinnato della Release v1.0.0;
+# sha256 verificato anche contro il `digest` ufficiale GitHub (2026-10-04).
+TOOLS = {
+    "name": "tools.zip",
+    "url": "https://github.com/dan64/HAVCServerDiT/releases/download/v1.0.0/tools.zip",
+    "sha256": "0a17002e1bb8964d81ab892fdcf250c760764a71b3d5990d3f7865b38765aef5",
+}
+
+# Launcher scritti nella cartella di installazione (front-end di default = GUI).
+# Contenuto ASCII; le righe vengono riscritte con CRLF al salvataggio (i .cmd
+# con soli LF possono essere mal interpretati da cmd.exe).
+LAUNCHERS = {
+    "HAVC.cmd": r"""@echo off
+setlocal
+set "HERE=%~dp0"
+set "PY=%HERE%venv\Scripts\python.exe"
+if not exist "%PY%" (
+    echo [ERROR] HAVC environment not found under "%HERE%".
+    echo         Run the installer first, or check that the folder is complete.
+    pause
+    exit /b 1
+)
+cd /d "%HERE%gui"
+echo ============================================================
+echo  HAVC - Hybrid Automatic Video Colorizer (GUI)
+echo ============================================================
+echo.
+"%PY%" "CMNET2_colorize_client_GUI.py"
+if errorlevel 1 (
+    echo.
+    echo [ERROR] The GUI exited with code %errorlevel%.
+    pause
+)
+endlocal
+""",
+    "HAVC.vbs": r'''Set fso = CreateObject("Scripting.FileSystemObject")
+here = fso.GetParentFolderName(WScript.ScriptFullName)
+Set sh = CreateObject("WScript.Shell")
+sh.CurrentDirectory = here
+sh.Run """" & here & "\HAVC.cmd""", 0, False
+Set sh = Nothing
+''',
+    "HAVC-Server.cmd": r"""@echo off
+setlocal
+set "HERE=%~dp0"
+set "PY=%HERE%venv\Scripts\python.exe"
+if not exist "%PY%" (
+    echo [ERROR] HAVC environment not found under "%HERE%".
+    pause
+    exit /b 1
+)
+set "WHICH=%~1"
+if "%WHICH%"=="" set "WHICH=int4"
+set "CFG="
+if /i "%WHICH%"=="int4"    set "CFG=qwen_nunchaku_int4.json"
+if /i "%WHICH%"=="fp4"     set "CFG=qwen_nunchaku_fp4.json"
+if /i "%WHICH%"=="q3"      set "CFG=qwen_gguf_q3.json"
+if /i "%WHICH%"=="q4"      set "CFG=qwen_gguf_q4.json"
+if /i "%WHICH%"=="longcat" set "CFG=longcat_gguf_q4.json"
+if /i "%WHICH%"=="qwen21"  set "CFG=qwen21_viggle.json"
+if "%CFG%"=="" (
+    echo [ERROR] Unknown model "%WHICH%". Available: int4 fp4 q3 q4 longcat qwen21
+    pause
+    exit /b 1
+)
+echo Starting HAVC DiT Server (%WHICH%) ...
+"%PY%" -u -m dit_rpc_server --host 127.0.0.1 --port 8765 --load-pipeline --pipeline-config "%HERE%config\%CFG%"
+echo.
+echo Server exited.
+pause
+endlocal
+""",
+    "HAVC-Doctor.cmd": r"""@echo off
+setlocal
+set "HERE=%~dp0"
+set "PY=%HERE%venv\Scripts\python.exe"
+if not exist "%PY%" (
+    echo [ERROR] HAVC environment not found under "%HERE%".
+    pause
+    exit /b 1
+)
+"%PY%" -m havc.doctor
+pause
+endlocal
+""",
+}
+
 
 class BootstrapError(RuntimeError):
     def __init__(self, message: str, remediation: str = ""):
@@ -48,6 +135,7 @@ class Ctx:
     wheel: Optional[Path] = None
     python: Optional[Path] = None
     runtime_zip: Optional[Path] = None
+    tools_zip: Optional[Path] = None
     use_system_python: bool = False
 
     @property
@@ -210,11 +298,16 @@ def patch_state(ctx: Ctx) -> Optional[str]:
     return "unknown"
 
 
-def find_diffusers_wheel(ctx: Ctx) -> Optional[Path]:
+def find_asset_wheel(ctx: Ctx, pattern: str) -> Optional[Path]:
+    """Prima wheel che corrisponde al pattern in --assets-dir."""
     if ctx.assets_dir is None:
         return None
-    wheels = sorted(ctx.assets_dir.glob("diffusers-*.whl"))
+    wheels = sorted(ctx.assets_dir.glob(pattern))
     return wheels[0] if wheels else None
+
+
+def find_diffusers_wheel(ctx: Ctx) -> Optional[Path]:
+    return find_asset_wheel(ctx, "diffusers-*.whl")
 
 
 # ---------------------------------------------------------------------------
@@ -226,9 +319,14 @@ def build_steps() -> list[Step]:
     torch_txt = req_dir / "torch.txt"
     nunchaku_txt = req_dir / "nunchaku.txt"
     core_txt = req_dir / "core.txt"
+    gui_txt = req_dir / "gui.txt"
     lock = read_lock(req_dir) if req_dir.is_dir() else {}
     core_pins = read_pins_file(core_txt) if core_txt.is_file() else {}
     torch_pins = {n: lock[n] for n in ("torch", "torchvision", "torchaudio") if n in lock}
+    gui_pins = read_pins_file(gui_txt) if gui_txt.is_file() else {}
+    for _name in ("vscmnet2", "spatial_correlation_sampler"):
+        if _name in lock:
+            gui_pins[_name] = lock[_name]
 
     # -- 1. preflight ------------------------------------------------------
     def preflight_run(c: Ctx) -> str:
@@ -408,7 +506,159 @@ def build_steps() -> list[Step]:
                "--no-deps", str(c.wheel)])
         return c.wheel.name
 
-    # -- 12. verify --------------------------------------------------------
+    # -- 12. configs -------------------------------------------------------
+    def configs_check(c: Ctx) -> Optional[str]:
+        src = paths.configs_dir()
+        if not src.is_dir():
+            return None
+        dst = c.install_dir / "config"
+        missing = [p.name for p in src.glob("*.json") if not (dst / p.name).exists()]
+        return "config già presenti" if not missing else None
+
+    def configs_run(c: Ctx) -> str:
+        if c.dry_run:
+            c.progress.event("log", level="dry-run",
+                             message=f"[dry-run] copia config -> {c.install_dir / 'config'}")
+            return "dry-run"
+        src = paths.configs_dir()
+        if not src.is_dir():
+            raise BootstrapError(f"config di origine non trovati: {src}",
+                                 "reinstalla la wheel havc")
+        dst = c.install_dir / "config"
+        dst.mkdir(parents=True, exist_ok=True)
+        copied = 0
+        for path in sorted(src.glob("*.json")):
+            target = dst / path.name
+            if not target.exists():
+                shutil.copy2(path, target)
+                copied += 1
+        return f"{copied} config copiate" if copied else "nessuna config nuova"
+
+    # -- 13. gui -----------------------------------------------------------
+    def gui_check(c: Ctx) -> Optional[str]:
+        target = c.install_dir / "gui" / "CMNET2_colorize_client_GUI.py"
+        return "file GUI già presenti" if target.is_file() else None
+
+    def gui_run(c: Ctx) -> str:
+        if c.dry_run:
+            c.progress.event("log", level="dry-run",
+                             message=f"[dry-run] copia GUI -> {c.install_dir / 'gui'}")
+            return "dry-run"
+        src = paths.gui_source_dir()
+        if src is None:
+            raise BootstrapError(
+                "file GUI non trovati (né nel pacchetto né nel checkout)",
+                "reinstalla la wheel havc oppure esegui dal checkout del repo")
+        dst = c.install_dir / "gui"
+        dst.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src / "CMNET2_colorize_client_GUI.py",
+                     dst / "CMNET2_colorize_client_GUI.py")
+        shutil.copy2(src / "load_image_DtD_GUI.py", dst / "load_image_DtD_GUI.py")
+        scripts_dst = dst / "scripts"
+        scripts_dst.mkdir(exist_ok=True)
+        count = 0
+        for path in sorted((src / "scripts").glob("*.vpy")):
+            shutil.copy2(path, scripts_dst / path.name)
+            count += 1
+        return f"{count} script .vpy"
+
+    # -- 14. gui-deps ------------------------------------------------------
+    def gui_deps_check(c: Ctx) -> Optional[str]:
+        return "dipendenze GUI già a posto" if not c.unmet(gui_pins) else None
+
+    def gui_deps_run(c: Ctx) -> str:
+        c.run([c.venv_python, "-m", "pip", "install", "-r", gui_txt])
+        for pattern, label in (("vscmnet2-*.whl", "vscmnet2"),
+                               ("spatial_correlation_sampler-*.whl",
+                                "spatial_correlation_sampler")):
+            wheel = find_asset_wheel(c, pattern)
+            if wheel is None:
+                raise BootstrapError(
+                    f"wheel {label} non trovata",
+                    "passa --assets-dir con le wheel del repo (es. packages/)")
+            c.run([c.venv_python, "-m", "pip", "install", str(wheel)])
+        return "GUI + vscmnet2 + spatial_correlation_sampler"
+
+    # -- 15. tools ---------------------------------------------------------
+    def tools_check(c: Ctx) -> Optional[str]:
+        if (c.install_dir / "tools" / "x265" / "x265.exe").is_file():
+            return "tool esterni già presenti"
+        return None
+
+    def tools_run(c: Ctx) -> str:
+        if c.dry_run:
+            c.progress.event("log", level="dry-run",
+                             message=f"[dry-run] tools -> {c.install_dir / 'tools'}")
+            return "dry-run"
+        if c.tools_zip is not None:
+            if not c.tools_zip.is_file():
+                raise BootstrapError(f"archivio tool non trovato: {c.tools_zip}")
+            archive = c.tools_zip
+        else:
+            cached = c.cache_dir / TOOLS["name"]
+            if cached.is_file() and sha256_of(cached) == TOOLS["sha256"]:
+                archive = cached
+                c.progress.event("log", level="out",
+                                 message=f"uso l'archivio in cache: {cached}")
+            else:
+                c.progress.event("log", level="out",
+                                 message=f"scarico i tool esterni: {TOOLS['url']}")
+                try:
+                    download_archive(TOOLS["url"], cached, progress=c.progress)
+                except Exception as exc:
+                    raise BootstrapError(
+                        f"download dei tool fallito: {exc}",
+                        "verifica la connessione; oppure usa --tools-zip con un archivio locale")
+                archive = cached
+        digest = sha256_of(archive)
+        if digest != TOOLS["sha256"]:
+            raise BootstrapError(
+                f"sha256 dei tool non corrisponde: {digest} != {TOOLS['sha256']}",
+                "riscarica l'archivio; se persiste, il file sorgente è cambiato")
+        extract_archive(archive, c.install_dir, required_root="tools")
+        return "x265, x264, mkvmerge in <install>/tools"
+
+    # -- 16. gui-settings --------------------------------------------------
+    def gui_settings_check(c: Ctx) -> Optional[str]:
+        settings = c.install_dir / "gui" / "gui_cmnet2_settings.json"
+        return "settings già presenti" if settings.is_file() else None
+
+    def gui_settings_run(c: Ctx) -> str:
+        if c.dry_run:
+            c.progress.event("log", level="dry-run",
+                             message=f"[dry-run] settings GUI -> {c.install_dir / 'gui'}")
+            return "dry-run"
+        gui_dir = c.install_dir / "gui"
+        if not gui_dir.is_dir():
+            raise BootstrapError("cartella gui mancante", "esegui prima il passo `gui`")
+        settings = {
+            "script_dir": str(gui_dir / "scripts"),
+            "vspipe_path": str(c.venv_python.parent / "vspipe.exe"),
+            "x265_path": str(c.install_dir / "tools" / "x265" / "x265.exe"),
+            "mkv_path": str(c.install_dir / "tools" / "MKVToolNix" / "mkvmerge.exe"),
+            "base_dir": str(c.install_dir / "work"),
+            "fixv_base_dir": str(c.install_dir / "work"),
+        }
+        path = gui_dir / "gui_cmnet2_settings.json"
+        with path.open("w", encoding="utf-8", newline="\n") as fh:
+            fh.write(json.dumps(settings, indent=4) + "\n")
+        return "gui_cmnet2_settings.json creato"
+
+    # -- 17. launchers -----------------------------------------------------
+    def launchers_check(c: Ctx) -> Optional[str]:
+        return "launcher già presenti" if (c.install_dir / "HAVC.cmd").is_file() else None
+
+    def launchers_run(c: Ctx) -> str:
+        if c.dry_run:
+            c.progress.event("log", level="dry-run",
+                             message=f"[dry-run] launcher -> {c.install_dir}")
+            return "dry-run"
+        for name, content in LAUNCHERS.items():
+            path = c.install_dir / name
+            path.write_bytes(content.replace("\n", "\r\n").encode("utf-8"))
+        return ", ".join(LAUNCHERS)
+
+    # -- 18. verify --------------------------------------------------------
     def verify_run(c: Ctx) -> str:
         env = dict(os.environ)
         env.pop("PYTHONPATH", None)  # niente ombreggiamenti dal chiamante
@@ -462,6 +712,22 @@ def build_steps() -> list[Step]:
              deps_check, deps_run),
         Step("wheel", "Wheel del progetto (havc)", "pip install --no-deps havc-*.whl",
              wheel_check, wheel_run),
+        Step("configs", "Config di pipeline in <install>/config", "copia le config mancanti",
+             configs_check, configs_run),
+        Step("gui", "File GUI in <install>/gui", "GUI + scripts .vpy",
+             gui_check, gui_run),
+        Step("gui-deps", "Dipendenze GUI (FreeSimpleGUI, tkinterdnd2, VapourSynth, vscmnet2, SCS)",
+             "pip install -r requirements/gui.txt + wheel locali",
+             gui_deps_check, gui_deps_run),
+        Step("tools", "Tool esterni in <install>/tools",
+             "tools.zip pinnato (Release v1.0.0) o --tools-zip",
+             tools_check, tools_run),
+        Step("gui-settings", "Settings GUI (solo se assenti)",
+             "gui_cmnet2_settings.json pre-seedato",
+             gui_settings_check, gui_settings_run),
+        Step("launchers", "Launcher in <install>",
+             "HAVC.cmd/.vbs (GUI), HAVC-Server.cmd, HAVC-Doctor.cmd",
+             launchers_check, launchers_run),
         Step("verify", "Verifica finale (havc doctor)", "python -m havc.doctor",
              lambda c: None, verify_run),
     ]
@@ -516,6 +782,8 @@ def main(argv=None) -> int:
                         help="interprete con cui creare il venv (default: runtime provisionato)")
     parser.add_argument("--runtime-zip", type=Path, default=None,
                         help="usa un archivio runtime locale invece di scaricarlo (verificato via sha256)")
+    parser.add_argument("--tools-zip", type=Path, default=None,
+                        help="usa un archivio tool locale invece di scaricarlo (verificato via sha256)")
     parser.add_argument("--use-system-python", action="store_true",
                         help="salta il provisioning del runtime e usa il Python di sistema (sviluppo)")
     parser.add_argument("--assets-dir", type=Path, default=None,
@@ -559,6 +827,7 @@ def main(argv=None) -> int:
         wheel=args.wheel.resolve() if args.wheel else None,
         python=args.python,
         runtime_zip=args.runtime_zip.resolve() if args.runtime_zip else None,
+        tools_zip=args.tools_zip.resolve() if args.tools_zip else None,
         use_system_python=args.use_system_python,
     )
     ok = run_steps(ctx, steps, only)

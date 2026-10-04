@@ -140,6 +140,19 @@ def check_gpu() -> dict:
     return _result("gpu", OK, out.replace("\n", " | "))
 
 
+def check_gui() -> dict:
+    """GUI installata accanto al venv (in sviluppo: presente nel checkout)."""
+    in_venv = sys.prefix != getattr(sys, "base_prefix", sys.prefix)
+    if in_venv:
+        gui_dir = Path(sys.prefix).parent / "gui"
+        if (gui_dir / "CMNET2_colorize_client_GUI.py").is_file():
+            return _result("gui", OK, f"GUI installata ({gui_dir})")
+    root = paths.repo_root()
+    if root is not None and (root / "GUI" / "CMNET2_colorize_client_GUI.py").is_file():
+        return _result("gui", OK, "GUI presente nel checkout del repo")
+    return _result("gui", WARN, "GUI non trovata (installazione server-only?)")
+
+
 def check_havc() -> dict:
     return _result("havc", OK, f"havc {__version__} ({paths.package_dir().parent})")
 
@@ -154,6 +167,7 @@ def run_checks(lock_dir: Path | None = None, fast: bool = False) -> list[dict]:
     if not fast:
         checks.append(check_cuda())
         checks.append(check_gpu())
+    checks.append(check_gui())
     checks.append(check_havc())
     return checks
 

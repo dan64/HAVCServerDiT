@@ -258,3 +258,10 @@ Fase 0: run end-to-end su VM/Sandbox pulita, prima release di prova con
   diffusers), verify ok, rifiuto di `--version` incoerente, verify fallita su
   artefatto troncato (exit 1). Staging pronto in `dist/staging-v0.1.0/`
   (fuori dal repo) per la prima release di prova.
+- **2026-10-04 (7)** — **Release di prova `v0.1.0-alpha` pubblicata**
+  (prerelease, `--latest=false`): asset = wheel `havc` 0.1.0, wheel diffusers,
+  `release.json` (manifest generato da `installer/make_release.py`, URL sul
+  tag corretto). Post-verifica: digest GitHub coerenti col manifest, manifest
+  remoto identico al locale, `HEAD` della wheel 200, `v1.0.0` resta "Latest".
+  Prossimo uso: test del flusso di update (Fase 1) e riferimento per il run
+  in VM.

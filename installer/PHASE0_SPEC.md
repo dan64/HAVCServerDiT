@@ -272,15 +272,19 @@ Verificato il 2026-10-04 (in questo branch):
   comfy_bridge, 0 voci 'blueprint', tutti i file chiave presenti);
 - generatore `release.json` (`installer/make_release.py`): generazione su
   staging (wheel `havc` + asset diffusers), `--verify` ok, rifiuto di
-  `--version` incoerente, verifica fallita su artefatto troncato (exit 1).
+  `--version` incoerente, verifica fallita su artefatto troncato (exit 1);
+- **prima release di prova pubblicata**: `v0.1.0-alpha` (prerelease) con wheel
+  `havc`, asset diffusers e `release.json`; digest GitHub coerenti col
+  manifest, manifest remoto identico al locale, URL raggiungibili, `v1.0.0`
+  resta la release "Latest".
 
 Da fare prima di chiudere la Fase 0:
 
 - run **end-to-end su VM/Sandbox pulita** (senza e con GPU): bootstrap completo
   + `havc doctor` verde;
 - prova del passo `--wheel` con la wheel buildata;
-- prima release di prova (manifest già generato in `dist/staging-v0.1.0/`,
-  fuori dal repo) + verifica del flusso di update incrementale tra due versioni.
+- verifica del flusso di update incrementale tra due versioni (la release di
+  prova `v0.1.0-alpha` è pronta per questo).
 
 ---
 

@@ -28,7 +28,7 @@ lo schema è già fissato qui.
 
 ## 2. Packaging — wheel `havc`
 
-- Versione `0.1.0` (PEP 440); fonte unica `havc/__init__.py::__version__`
+- Versione `0.1.1` (PEP 440); fonte unica `havc/__init__.py::__version__`
   (`[tool.setuptools.dynamic]`).
 - `requires-python = "==3.12.*"` — le wheel nunchaku e
   spatial_correlation_sampler sono cp312: un ambiente 3.11/3.13 va rifiutato,
@@ -139,6 +139,7 @@ Passi, nell'ordine:
 12. `configs` — copia le config di pipeline in `<install>\config` (solo mancanti);
 13. `gui` — copia i file GUI in `<install>\gui` (script principale, helper,
     `scripts/*.vpy` — dalla copia inclusa nella wheel o dal checkout);
+    aggiorna i file se il contenuto differisce (skip solo se identici);
 14. `gui-deps` — `pip install -r requirements/gui.txt` + wheel `vscmnet2` e
     `spatial_correlation_sampler` da `--assets-dir`;
 15. `cmnet2-plugins` — estrae `plugins_win.zip` (vs-cmnet2 v1.0.0, sha256)
@@ -154,7 +155,7 @@ Passi, nell'ordine:
     percorsi di `scripts/`, `vspipe`, tool e cartella di lavoro;
 20. `launchers` — scrive i launcher in `<install>`: `HAVC.cmd`/`HAVC.vbs`
     (**front-end di default = GUI**), `HAVC-Server.cmd` (server con scelta
-    modello), `HAVC-Doctor.cmd`;
+    modello), `HAVC-Doctor.cmd`; riscritti se il contenuto differisce;
 21. `verify` — esegue `havc doctor --json` **nel venv di destinazione**;
     un FAIL qui è un errore del bootstrap.
 
@@ -341,11 +342,15 @@ Verificato il 2026-10-04 (in questo branch):
   con `--with-dinov2` — 4 file (~720 MB) scaricati da cmnet2 v1.0.0, sha256
   verificati (spot-check sul checkpoint da 494 MB), dimensioni identiche al
   byte; rerun idempotente.
+- **update incrementale verificato** (2026-10-04, da `v0.1.0` a `0.1.1`,
+  staging locale): eseguiti solo `wheel`/`gui`/`launchers`, `verify` verde,
+  rerun idempotente; il test ha fatto correggere i passi `gui`/`launchers`
+  (skip "su presenza" → confronto di contenuto: le modifiche ai file gestiti
+  ora si propagano con l'update); log `install-run8/9/10.log` in
+  `D:\HAVCServerDiT_Test`.
 
 Da fare prima di chiudere la Fase 0:
 
-- verifica del flusso di update incrementale tra due versioni (la release di
-  prova `v0.1.0-alpha` è pronta per questo);
 - (facoltativo, pre-release) run su VM/Sandbox "macchina pulita" per le
   assunzioni fuori dallo stack (niente Python/git/cache preesistenti).
 

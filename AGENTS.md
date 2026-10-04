@@ -21,14 +21,19 @@
 
 ## 0. Come riprendere (handoff — stato al 2026-10-04, chiusura sessione)
 
-**Dove sta il lavoro**: branch `feature/installer` (pushato, in sync con
-GitHub) nel worktree `D:\PProjects\HAVCServerDiT_installer`; la cartella
-principale `D:\PProjects\HAVCServerDiT` è rimasta su `main` e operativa.
-Ultimo commit della sessione: `960479a`.
+**Dove sta il lavoro**: branch `feature/installer` (pushato su GitHub) nel
+worktree `D:\PProjects\HAVCServerDiT_installer`; la cartella principale
+`D:\PProjects\HAVCServerDiT` è rimasta su `main` e operativa (la sua vecchia
+copia locale di `AGENTS.md`, superata, è stata rimossa il 04-10: finché il
+branch non arriva su `main`, la memoria è solo qui). Ultimo commit pushato:
+`8fc58de`; questa sessione aggiunge fix convergenza `gui`/`launchers`, v0.1.1
+e questo handoff.
 
 **Installazione di test completa**: `D:\HAVCServerDiT_Test` — stack server +
 GUI + tool (x265/x264/mkvmerge/NVEncC) + vscmnet2 con plugin e pesi (DINOv3 +
-DINOv2). Controllo rapido: `D:\HAVCServerDiT_Test\venv\Scripts\havc-doctor.exe`
+DINOv2), **aggiornata a havc 0.1.1** col test del flusso di update del 04-10
+(smoke/update/idempotenza: `install-run8/9/10.log` nella radice). Controllo
+rapido: `D:\HAVCServerDiT_Test\venv\Scripts\havc-doctor.exe`
 (9 check attesi verdi); per usarla: doppio click su `HAVC.vbs` dalla radice.
 
 **Release coinvolte** (repo `dan64/HAVCServerDiT`):
@@ -38,10 +43,9 @@ DINOv2). Controllo rapido: `D:\HAVCServerDiT_Test\venv\Scripts\havc-doctor.exe`
   vscmnet2, spatial_correlation_sampler, `release.json`)
 
 **Prossimi passi, in ordine**:
-1. Test del **flusso di update incrementale** tra due versioni (usa
-   `v0.1.0-alpha`; è l'ultimo item sostanziale della Fase 0)
-2. (Facoltativo, pre-release) run su VM/Sandbox "macchina pulita"
-3. **Fase 1: manager C#** (wizard grafico, update/repair) — vedi §4c e §6
+1. **Fase 1: manager C#** (wizard grafico, update/repair) — vedi §4c e §6;
+   la Fase 0 è chiusa (update incrementale verificato il 04-10, log (14)).
+2. (Facoltativo, pre-release) run su VM/Sandbox "macchina pulita".
 
 **Regola d'oro per riprendere**: `havc-install` è idempotente e convergente —
 rieseguirlo su `D:\HAVCServerDiT_Test` deve finire tutto-skip; usarlo come
@@ -210,13 +214,15 @@ l'update dell'ambiente è indipendente (e resta il punto forte della separazione
   eventuale guscio Inno opzionale, uninstaller. *Stima grezza: ~1 settimana.*
 - **Fase 3 — (solo se mai) firma del codice.** Nessun impatto sull'architettura.
 
-**Stato Fase 0 (04-10, chiusura sessione):** **completata salvo il test del
-flusso di update**. Realizzati e verificati: wheel `havc` (+GUI, +comfy_bridge),
-lockfile unico, `havc-install` (21 passi: runtime pinnato, stack server, GUI,
-tool esterni, plugin+pesi vs-cmnet2), `havc doctor` (9 check), generatore
-`release.json`, release di prova `v0.1.0-alpha`, installazione di test completa
-in `D:\HAVCServerDiT_Test`. Spec: `installer/PHASE0_SPEC.md`. Restano della
-Fase 0: verifica dell'update incrementale (+ eventuale run su VM pulita).
+**Stato Fase 0 (04-10, chiusura sessione):** **completata.** Realizzati e
+verificati: wheel `havc` (+GUI, +comfy_bridge), lockfile unico, `havc-install`
+(21 passi: runtime pinnato, stack server, GUI, tool esterni, plugin+pesi
+vs-cmnet2), `havc doctor` (9 check), generatore `release.json`, release di
+prova `v0.1.0-alpha`, installazione di test completa in
+`D:\HAVCServerDiT_Test`, **update incrementale 0.1.0 → 0.1.1** (wheel
+sostituita, refresh di GUI/launcher, `verify` verde, rerun idempotente — log
+(14)). Spec: `installer/PHASE0_SPEC.md`. Resta solo il run facoltativo su VM
+pulita.
 
 ---
 
@@ -368,3 +374,17 @@ Fase 0: verifica dell'update incrementale (+ eventuale run su VM pulita).
   launcher, generatore `release.json`, release di prova `v0.1.0-alpha`,
   installazione di test completa e verificata in `D:\HAVCServerDiT_Test`.
   Prossimo: test del flusso di update, poi Fase 1 (manager C#).
+- **2026-10-04 (14)** — **Update incrementale verificato (Fase 0 chiusa);
+  fix convergenza `gui`/`launchers`.** Test a due versioni sul test install:
+  da havc `0.1.0` a una nuova `0.1.1` (staging locale `dist/staging-v0.1.1`,
+  manifest rigenerato e verificato). Il test ha esposto un gap di convergenza:
+  i passi `gui` e `launchers` facevano skip "su presenza" — le modifiche a
+  quei file in una nuova versione non sarebbero mai arrivate all'installazione
+  (dimostrato: contenuto divergente lasciato lì dal rerun 0.1.0). Fix in
+  `havc/install.py`: confronto di contenuto (aggiorna solo se diverso;
+  idempotente). Flusso verificato: smoke tutto-skip → wheel 0.1.1 nel runtime
+  → run9 (eseguiti solo `wheel`, `gui` a 9 file, `launchers`; `verify` verde)
+  → run10 idempotente tutto-skip; `havc doctor` 9/9 verdi; havc 0.1.1 in venv
+  e runtime; hash del file GUI installato == sorgente; demo repair (config
+  rimossa → ricopiata). Log: `install-run8/9/10.log` in `D:\HAVCServerDiT_Test`.
+  Resta solo il run facoltativo su VM pulita; prossimo: Fase 1 (manager C#).

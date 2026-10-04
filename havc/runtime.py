@@ -90,7 +90,7 @@ def download_archive(url: str, dest: Path, progress=None) -> None:
                                        message=f"  … {done // (1024 * 1024)} MB{suffix}")
                         next_mark += step
     except OSError as exc:
-        raise RuntimeError(f"download fallito da {url}: {exc}") from exc
+        raise RuntimeError(f"download failed from {url}: {exc}") from exc
     tmp.replace(dest)
 
 
@@ -118,7 +118,7 @@ def extract_archive(archive: Path, dest: Path,
                 _require_root(zf.namelist(), required_root)
             zf.extractall(dest)
     else:
-        raise ValueError(f"formato archivio non supportato: {archive.name}")
+        raise ValueError(f"unsupported archive format: {archive.name}")
 
 
 def _require_root(names, required_root: str) -> None:
@@ -126,4 +126,4 @@ def _require_root(names, required_root: str) -> None:
     prefix = required_root.rstrip("/") + "/"
     if not any(n.startswith(prefix) or n.rstrip("/") == required_root
                for n in normalized):
-        raise ValueError(f"layout archivio inatteso: manca la radice '{required_root}/'")
+        raise ValueError(f"unexpected archive layout: missing root '{required_root}/'")

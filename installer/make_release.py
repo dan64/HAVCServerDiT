@@ -48,7 +48,7 @@ def sha256_of(path: Path) -> str:
 
 
 def fail(message: str) -> None:
-    print(f"[ERRORE] {message}", file=sys.stderr)
+    print(f"[ERROR] {message}", file=sys.stderr)
     sys.exit(1)
 
 
@@ -56,17 +56,17 @@ def collect_wheels(artifacts_dir: Path, version: str) -> tuple[Path, list[Path]]
     """The project wheel (exactly one, with matching version) and the other wheels."""
     wheels = sorted(artifacts_dir.glob("*.whl"))
     if not wheels:
-        fail(f"nessuna wheel trovata in {artifacts_dir}")
+        fail(f"no wheels found in {artifacts_dir}")
     ignored = [
         p.name for p in sorted(artifacts_dir.iterdir())
         if p.is_file() and p.suffix != ".whl" and p.name != "release.json"
     ]
     if ignored:
-        print(f"[avviso] file ignorati (non wheel): {', '.join(ignored)}")
+        print(f"[warning] ignored files (not wheels): {', '.join(ignored)}")
     project = [p for p in wheels if p.name.startswith(f"havc-{version}-")]
     if len(project) != 1:
-        fail(f"attesa esattamente una wheel 'havc-{version}-*.whl' in {artifacts_dir}, "
-             f"trovate {len(project)}")
+        fail(f"expected exactly one 'havc-{version}-*.whl' wheel in {artifacts_dir}, "
+             f"found {len(project)}")
     others = [p for p in wheels if p not in project]
     return project[0], others
 
@@ -83,10 +83,10 @@ def make_entry(path: Path, repo: str, tag: str) -> dict:
 def generate(args: argparse.Namespace) -> None:
     artifacts_dir = args.artifacts_dir.resolve()
     if not artifacts_dir.is_dir():
-        fail(f"cartella artefatti non trovata: {artifacts_dir}")
+        fail(f"artifacts folder not found: {artifacts_dir}")
     if args.version and args.version != HAVC_VERSION:
-        fail(f"--version {args.version} non corrisponde a havc/__init__.py "
-             f"({HAVC_VERSION}): la versione si cambia SOLO in havc/__init__.py")
+        fail(f"--version {args.version} does not match havc/__init__.py "
+             f"({HAVC_VERSION}): the version is changed ONLY in havc/__init__.py")
     version = HAVC_VERSION
 
     project, others = collect_wheels(artifacts_dir, version)
@@ -125,7 +125,7 @@ def generate(args: argparse.Namespace) -> None:
     with out.open("w", encoding="utf-8", newline="\n") as fh:
         fh.write(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n")
 
-    print(f"Manifest generato: {out}")
+    print(f"Manifest generated: {out}")
     print(f"  app_version : {version}")
     print(f"  tag/repo    : {args.tag}  ({args.repo})")
     print(f"  wheels: {len(wheels)} | assets: {len(assets)}")
@@ -136,19 +136,19 @@ def generate(args: argparse.Namespace) -> None:
 def verify(args: argparse.Namespace) -> None:
     manifest_path = args.verify.resolve()
     if not manifest_path.is_file():
-        fail(f"manifest non trovato: {manifest_path}")
+        fail(f"manifest not found: {manifest_path}")
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     artifacts_dir = args.artifacts_dir.resolve()
 
     entries = list(manifest.get("wheels", [])) + list(manifest.get("assets", []))
     if not entries:
-        fail("il manifest non elenca wheel/asset")
+        fail("the manifest lists no wheels/assets")
 
     failures = 0
     for item in entries:
         candidate = artifacts_dir / item.get("name", "")
         if not candidate.is_file():
-            print(f"[FAIL] {item.get('name')}: file assente in {artifacts_dir}")
+            print(f"[FAIL] {item.get('name')}: file missing in {artifacts_dir}")
             failures += 1
             continue
         digest = sha256_of(candidate)
@@ -158,55 +158,55 @@ def verify(args: argparse.Namespace) -> None:
         else:
             print(f"[FAIL] {item['name']}  ({size} byte)")
             if digest != item.get("sha256"):
-                print(f"        atteso sha256 {item.get('sha256')}")
-                print(f"        trovato       {digest}")
+                print(f"        expected sha256 {item.get('sha256')}")
+                print(f"        found         {digest}")
             if size != item.get("size"):
-                print(f"        atteso size {item.get('size')}")
+                print(f"        expected size {item.get('size')}")
             failures += 1
 
     for item in manifest.get("wheels", []):
         if item.get("kind") == "project" and \
                 not item.get("name", "").startswith(f"havc-{manifest.get('app_version')}-"):
-            print(f"[FAIL] {item.get('name')} non corrisponde ad "
+            print(f"[FAIL] {item.get('name')} does not match "
                   f"app_version {manifest.get('app_version')}")
             failures += 1
 
     if failures:
-        print(f"\nVerifica FALLITA: {failures} problema/i")
+        print(f"\nVerification FAILED: {failures} problem(s)")
         sys.exit(1)
-    print("\nVerifica OK: tutti gli artefatti corrispondono al manifest")
+    print("\nVerification OK: all artifacts match the manifest")
 
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
         prog="make_release.py",
-        description="Genera o verifica il manifest release.json "
-                    "(specifica: installer/PHASE0_SPEC.md §6).",
+        description="Generate or verify the release.json manifest "
+                    "(spec: installer/PHASE0_SPEC.md §6).",
     )
     parser.add_argument("--tag", default=None,
-                        help="tag della release (es. v0.1.0) — obbligatorio in generazione")
+                        help="release tag (e.g. v0.1.0) — required for generation")
     parser.add_argument("--artifacts-dir", type=Path, required=True,
-                        help="cartella con gli artefatti (wheel); usata anche in verifica")
+                        help="folder with the artifacts (wheels); also used for verification")
     parser.add_argument("--out", type=Path, default=None,
-                        help="percorso del manifest (default: <artifacts-dir>/release.json)")
+                        help="manifest path (default: <artifacts-dir>/release.json)")
     parser.add_argument("--repo", default="dan64/HAVCServerDiT",
                         help="repo GitHub (default: dan64/HAVCServerDiT)")
     parser.add_argument("--channel", default="stable", choices=("stable", "beta"))
     parser.add_argument("--version", default=None,
-                        help="asserzione extra: deve corrispondere a havc/__init__.py")
+                        help="extra assertion: must match havc/__init__.py")
     parser.add_argument("--bootstrap-min-version", default=None,
-                        help="versione minima del bootstrap (default: versione app)")
+                        help="minimum bootstrap version (default: app version)")
     parser.add_argument("--requires-env-rebuild", action="store_true",
-                        help="imposta requires_env_rebuild=true (cambio Python/lock sostanziale)")
+                        help="set requires_env_rebuild=true (substantial Python/lock change)")
     parser.add_argument("--verify", type=Path, default=None,
-                        help="verifica un manifest esistente contro <artifacts-dir>")
+                        help="verify an existing manifest against <artifacts-dir>")
     args = parser.parse_args(argv)
 
     if args.verify is not None:
         verify(args)
         return 0
     if not args.tag:
-        parser.error("--tag è obbligatorio in generazione (oppure usa --verify)")
+        parser.error("--tag is required for generation (or use --verify)")
     generate(args)
     return 0
 

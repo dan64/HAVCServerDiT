@@ -283,8 +283,8 @@ class Ctx:
             if capture:
                 tail = (proc.stderr or proc.stdout or "").strip().splitlines()
                 if tail:
-                    detail = f" — ultima riga: {tail[-1]}"
-            raise BootstrapError(f"comando fallito (exit {proc.returncode}): {pretty}{detail}")
+                    detail = f" — last line: {tail[-1]}"
+            raise BootstrapError(f"command failed (exit {proc.returncode}): {pretty}{detail}")
         return proc
 
     # -------------------------------------------------------- query (ro) --
@@ -308,9 +308,9 @@ class Ctx:
         for name, want in sorted(expected.items()):
             have = self.dist_version(name)
             if have is None:
-                problems.append(f"{name} assente")
+                problems.append(f"{name} missing")
             elif have != want:
-                problems.append(f"{name}: atteso {want}, trovato {have}")
+                problems.append(f"{name}: expected {want}, found {have}")
         return problems
 
 
@@ -410,29 +410,29 @@ def cached_download(ctx: Ctx, asset: dict, local: Optional[Path] = None) -> Path
     sha256 verification."""
     if local is not None:
         if not local.is_file():
-            raise BootstrapError(f"archivio locale non trovato: {local}")
+            raise BootstrapError(f"local archive not found: {local}")
         digest = sha256_of(local)
         if digest != asset["sha256"]:
             raise BootstrapError(
-                f"sha256 di {local.name} non corrisponde: {digest} != {asset['sha256']}",
-                "il file locale è diverso dall'asset pinnato")
+                f"{local.name} sha256 mismatch: {digest} != {asset['sha256']}",
+                "the local file differs from the pinned asset")
         return local
     cached = ctx.cache_dir / asset["name"]
     if cached.is_file() and sha256_of(cached) == asset["sha256"]:
         ctx.progress.event("log", level="out",
-                           message=f"uso l'archivio in cache: {cached}")
+                           message=f"using cached archive: {cached}")
         return cached
-    ctx.progress.event("log", level="out", message=f"scarico: {asset['url']}")
+    ctx.progress.event("log", level="out", message=f"downloading: {asset['url']}")
     try:
         download_archive(asset["url"], cached, progress=ctx.progress)
     except Exception as exc:
-        raise BootstrapError(f"download fallito ({asset['name']}): {exc}",
-                             "verifica la connessione; riprova")
+        raise BootstrapError(f"download failed ({asset['name']}): {exc}",
+                             "check your connection; retry")
     digest = sha256_of(cached)
     if digest != asset["sha256"]:
         raise BootstrapError(
-            f"sha256 non corrisponde per {asset['name']}: {digest} != {asset['sha256']}",
-            "riscarica l'archivio; se persiste, il file sorgente è cambiato")
+            f"sha256 mismatch for {asset['name']}: {digest} != {asset['sha256']}",
+            "re-download the archive; if it persists, the source file has changed")
     return cached
 
 
@@ -458,24 +458,24 @@ def build_steps() -> list[Step]:
     def preflight_run(c: Ctx) -> str:
         if sys.version_info[:2] < (3, 9):
             raise BootstrapError(
-                f"il bootstrap richiede Python >= 3.9 (trovato {sys.version.split()[0]})"
+                f"the bootstrap requires Python >= 3.9 (found {sys.version.split()[0]})"
             )
         if not req_dir.is_dir():
             raise BootstrapError(
-                f"lockfile non trovato: {req_dir}",
-                "esegui dal checkout del progetto o reinstalla la wheel `havc`",
+                f"lockfile not found: {req_dir}",
+                "run from the project checkout or reinstall the `havc` wheel",
             )
         note = "" if sys.version_info[:2] == (3, 12) else \
-            " (il venv userà il runtime 3.12 provisionato)"
+            " (the venv will use the provisioned 3.12 runtime)"
         return f"host: {sys.version.split()[0]}{note}"
 
     # -- 2. runtime (provisioned Python) ----------------------------------
     def runtime_check(c: Ctx) -> Optional[str]:
         if c.use_system_python:
-            return "uso il Python di sistema (--use-system-python)"
+            return "using the system Python (--use-system-python)"
         found = probe_version(c.runtime_python)
         if found == RUNTIME["python"]:
-            return f"runtime Python {found} già presente"
+            return f"runtime Python {found} already present"
         return None
 
     def runtime_run(c: Ctx) -> str:
@@ -488,71 +488,71 @@ def build_steps() -> list[Step]:
             return "dry-run"
         if c.runtime_zip is not None:
             if not c.runtime_zip.is_file():
-                raise BootstrapError(f"archivio runtime non trovato: {c.runtime_zip}")
+                raise BootstrapError(f"runtime archive not found: {c.runtime_zip}")
             archive = c.runtime_zip
         else:
             cached = c.cache_dir / RUNTIME["name"]
             if cached.is_file() and sha256_of(cached) == RUNTIME["sha256"]:
                 archive = cached
                 c.progress.event("log", level="out",
-                                 message=f"uso l'archivio in cache: {cached}")
+                                 message=f"using cached archive: {cached}")
             else:
                 c.progress.event("log", level="out",
-                                 message=f"scarico il runtime: {RUNTIME['url']}")
+                                 message=f"downloading the runtime: {RUNTIME['url']}")
                 try:
                     download_archive(RUNTIME["url"], cached, progress=c.progress)
                 except Exception as exc:
                     raise BootstrapError(
-                        f"download del runtime fallito: {exc}",
-                        "verifica la connessione; oppure usa --runtime-zip con un archivio locale",
+                        f"runtime download failed: {exc}",
+                        "check your connection; or use --runtime-zip with a local archive",
                     )
                 archive = cached
         digest = sha256_of(archive)
         if digest != RUNTIME["sha256"]:
             raise BootstrapError(
-                f"sha256 del runtime non corrisponde: {digest} != {RUNTIME['sha256']}",
-                "riscarica l'archivio; se persiste, il file sorgente è cambiato",
+                f"runtime sha256 mismatch: {digest} != {RUNTIME['sha256']}",
+                "re-download the archive; if it persists, the source file has changed",
             )
         target = c.runtime_dir / "python"
         if target.exists():
             shutil.rmtree(target)
-        c.progress.event("log", level="out", message=f"estrazione in {c.runtime_dir} …")
+        c.progress.event("log", level="out", message=f"extracting into {c.runtime_dir} …")
         extract_archive(archive, c.runtime_dir)
         found = probe_version(c.runtime_python)
         if found != RUNTIME["python"]:
             raise BootstrapError(
-                f"runtime inatteso dopo l'estrazione: {found!r} (atteso {RUNTIME['python']})"
+                f"unexpected runtime after extraction: {found!r} (expected {RUNTIME['python']})"
             )
         return f"runtime Python {found} in {c.runtime_dir}"
 
     # -- 3. venv -----------------------------------------------------------
     def venv_check(c: Ctx) -> Optional[str]:
-        return "venv già presente" if c.venv_exists() else None
+        return "venv already present" if c.venv_exists() else None
 
     def venv_run(c: Ctx) -> str:
         base = c.env_python()
         if base is None:
             raise BootstrapError(
-                "nessun Python utilizzabile per creare il venv",
-                "abilita il runtime provisionato (default) oppure passa --python <3.12>",
+                "no usable Python to create the venv",
+                "enable the provisioned runtime (default) or pass --python <3.12>",
             )
         c.run([base, "-m", "venv", str(c.env_dir)])
-        return f"{c.env_dir} (da {base})"
+        return f"{c.env_dir} (from {base})"
 
     # -- 4. pip ------------------------------------------------------------
     def pip_check(c: Ctx) -> Optional[str]:
         version = pip_version(c)
         if version is not None and version >= PIP_MIN:
-            return f"pip {version[0]}.{version[1]} già aggiornato"
+            return f"pip {version[0]}.{version[1]} already up to date"
         return None
 
     def pip_run(c: Ctx) -> str:
         c.run([c.venv_python, "-m", "pip", "install", "--upgrade", "pip"])
-        return "pip aggiornato"
+        return "pip upgraded"
 
     # -- 5. torch ----------------------------------------------------------
     def torch_check(c: Ctx) -> Optional[str]:
-        return "torch già alla versione pinnata" if not c.unmet(torch_pins) else None
+        return "torch already at the pinned version" if not c.unmet(torch_pins) else None
 
     def torch_run(c: Ctx) -> str:
         c.run([c.venv_python, "-m", "pip", "install", "-r", torch_txt,
@@ -563,7 +563,7 @@ def build_steps() -> list[Step]:
     def nunchaku_check(c: Ctx) -> Optional[str]:
         want = lock.get("nunchaku")
         if want and c.dist_version("nunchaku") == want:
-            return f"nunchaku {want} già installato"
+            return f"nunchaku {want} already installed"
         return None
 
     def nunchaku_run(c: Ctx) -> str:
@@ -572,7 +572,7 @@ def build_steps() -> list[Step]:
 
     # -- 7. torch-repin ----------------------------------------------------
     def repin_check(c: Ctx) -> Optional[str]:
-        return "torch invariato dopo nunchaku" if not c.unmet(torch_pins) else None
+        return "torch unchanged after nunchaku" if not c.unmet(torch_pins) else None
 
     def repin_run(c: Ctx) -> str:
         c.run([c.venv_python, "-m", "pip", "install", "-r", torch_txt,
@@ -582,49 +582,49 @@ def build_steps() -> list[Step]:
     # -- 8. patch ----------------------------------------------------------
     def patch_check(c: Ctx) -> Optional[str]:
         if c.dist_version("nunchaku") is None:
-            return "nunchaku non installato"
+            return "nunchaku not installed"
         if patch_state(c) == "patched":
-            return "patch già applicata"
+            return "patch already applied"
         return None
 
     def patch_run(c: Ctx) -> str:
         script = paths.find_patch_script()
         if script is None:
-            raise BootstrapError("patch_nunchaku.py non trovato nella wheel/checkout")
+            raise BootstrapError("patch_nunchaku.py not found in the wheel/checkout")
         c.run([c.venv_python, str(script)])
-        return "patch nunchaku applicata"
+        return "nunchaku patch applied"
 
     # -- 9. diffusers ------------------------------------------------------
     def diffusers_check(c: Ctx) -> Optional[str]:
         want = lock.get("diffusers")
         if want and c.dist_version("diffusers") == want:
-            return f"diffusers {want} già installato"
+            return f"diffusers {want} already installed"
         return None
 
     def diffusers_run(c: Ctx) -> str:
         wheel = find_diffusers_wheel(c)
         if wheel is None:
             raise BootstrapError(
-                "wheel diffusers non trovata",
-                "passa --assets-dir <cartella con le wheel del repo> (es. packages/)",
+                "diffusers wheel not found",
+                "pass --assets-dir <folder with the repo wheels> (e.g. packages/)",
             )
         c.run([c.venv_python, "-m", "pip", "install", str(wheel)])
         return wheel.name
 
     # -- 10. deps ----------------------------------------------------------
     def deps_check(c: Ctx) -> Optional[str]:
-        return "dipendenze core già a posto" if not c.unmet(core_pins) else None
+        return "core dependencies already in place" if not c.unmet(core_pins) else None
 
     def deps_run(c: Ctx) -> str:
         c.run([c.venv_python, "-m", "pip", "install", "-r", core_txt])
-        return "dipendenze core"
+        return "core dependencies"
 
     # -- 11. project wheel -------------------------------------------
     def wheel_check(c: Ctx) -> Optional[str]:
         if c.wheel is None:
-            return "nessuna wheel del progetto fornita"
+            return "no project wheel provided"
         if c.dist_version("havc") == __version__:
-            return f"havc {__version__} già installato"
+            return f"havc {__version__} already installed"
         return None
 
     def wheel_run(c: Ctx) -> str:
@@ -639,17 +639,17 @@ def build_steps() -> list[Step]:
             return None
         dst = c.install_dir / "config"
         missing = [p.name for p in src.glob("*.json") if not (dst / p.name).exists()]
-        return "config già presenti" if not missing else None
+        return "configs already present" if not missing else None
 
     def configs_run(c: Ctx) -> str:
         if c.dry_run:
             c.progress.event("log", level="dry-run",
-                             message=f"[dry-run] copia config -> {c.install_dir / 'config'}")
+                             message=f"[dry-run] copy configs -> {c.install_dir / 'config'}")
             return "dry-run"
         src = paths.configs_dir()
         if not src.is_dir():
-            raise BootstrapError(f"config di origine non trovati: {src}",
-                                 "reinstalla la wheel havc")
+            raise BootstrapError(f"source configs not found: {src}",
+                                 "reinstall the havc wheel")
         dst = c.install_dir / "config"
         dst.mkdir(parents=True, exist_ok=True)
         copied = 0
@@ -658,7 +658,7 @@ def build_steps() -> list[Step]:
             if not target.exists():
                 shutil.copy2(path, target)
                 copied += 1
-        return f"{copied} config copiate" if copied else "nessuna config nuova"
+        return f"{copied} configs copied" if copied else "no new configs"
 
     # -- 13. gui -----------------------------------------------------------
     def gui_files() -> Optional[dict[str, Path]]:
@@ -683,18 +683,18 @@ def build_steps() -> list[Step]:
             target = dst_root / rel
             if not target.is_file() or target.read_bytes() != src_path.read_bytes():
                 return None
-        return "file GUI già aggiornati"
+        return "GUI files already up to date"
 
     def gui_run(c: Ctx) -> str:
         if c.dry_run:
             c.progress.event("log", level="dry-run",
-                             message=f"[dry-run] copia GUI -> {c.install_dir / 'gui'}")
+                             message=f"[dry-run] copy GUI -> {c.install_dir / 'gui'}")
             return "dry-run"
         files = gui_files()
         if files is None:
             raise BootstrapError(
-                "file GUI non trovati (né nel pacchetto né nel checkout)",
-                "reinstalla la wheel havc oppure esegui dal checkout del repo")
+                "GUI files not found (neither in the package nor in the checkout)",
+                "reinstall the havc wheel or run from the repo checkout")
         dst_root = c.install_dir / "gui"
         for rel, src_path in files.items():
             target = dst_root / rel
@@ -704,7 +704,7 @@ def build_steps() -> list[Step]:
 
     # -- 14. gui-deps ------------------------------------------------------
     def gui_deps_check(c: Ctx) -> Optional[str]:
-        return "dipendenze GUI già a posto" if not c.unmet(gui_pins) else None
+        return "GUI dependencies already in place" if not c.unmet(gui_pins) else None
 
     def gui_deps_run(c: Ctx) -> str:
         c.run([c.venv_python, "-m", "pip", "install", "-r", gui_txt])
@@ -714,8 +714,8 @@ def build_steps() -> list[Step]:
             wheel = find_asset_wheel(c, pattern)
             if wheel is None:
                 raise BootstrapError(
-                    f"wheel {label} non trovata",
-                    "passa --assets-dir con le wheel del repo (es. packages/)")
+                    f"{label} wheel not found",
+                    "pass --assets-dir with the repo wheels (e.g. packages/)")
             c.run([c.venv_python, "-m", "pip", "install", str(wheel)])
         return "GUI + vscmnet2 + spatial_correlation_sampler"
 
@@ -723,45 +723,45 @@ def build_steps() -> list[Step]:
     def cmnet2_plugins_check(c: Ctx) -> Optional[str]:
         pkg = vscmnet2_dir(c)
         if pkg is None:
-            return "vscmnet2 non installato"
+            return "vscmnet2 not installed"
         if (pkg / "plugins" / "SourceFilter" / "LSmashSource" / "LSMASHSource.dll").is_file():
-            return "plugin già presenti"
+            return "plugins already present"
         return None
 
     def cmnet2_plugins_run(c: Ctx) -> str:
         if c.dry_run:
             c.progress.event("log", level="dry-run",
-                             message="[dry-run] plugin vs-cmnet2 -> vscmnet2/plugins")
+                             message="[dry-run] vs-cmnet2 plugins -> vscmnet2/plugins")
             return "dry-run"
         pkg = vscmnet2_dir(c)
         if pkg is None:
-            raise BootstrapError("vscmnet2 non installato nel venv",
-                                 "esegui prima il passo `gui-deps`")
+            raise BootstrapError("vscmnet2 not installed in the venv",
+                                 "run the `gui-deps` step first")
         archive = cached_download(c, CMNET2_PLUGINS)
         extract_archive(archive, pkg, required_root="plugins")
-        return "plugin in vscmnet2/plugins"
+        return "plugins in vscmnet2/plugins"
 
     # -- 16. cmnet2-weights ------------------------------------------------
     def cmnet2_weights_check(c: Ctx) -> Optional[str]:
         pkg = vscmnet2_dir(c)
         if pkg is None:
-            return "vscmnet2 non installato"
+            return "vscmnet2 not installed"
         checkpoint = pkg / "weights" / CMNET2_DINOV3[0]["name"]
         vitb16 = pkg / "weights" / "dinov3-vitb16" / "model.safetensors"
         if (checkpoint.is_file() and checkpoint.stat().st_size == CMNET2_DINOV3[0]["size"]
                 and vitb16.is_file()):
-            return "pesi DINOv3 già presenti"
+            return "DINOv3 weights already present"
         return None
 
     def cmnet2_weights_run(c: Ctx) -> str:
         if c.dry_run:
             c.progress.event("log", level="dry-run",
-                             message="[dry-run] pesi DINOv3 -> vscmnet2/weights")
+                             message="[dry-run] DINOv3 weights -> vscmnet2/weights")
             return "dry-run"
         pkg = vscmnet2_dir(c)
         if pkg is None:
-            raise BootstrapError("vscmnet2 non installato nel venv",
-                                 "esegui prima il passo `gui-deps`")
+            raise BootstrapError("vscmnet2 not installed in the venv",
+                                 "run the `gui-deps` step first")
         weights = pkg / "weights"
         weights.mkdir(parents=True, exist_ok=True)
         done = []
@@ -769,49 +769,49 @@ def build_steps() -> list[Step]:
             archive = cached_download(c, asset)
             if asset["extract_root"]:
                 extract_archive(archive, weights, required_root=asset["extract_root"])
-                done.append(f"{asset['name']} (estratto)")
+                done.append(f"{asset['name']} (extracted)")
             else:
                 shutil.copy2(archive, weights / asset["name"])
                 done.append(asset["name"])
         if not (weights / "dinov3-vitb16" / "model.safetensors").is_file():
             raise BootstrapError(
-                "dinov3-vitb16/model.safetensors mancante dopo l'estrazione",
-                "l'archivio potrebbe avere un layout inatteso")
+                "dinov3-vitb16/model.safetensors missing after extraction",
+                "the archive may have an unexpected layout")
         return ", ".join(done)
 
     # -- 17. cmnet2-dinov2 -------------------------------------------------
     def cmnet2_dinov2_check(c: Ctx) -> Optional[str]:
         if not c.with_dinov2:
-            return "non richiesto (--with-dinov2)"
+            return "not requested (--with-dinov2)"
         pkg = vscmnet2_dir(c)
         if pkg is None:
-            return "vscmnet2 non installato"
+            return "vscmnet2 not installed"
         missing = [a["name"] for a in CMNET2_DINOV2
                    if not (pkg / a["dest"] / a["name"]).is_file()]
-        return "pesi DINOv2 già presenti" if not missing else None
+        return "DINOv2 weights already present" if not missing else None
 
     def cmnet2_dinov2_run(c: Ctx) -> str:
         if c.dry_run:
             c.progress.event("log", level="dry-run",
-                             message="[dry-run] pesi DINOv2 -> vscmnet2/weights + models/checkpoints")
+                             message="[dry-run] DINOv2 weights -> vscmnet2/weights + models/checkpoints")
             return "dry-run"
         pkg = vscmnet2_dir(c)
         if pkg is None:
-            raise BootstrapError("vscmnet2 non installato nel venv",
-                                 "esegui prima il passo `gui-deps`")
+            raise BootstrapError("vscmnet2 not installed in the venv",
+                                 "run the `gui-deps` step first")
         for asset in CMNET2_DINOV2:
             dest_dir = pkg / asset["dest"]
             dest_dir.mkdir(parents=True, exist_ok=True)
             archive = cached_download(c, asset)
             shutil.copy2(archive, dest_dir / asset["name"])
-        return f"{len(CMNET2_DINOV2)} file DINOv2 (legacy)"
+        return f"{len(CMNET2_DINOV2)} DINOv2 files (legacy)"
 
     # -- 18. tools ---------------------------------------------------------
     def tools_check(c: Ctx) -> Optional[str]:
         x265 = (c.install_dir / "tools" / "x265" / "x265.exe").is_file()
         nvenc = (c.install_dir / "tools" / "NVEncC" / "NVEncC64.exe").is_file()
         if x265 and nvenc:
-            return "tool esterni già presenti"
+            return "external tools already present"
         return None
 
     def tools_run(c: Ctx) -> str:
@@ -832,24 +832,24 @@ def build_steps() -> list[Step]:
                             required_root=None)
             if not nvenc_exe.is_file():
                 raise BootstrapError(
-                    "NVEncC64.exe mancante dopo l'estrazione",
-                    "l'archivio potrebbe avere un layout inatteso")
+                    "NVEncC64.exe missing after extraction",
+                    "the archive may have an unexpected layout")
             done.append("NVEncC 9.17")
-        return ", ".join(done) if done else "già presenti"
+        return ", ".join(done) if done else "already present"
 
     # -- 19. gui-settings --------------------------------------------------
     def gui_settings_check(c: Ctx) -> Optional[str]:
         settings = c.install_dir / "gui" / "gui_cmnet2_settings.json"
-        return "settings già presenti" if settings.is_file() else None
+        return "settings already present" if settings.is_file() else None
 
     def gui_settings_run(c: Ctx) -> str:
         if c.dry_run:
             c.progress.event("log", level="dry-run",
-                             message=f"[dry-run] settings GUI -> {c.install_dir / 'gui'}")
+                             message=f"[dry-run] GUI settings -> {c.install_dir / 'gui'}")
             return "dry-run"
         gui_dir = c.install_dir / "gui"
         if not gui_dir.is_dir():
-            raise BootstrapError("cartella gui mancante", "esegui prima il passo `gui`")
+            raise BootstrapError("gui folder missing", "run the `gui` step first")
         settings = {
             "script_dir": str(gui_dir / "scripts"),
             "vspipe_path": str(c.venv_python.parent / "vspipe.exe"),
@@ -861,7 +861,7 @@ def build_steps() -> list[Step]:
         path = gui_dir / "gui_cmnet2_settings.json"
         with path.open("w", encoding="utf-8", newline="\n") as fh:
             fh.write(json.dumps(settings, indent=4) + "\n")
-        return "gui_cmnet2_settings.json creato"
+        return "gui_cmnet2_settings.json created"
 
     # -- 20. launchers -----------------------------------------------------
     def launcher_files() -> dict[str, bytes]:
@@ -873,7 +873,7 @@ def build_steps() -> list[Step]:
             path = c.install_dir / name
             if not path.is_file() or path.read_bytes() != data:
                 return None
-        return "launcher già aggiornati"
+        return "launchers already up to date"
 
     def launchers_run(c: Ctx) -> str:
         if c.dry_run:
@@ -903,68 +903,68 @@ def build_steps() -> list[Step]:
                 continue
         if report is None:
             raise BootstrapError(
-                "output di `havc doctor --json` non interpretabile",
-                f"esegui a mano: {c.venv_python} -m havc.doctor",
+                "`havc doctor --json` output not parseable",
+                f"run manually: {c.venv_python} -m havc.doctor",
             )
         failed = [x["check"] for x in report.get("checks", []) if x["status"] == "fail"]
         if failed:
             raise BootstrapError(
-                "havc doctor segnala problemi: " + ", ".join(failed),
-                "vedi il report del doctor",
+                "havc doctor reports problems: " + ", ".join(failed),
+                "see the doctor report",
             )
-        return "doctor: tutti i check OK"
+        return "doctor: all checks OK"
 
     return [
-        Step("preflight", "Verifiche preliminari (host, lockfile)", "",
+        Step("preflight", "Preliminary checks (host, lockfile)", "",
              lambda c: None, preflight_run),
         Step("runtime", "Runtime Python 3.12 (python-build-standalone)",
-             "scarica/verifica/estrae l'archivio pinnato",
+             "download/verify/extract the pinned archive",
              runtime_check, runtime_run),
-        Step("venv", "Virtualenv di destinazione", "python -m venv dal runtime",
+        Step("venv", "Target virtualenv", "python -m venv from the runtime",
              venv_check, venv_run),
-        Step("pip", "Aggiornamento pip", "pip install --upgrade pip",
+        Step("pip", "pip upgrade", "pip install --upgrade pip",
              pip_check, pip_run),
         Step("torch", "PyTorch 2.10.0+cu130", "pip install -r requirements/torch.txt --index-url ...",
              torch_check, torch_run),
-        Step("nunchaku", "Nunchaku 1.2.1 (wheel da GitHub)", "pip install -r requirements/nunchaku.txt",
+        Step("nunchaku", "Nunchaku 1.2.1 (wheel from GitHub)", "pip install -r requirements/nunchaku.txt",
              nunchaku_check, nunchaku_run),
-        Step("torch-repin", "Re-pin torch (se nunchaku l'ha aggiornato)", "pip install --force-reinstall",
+        Step("torch-repin", "Re-pin torch (if nunchaku upgraded it)", "pip install --force-reinstall",
              repin_check, repin_run),
-        Step("patch", "Patch di compatibilità nunchaku", "python patch_nunchaku.py",
+        Step("patch", "Nunchaku compatibility patch", "python patch_nunchaku.py",
              patch_check, patch_run),
-        Step("diffusers", "diffusers 0.37.0.dev0 (wheel locale)", "pip install packages/diffusers-*.whl",
+        Step("diffusers", "diffusers 0.37.0.dev0 (local wheel)", "pip install packages/diffusers-*.whl",
              diffusers_check, diffusers_run),
-        Step("deps", "Dipendenze core", "pip install -r requirements/core.txt",
+        Step("deps", "Core dependencies", "pip install -r requirements/core.txt",
              deps_check, deps_run),
-        Step("wheel", "Wheel del progetto (havc)", "pip install --no-deps havc-*.whl",
+        Step("wheel", "Project wheel (havc)", "pip install --no-deps havc-*.whl",
              wheel_check, wheel_run),
-        Step("configs", "Config di pipeline in <install>/config", "copia le config mancanti",
+        Step("configs", "Pipeline configs in <install>/config", "copy missing configs",
              configs_check, configs_run),
-        Step("gui", "File GUI in <install>/gui",
-             "GUI + scripts .vpy (aggiornati se diversi)",
+        Step("gui", "GUI files in <install>/gui",
+             "GUI + scripts .vpy (updated if different)",
              gui_check, gui_run),
-        Step("gui-deps", "Dipendenze GUI (FreeSimpleGUI, tkinterdnd2, VapourSynth, vscmnet2, SCS)",
-             "pip install -r requirements/gui.txt + wheel locali",
+        Step("gui-deps", "GUI dependencies (FreeSimpleGUI, tkinterdnd2, VapourSynth, vscmnet2, SCS)",
+             "pip install -r requirements/gui.txt + local wheels",
              gui_deps_check, gui_deps_run),
-        Step("cmnet2-plugins", "Plugin vs-cmnet2 in vscmnet2/plugins",
+        Step("cmnet2-plugins", "vs-cmnet2 plugins in vscmnet2/plugins",
              "plugins_win.zip (vs-cmnet2 v1.0.0, sha256)",
              cmnet2_plugins_check, cmnet2_plugins_run),
-        Step("cmnet2-weights", "Pesi DINOv3 di vs-cmnet2",
+        Step("cmnet2-weights", "DINOv3 weights for vs-cmnet2",
              "checkpoint (cmnet2 v1.3.0) + dinov3-vitb16.zip (v1.1.0)",
              cmnet2_weights_check, cmnet2_weights_run),
-        Step("cmnet2-dinov2", "Pesi DINOv2 legacy (opzionale)",
-             "solo con --with-dinov2",
+        Step("cmnet2-dinov2", "Legacy DINOv2 weights (optional)",
+             "only with --with-dinov2",
              cmnet2_dinov2_check, cmnet2_dinov2_run),
-        Step("tools", "Tool esterni in <install>/tools",
-             "tools.zip + NVEncC_9.17_x64.zip (Release v1.0.0) o --tools-zip",
+        Step("tools", "External tools in <install>/tools",
+             "tools.zip + NVEncC_9.17_x64.zip (Release v1.0.0) or --tools-zip",
              tools_check, tools_run),
-        Step("gui-settings", "Settings GUI (solo se assenti)",
-             "gui_cmnet2_settings.json pre-seedato",
+        Step("gui-settings", "GUI settings (only if missing)",
+             "pre-seeded gui_cmnet2_settings.json",
              gui_settings_check, gui_settings_run),
         Step("launchers", "Launcher in <install>",
-             "HAVC.cmd/.vbs (GUI), HAVC-Server.cmd, HAVC-Doctor.cmd (riscritti se diversi)",
+             "HAVC.cmd/.vbs (GUI), HAVC-Server.cmd, HAVC-Doctor.cmd (rewritten if different)",
              launchers_check, launchers_run),
-        Step("verify", "Verifica finale (havc doctor)", "python -m havc.doctor",
+        Step("verify", "Final verification (havc doctor)", "python -m havc.doctor",
              lambda c: None, verify_run),
     ]
 
@@ -1007,35 +1007,35 @@ def run_steps(ctx: Ctx, steps: list[Step], only: Optional[set[str]]) -> bool:
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
         prog="havc-install",
-        description="Bootstrap idempotente dello stack server HAVC "
-                    "(install = update da stato vuoto).",
-        epilog="Specifica: installer/PHASE0_SPEC.md",
+        description="Idempotent bootstrap of the HAVC server stack "
+                    "(install = update from an empty state).",
+        epilog="Specification: installer/PHASE0_SPEC.md",
     )
     parser.add_argument("--install-dir", required=True, type=Path,
-                        help="cartella dell'installazione: runtime/, venv/, cache/ "
-                             "(obbligatorio; nulla viene toccato fuori da qui)")
+                        help="installation folder: runtime/, venv/, cache/ "
+                             "(required; nothing is touched outside it)")
     parser.add_argument("--python", type=Path, default=None,
-                        help="interprete con cui creare il venv (default: runtime provisionato)")
+                        help="interpreter used to create the venv (default: provisioned runtime)")
     parser.add_argument("--runtime-zip", type=Path, default=None,
-                        help="usa un archivio runtime locale invece di scaricarlo (verificato via sha256)")
+                        help="use a local runtime archive instead of downloading it (sha256 verified)")
     parser.add_argument("--tools-zip", type=Path, default=None,
-                        help="usa un archivio tools.zip locale invece di scaricarlo (verificato via sha256)")
+                        help="use a local tools.zip archive instead of downloading it (sha256 verified)")
     parser.add_argument("--with-dinov2", action="store_true",
-                        help="scarica anche i pesi DINOv2 legacy (backbone dinov2, ~740 MB)")
+                        help="also download the legacy DINOv2 weights (dinov2 backbone, ~740 MB)")
     parser.add_argument("--use-system-python", action="store_true",
-                        help="salta il provisioning del runtime e usa il Python di sistema (sviluppo)")
+                        help="skip runtime provisioning and use the system Python (development)")
     parser.add_argument("--assets-dir", type=Path, default=None,
-                        help="cartella con le wheel locali (default: packages/ del checkout)")
+                        help="folder with the local wheels (default: packages/ of the checkout)")
     parser.add_argument("--wheel", type=Path, default=None,
-                        help="wheel del progetto (havc-*.whl) da installare")
+                        help="project wheel (havc-*.whl) to install")
     parser.add_argument("--only", default="",
-                        help="esegui solo questi passi (id separati da virgola)")
+                        help="run only these steps (comma-separated ids)")
     parser.add_argument("--plan", action="store_true",
-                        help="mostra il piano senza eseguire nulla")
+                        help="show the plan without executing anything")
     parser.add_argument("--dry-run", action="store_true",
-                        help="mostra i comandi senza eseguirli")
+                        help="show the commands without executing them")
     parser.add_argument("--json-progress", action="store_true",
-                        help="eventi JSON su stdout (una riga per evento)")
+                        help="JSON events on stdout (one line per event)")
     args = parser.parse_args(argv)
     force_utf8()
 
@@ -1047,8 +1047,8 @@ def main(argv=None) -> int:
     if only:
         unknown = only - ids
         if unknown:
-            parser.error(f"passi sconosciuti: {', '.join(sorted(unknown))} "
-                         f"(validi: {', '.join(sorted(ids))})")
+            parser.error(f"unknown steps: {', '.join(sorted(unknown))} "
+                         f"(valid: {', '.join(sorted(ids))})")
 
     assets_dir = args.assets_dir
     if assets_dir is None:

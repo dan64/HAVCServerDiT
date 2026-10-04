@@ -44,7 +44,7 @@ def requirements_dir() -> Path:
 def config_path(name: str) -> Path:
     path = configs_dir() / name
     if not path.is_file():
-        raise FileNotFoundError(f"config '{name}' non trovata in {configs_dir()}")
+        raise FileNotFoundError(f"config '{name}' not found in {configs_dir()}")
     return path
 
 

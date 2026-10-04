@@ -33,9 +33,9 @@ class Progress:
 
     def _human(self, kind: str, data: dict) -> None:
         if kind == "plan":
-            print("Piano di installazione:")
+            print("Installation plan:")
             for i, step in enumerate(data.get("steps", []), 1):
-                mark = f"[salta: {step['skip_reason']}]" if step.get("skip_reason") else ""
+                mark = f"[skip: {step['skip_reason']}]" if step.get("skip_reason") else ""
                 print(f"  {i:2d}. {step['id']:<12} {step['title']} {mark}")
         elif kind == "step_begin":
             print(f"\n[{data.get('id')}] {data.get('title')} ...")
@@ -43,13 +43,13 @@ class Progress:
             detail = f" ({data['detail']})" if data.get("detail") else ""
             print(f"[{data.get('id')}] OK{detail}")
         elif kind == "step_skip":
-            print(f"[{data.get('id')}] saltato: {data.get('reason')}")
+            print(f"[{data.get('id')}] skipped: {data.get('reason')}")
         elif kind == "step_error":
-            print(f"[{data.get('id')}] ERRORE: {data.get('error')}")
+            print(f"[{data.get('id')}] ERROR: {data.get('error')}")
             if data.get("remediation"):
                 print(f"          -> {data['remediation']}")
         elif kind == "log":
             print(f"    {data.get('message')}")
         elif kind == "result":
-            print(f"\nEsito: {'OK' if data.get('ok') else 'FALLITO'}")
+            print(f"\nEsito: {'OK' if data.get('ok') else 'FAILED'}")
         # other events: ignored in human mode

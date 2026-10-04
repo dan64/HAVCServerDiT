@@ -86,7 +86,10 @@ lo schema è già fissato qui.
   Windows / cp312 / CUDA 13.0 / torch 2.10).
 - `core.txt` — `transformers`, `accelerate`, `huggingface_hub`, `pillow`,
   `scipy`, `av`, `torchsde`, `gguf`, `comfy-aimdo`, `comfy-kitchen`
-  (pin presi dall'ambiente di riferimento `_dev`, 2026-10-04).
+  (pin presi dall'ambiente di riferimento `_dev`, 2026-10-04);
+- `assets.txt` — versioni attese delle wheel installate da **file locali**
+  (es. `diffusers==0.37.0.dev0`): non è installato da pip, serve ai check di
+  idempotenza del bootstrap e a `havc doctor`.
 
 Regole:
 
@@ -276,15 +279,22 @@ Verificato il 2026-10-04 (in questo branch):
 - **prima release di prova pubblicata**: `v0.1.0-alpha` (prerelease) con wheel
   `havc`, asset diffusers e `release.json`; digest GitHub coerenti col
   manifest, manifest remoto identico al locale, URL raggiungibili, `v1.0.0`
-  resta la release "Latest".
+  resta la release "Latest" (asset aggiornati il 04-10 dopo i fix sotto);
+- **end-to-end su cartella di test** (`D:\HAVCServerDiT_Test`, flusso manager
+  runtime→wheel nel runtime→bootstrap): installazione completa con download
+  reale (runtime dal mirror, torch, nunchaku), venv creato dal runtime, passo
+  `--wheel` provato, doctor tutto verde, console script presenti nel venv.
+  Il test ha trovato e fatto correggere: (a) check di skip e `verify`
+  sensibili al CWD (un checkout/`havc.egg-info` nel CWD ombreggiava il venv —
+  ora i processi figli girano con CWD neutrale); (b) pin `diffusers` mancante
+  nel lock (aggiunto `requirements/assets.txt`).
 
 Da fare prima di chiudere la Fase 0:
 
-- run **end-to-end su VM/Sandbox pulita** (senza e con GPU): bootstrap completo
-  + `havc doctor` verde;
-- prova del passo `--wheel` con la wheel buildata;
 - verifica del flusso di update incrementale tra due versioni (la release di
-  prova `v0.1.0-alpha` è pronta per questo).
+  prova `v0.1.0-alpha` è pronta per questo);
+- (facoltativo, pre-release) run su VM/Sandbox "macchina pulita" per le
+  assunzioni fuori dallo stack (niente Python/git/cache preesistenti).
 
 ---
 

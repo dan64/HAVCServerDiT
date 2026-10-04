@@ -265,3 +265,15 @@ Fase 0: run end-to-end su VM/Sandbox pulita, prima release di prova con
   remoto identico al locale, `HEAD` della wheel 200, `v1.0.0` resta "Latest".
   Prossimo uso: test del flusso di update (Fase 1) e riferimento per il run
   in VM.
+- **2026-10-04 (8)** — **End-to-end su cartella di test + 2 bug corretti.**
+  Installazione completa in `D:\HAVCServerDiT_Test` col flusso a due stadi del
+  futuro manager (runtime dal mirror → wheel nel runtime → `havc.install`).
+  Il primo run ha rivelato due bug di CWD: i check di skip leggevano metadata
+  ombreggiati dal checkout nel CWD (`havc.egg-info` → il passo `wheel` non
+  installava il progetto nel venv!) e `verify` importava `havc` dalla sorgente
+  invece che dal venv. Fix: CWD neutrale per tutti i processi figli in
+  `havc/install.py`. Trovato anche che il pin `diffusers` mancava nel lock
+  (aggiunto `requirements/assets.txt`). Wheel ricostruita e asset della
+  release `v0.1.0-alpha` aggiornati (`--clobber`); run finale tutto verde con
+  `havc doctor` a 15 pacchetti conformi e console script (`havc-server.exe`,
+  `havc-doctor.exe`) presenti nel venv.

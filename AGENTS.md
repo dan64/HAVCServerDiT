@@ -242,3 +242,12 @@ Fase 0: run end-to-end su VM/Sandbox pulita, prima release di prova con
   su GitHub con l'asset pinnato (22.011.023 byte; sha256 confermato dal
   `digest` GitHub). `RUNTIME["url"]` ora punta al mirror; download end-to-end
   dal mirror verificato (sha256 ok); `v1.0.0` resta la release "Latest".
+- **2026-10-04 (5)** — **`comfy_bridge/blueprints/` escluso dalla wheel**
+  (scelta utente, opzione b): 96 file / 3,1 MB (80 template UI + 14 shader
+  `.frag`), nessun riferimento nel codice. Wheel: 11.034.021 → 10.644.120 byte
+  (−389.901 compressi). Trovato e corretto per strada un bug del build hook:
+  i file già in `build/lib` restavano impacchettati nelle build successive —
+  ora la destinazione viene azzerata prima di ogni copia (copia
+  deterministica). Da confermare col run end-to-end in VM: se un percorso reale
+  dovesse mai richiedere i blueprint, basta togliere la voce da `COPIES` in
+  `setup.py`.

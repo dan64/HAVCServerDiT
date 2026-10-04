@@ -47,11 +47,19 @@ lo schema è già fissato qui.
     cartelle non importabili come `custom_nodes/ComfyUI-GGUF*`);
   - `config/*.json` → `havc/configs/`;
   - `requirements/*.txt` → `havc/requirements/`.
-- Esclusi dalla wheel: solo cache Python (`.pyc`, `__pycache__`) e backup
-  (`.bak`/`.orig`/`.rej`). Ottimizzazione futura possibile:
-  `comfy_bridge/blueprints/` (3,1 MB, template GUI ComfyUI, **non referenziato
-  dal codice** — verificato con grep sull'intero albero) — da rimuovere solo
-  dopo un ciclo di verifica in VM (§9).
+- **Esclusi dalla wheel** (esplicito e reversibile in `setup.py`, costante
+  `COPIES`): cache Python (`.pyc`, `__pycache__`), backup (`.bak`/`.orig`/`.rej`)
+  e — dal 2026-10-04 — **`comfy_bridge/blueprints/`** (96 file / 3,1 MB di
+  contenuto: 80 template di workflow della UI ComfyUI + 14 shader `.frag` in
+  `.glsl/`; nessun riferimento nel codice del runtime, verificato con grep
+  case-insensitive su tutto l'albero). Effetto misurato sulla wheel: −96 file,
+  −389.901 byte compressi (11.034.021 → 10.644.120). Togliere la voce da
+  `COPIES` ripristina completamente.
+- **Nota di build**: il build hook azzera le destinazioni dentro `build/lib`
+  prima di ogni copia (copia deterministica) — senza questo, i file già copiati
+  dalle build precedenti restano impacchettati da `bdist_wheel` anche se
+  rimossi/esclusi dal sorgente (bug trovato e corretto il 2026-10-04 proprio
+  con l'esclusione di `blueprints/`).
 - Risoluzione percorsi a runtime: `havc.paths` cerca prima la copia inclusa
   nella wheel, poi il checkout. `dit_colorize_main.py` continua a risolvere
   `comfy_bridge/` come sibling del proprio file — vale sia nel repo sia in
@@ -254,7 +262,10 @@ Verificato il 2026-10-04 (in questo branch):
   (controllata anche contro il `digest` ufficiale GitHub); rifiuto con sha256
   errato (exit 1); uso della cache e di `--use-system-python`;
 - **mirror pubblicato** (release `runtime-312`) e download end-to-end **dal
-  mirror** verificato (sha256 ok); `RUNTIME["url"]` punta al mirror.
+  mirror** verificato (sha256 ok); `RUNTIME["url"]` punta al mirror;
+- esclusione di `comfy_bridge/blueprints/` dalla wheel: −96 file / −389.901
+  byte (11.034.021 → 10.644.120); contenuti riverificati (407 file
+  comfy_bridge, 0 voci 'blueprint', tutti i file chiave presenti).
 
 Da fare prima di chiudere la Fase 0:
 
@@ -262,8 +273,7 @@ Da fare prima di chiudere la Fase 0:
   + `havc doctor` verde;
 - prova del passo `--wheel` con la wheel buildata;
 - prima release di prova con `release.json` generato + verifica del flusso di
-  update incrementale tra due versioni;
-- pulizia: valutare l'esclusione di `comfy_bridge/blueprints/` dalla wheel.
+  update incrementale tra due versioni.
 
 ---
 

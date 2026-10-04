@@ -26,8 +26,8 @@ worktree `D:\PProjects\HAVCServerDiT_installer`; la cartella principale
 `D:\PProjects\HAVCServerDiT` è rimasta su `main` e operativa (la sua vecchia
 copia locale di `AGENTS.md`, superata, è stata rimossa il 04-10: finché il
 branch non arriva su `main`, la memoria è solo qui). Ultimo commit pushato:
-`8fc58de`; questa sessione aggiunge fix convergenza `gui`/`launchers`, v0.1.1
-e questo handoff.
+`7dc346a`; commit locali non pushati: decisioni Fase 1 (D8–D11), conversione
+lingua del codice, mirror nunchaku.
 
 **Installazione di test completa**: `D:\HAVCServerDiT_Test` — stack server +
 GUI + tool (x265/x264/mkvmerge/NVEncC) + vscmnet2 con plugin e pesi (DINOv3 +
@@ -43,8 +43,9 @@ rapido: `D:\HAVCServerDiT_Test\venv\Scripts\havc-doctor.exe`
   vscmnet2, spatial_correlation_sampler, `release.json`)
 
 **Prossimi passi, in ordine**:
-1. **Fase 1: manager C#** (wizard grafico, update/repair) — vedi §4c e §6;
-   la Fase 0 è chiusa (update incrementale verificato il 04-10, log (14)).
+1. **Fase 1: manager C#** (UI **WPF**, D9; wizard, update/repair) — vedi §4c
+   e §6; Fase 0 chiusa (log (14)) e decisioni di §7 complete (D4–D11) —
+   prossimo deliverable: **spec del manager**.
 2. (Facoltativo, pre-release) run su VM/Sandbox "macchina pulita".
 
 **Regola d'oro per riprendere**: `havc-install` è idempotente e convergente —
@@ -110,6 +111,33 @@ esterni. Obiettivo di questo filone di lavoro:
   `--with-dinov2`. Attenzione: il link "v1.2.0" nei README (GUI e vs-cmnet2)
   è morto — corretto qui in `GUI/README_GUI.md`, da correggere anche nel
   README di vs-cmnet2.
+- **D8 — Inno Setup scartato del tutto** (04-10): non come motore (già deciso)
+  e nemmeno come guscio esterno di Fase 2. Non aggiunge nulla: SmartScreen è
+  neutro rispetto al packaging (conta firma+reputazione del file; dal 2024
+  nemmeno i certificati EV bypassano), e wizard/scorciatoie/voce di
+  disinstallazione/uninstaller sono già responsabilità del manager. Si
+  rivaluta solo su un requisito concreto (es. distribuzione aziendale
+  silenziata).
+- **D9 — UI del manager: C# WPF** (04-10): scelta **WPF** al posto di Avalonia
+  (il target resta Windows-only; il cross-platform non è un requisito).
+- **D10 — Default del wizard** (04-10): default **Server+GUI** (in Fase 1 solo
+  questa modalità, + update/ripara; "Server only"/"GUI-only" rimandate). Pesi
+  **DINOv2** (~720 MB) inclusi nell'installazione standard. Cartella modelli
+  **unica** (cache HF + modelli comfy, con override di `COMFYUI_MODELS_DIR` da
+  implementare): pre-compilata "intelligente" (unità con più spazio libero,
+  avviso sotto soglia ~50 GB) e **modificabile durante l'installazione**;
+  riusata negli update senza riscaricare; in disinstallazione i modelli
+  **restano** (cancellazione solo su richiesta esplicita).
+- **D11 — Nunchaku: pin + patch + mirror della wheel intatta** (04-10). Si
+  resta sull'approccio attuale (patch chirurgica in `patch_nunchaku.py`, con
+  `--check`; funziona senza issue e il progetto nunchaku non ha fix in
+  programma), ma la wheel upstream **non modificata** viene mirrorata in una
+  release del nostro repo — stesso schema di `runtime-312`: asset invariato,
+  sha256 `20d8c4ce…` verificato contro il digest GitHub (111.735.072 byte) —
+  **pubblicata il 04-10** (release `nunchaku-1.2.1`, download end-to-end
+  verificato); `requirements/nunchaku.txt` punta al mirror. La wheel *già
+  patchata* (vendorizzata) resta
+  un'opzione rinviata con criterio.
 
 ---
 
@@ -167,7 +195,7 @@ Altri fatti rilevanti:
 
 - App C# **self-contained single-file** (nessun runtime .NET da installare); UI wizard + progresso + log + bottoni "Apri GUI", "Avvia server", "Controlla aggiornamenti", "Ripara".
 - Al primo avvio: preflight (GPU/VRAM/spazio disco via `nvidia-smi`), scelta backend suggerita dalla GPU, componenti, cartelle; crea scorciatoie (Start Menu/desktop) e voce di disinstallazione. L'utente finale **non vede mai git**.
-- **Inno Setup: NON come motore.** Inno non ha un downloader nativo e questa installazione *è* fatta di download (GB); usarlo con Pascal Script significherebbe riscrivere peggio il bootstrap. Al massimo, in Fase 2, guscio esterno opzionale (copia file del manager + `[Run]`); non richiede di riprogettare nulla.
+- **Inno Setup: NON come motore.** Inno non ha un downloader nativo e questa installazione *è* fatta di download (GB); usarlo con Pascal Script significherebbe riscrivere peggio il bootstrap. ~~Al massimo, in Fase 2, guscio esterno opzionale (copia file del manager + `[Run]`); non richiede di riprogettare nulla~~ → **scartato del tutto il 04-10 (D8)**: nessun vantaggio (SmartScreen neutro; funzioni già coperte dal manager).
 - **Provisioning Python** (pollo-uovo del bootstrap): ~~raccomandato l'installer ufficiale python.org 3.12 silenzioso per-utente~~ → **risolto il 04-10 (D5)**: build **python-build-standalone** pinnata (versione + sha256, mirror `runtime-312`), estratta in `<install>\runtime\python`; include tkinter 8.6, venv ed ensurepip. Niente Python di sistema. L'**embeddable zip resta escluso** (verificato: privo di tkinter/venv/ensurepip).
 
 ---
@@ -211,7 +239,7 @@ l'update dell'ambiente è indipendente (e resta il punto forte della separazione
 - **Fase 1 — Manager C# v0.** Wizard, progresso, state file, update via
   manifest. *Stima grezza: 2-4 settimane.*
 - **Fase 2 — Rifiniture.** Rollback/repair in UI, scelta cartella modelli,
-  eventuale guscio Inno opzionale, uninstaller. *Stima grezza: ~1 settimana.*
+  uninstaller. *Stima grezza: ~1 settimana.*
 - **Fase 3 — (solo se mai) firma del codice.** Nessun impatto sull'architettura.
 
 **Stato Fase 0 (04-10, chiusura sessione):** **completata.** Realizzati e
@@ -224,24 +252,35 @@ sostituita, refresh di GUI/launcher, `verify` verde, rerun idempotente — log
 (14)). Spec: `installer/PHASE0_SPEC.md`. Resta solo il run facoltativo su VM
 pulita.
 
+**Stato Fase 1 (04-10):** non iniziata; tutte le decisioni propedeutiche sono
+prese (§7 chiusa: D8–D11). Prossimo deliverable: **spec del manager C#**
+(wizard, update/repair, cartella modelli).
+
 ---
 
 ## 7. Questioni aperte (decisioni da prendere)
 
+*Tutte risolte al 04-10 (D4, D5, D8, D9, D10, D11); sezione mantenuta come
+storico.*
+
 1. ~~Dove sviluppare la Fase 0~~ → **risolta il 04-10 (D4)**: branch
    `feature/installer` in un worktree separato; venv leggeri di sviluppo
    (`.venv-dev`, `.venv-test`, ignorati da git); icona installer committata.
-2. **Inno Setup:** confermare "non motore" (raccomandazione); eventualmente
-   guscio in Fase 2.
-3. **UI C#:** **WPF** (raccomandato, solo-Windows) vs Avalonia (se un domani
-   cross-platform).
+2. ~~Inno Setup~~ → **risolta il 04-10 (D8)**: scartato del tutto (non motore
+   né guscio); si rivaluta solo su requisito concreto (es. distribuzione
+   aziendale silenziata).
+3. ~~UI C#: WPF vs Avalonia~~ → **risolta il 04-10 (D9)**: **WPF**
+   (Windows-only; il cross-platform non è un requisito).
 4. ~~Provisioning Python~~ → **risolta il 04-10 (D5)**: build
    python-build-standalone pinnata (mirror `runtime-312`); niente python.org,
    niente embed (privo di tkinter/venv).
-5. **Default del wizard:** componenti preselezionati (proposta: *Server+GUI*) e
-   default cartella modelli.
-6. **Wheel nunchaku patchata vendorizzata** (eliminerebbe il post-step di patch
-   a `site-packages`, più deterministico) — da valutare.
+5. ~~Default del wizard~~ → **risolta il 04-10 (D10)**: *Server+GUI* (Fase 1
+   solo questa modalità); pesi DINOv2 inclusi; cartella modelli unica
+   pre-compilata (unità con più spazio, avviso sotto soglia) e modificabile.
+6. ~~Wheel nunchaku patchata vendorizzata~~ → **risolta il 04-10 (D11)**: si
+   mantiene pin + patch (`--check`), con **mirror della wheel ufficiale
+   intatta** nel nostro repo (schema `runtime-312`); vendorizzazione rinviata
+   con criterio.
 
 ---
 
@@ -263,6 +302,11 @@ pulita.
   con data) senza riscrivere le voci precedenti.
 - Convenzione: prosa in **italiano**, identificatori/percorsi/comandi in
   inglese o nella forma originale.
+- **Lingua del codice**: commenti e docstring nei file pubblici vanno in
+  **inglese** (convenzione dell'autore, 04-10; vale anche per il futuro
+  codice C#); l'italiano resta per l'interazione, questa memoria e le spec.
+  Le stringhe visibili all'utente sono attualmente in italiano (eventuale
+  localizzazione: decisione futura).
 - Non duplicare qui l'architettura del progetto (vive in `_dev/AGENTS.md`);
   questo file resta focalizzato su installer/wheel/update/release.
 
@@ -388,3 +432,26 @@ pulita.
   e runtime; hash del file GUI installato == sorgente; demo repair (config
   rimossa → ricopiata). Log: `install-run8/9/10.log` in `D:\HAVCServerDiT_Test`.
   Resta solo il run facoltativo su VM pulita; prossimo: Fase 1 (manager C#).
+- **2026-10-04 (15)** — **Decisioni di Fase 1 prese; §7 chiusa (D8–D11).**
+  D8: Inno Setup scartato del tutto (SmartScreen neutro rispetto al
+  packaging: conta firma+reputazione, dal 2024 nemmeno EV bypassa).
+  D9: UI **C# WPF**. D10: wizard = default *Server+GUI* (Fase 1 solo questa
+  modalità + update/ripara); pesi **DINOv2 inclusi** nell'installazione
+  standard; cartella modelli **unica** (cache HF + comfy), pre-compilata
+  "intelligente" (unità con più spazio, avviso sotto soglia) e modificabile
+  durante l'installazione, riusata negli update, mai cancellata in
+  disinstallazione. D11: nunchaku resta **pin + patch**, con **mirror della
+  wheel ufficiale intatta** nel nostro repo (schema `runtime-312`; sha256 dal
+  digest GitHub `20d8c4cef6664c2dd6f2d44155e6dd2d4d36163439f70da31ef945af3c8c6149`,
+  111.735.072 byte); vendorizzata rinviata con criterio; pubblicazione del
+  mirror = passo separato, su ok. Prossimo deliverable: **spec del manager C#**.
+- **2026-10-04 (16)** — **Convenzione lingua: codice e commenti in inglese.**
+  Su richiesta dell'autore: convertiti commenti e docstring del codice nuovo
+  (`havc/*.py`, `installer/make_release.py`, `setup.py`, `pyproject.toml`,
+  `requirements/*.txt`, `$comment` di `release.example.json`); regola
+  registrata in §9. Le stringhe visibili all'utente restano in italiano.
+- **2026-10-04 (17)** — **Mirror nunchaku pubblicato.** Release
+  `nunchaku-1.2.1` con l'asset ufficiale invariato (111.735.072 byte; sha256
+  confermato dal `digest` GitHub e con download end-to-end dal mirror);
+  `requirements/nunchaku.txt` punta al mirror. Committate le modifiche
+  pendenti (decisioni D8–D11, conversione lingua, mirror nunchaku).

@@ -18,6 +18,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -75,6 +76,17 @@ class Ctx:
     def venv_exists(self) -> bool:
         return (self.env_dir / "pyvenv.cfg").is_file() and self.venv_python.is_file()
 
+    def child_cwd(self) -> str:
+        """CWD neutrale per i processi figli.
+
+        Evita che il CWD del bootstrap (es. un checkout del repo con
+        `havc.egg-info`) ombreggi i pacchetti del venv nelle query di
+        metadata e nell'import di `havc.doctor` — bug trovato il 2026-10-04
+        con l'end-to-end su cartella di test.
+        """
+        return str(self.install_dir if self.install_dir.is_dir()
+                   else Path(tempfile.gettempdir()))
+
     def env_python(self) -> Optional[Path]:
         """Interprete per creare il venv: runtime provisionato, altrimenti --python/3.12 di sistema."""
         if not self.use_system_python and self.runtime_python.is_file():
@@ -83,7 +95,8 @@ class Ctx:
 
     # ---------------------------------------------------------------- run --
     def run(self, cmd, *, capture: Optional[bool] = None, check: bool = True,
-            timeout: Optional[int] = None, env: Optional[dict] = None):
+            timeout: Optional[int] = None, env: Optional[dict] = None,
+            cwd: Optional[str] = None):
         if capture is None:
             capture = self.progress.json_mode
         cmd = [str(c) for c in cmd]
@@ -93,7 +106,8 @@ class Ctx:
             self.progress.event("log", level="dry-run", message=f"[dry-run] {pretty}")
             return subprocess.CompletedProcess(cmd, 0, "", "")
         proc = subprocess.run(cmd, capture_output=capture, text=True,
-                              timeout=timeout, env=env)
+                              timeout=timeout, env=env,
+                              cwd=cwd if cwd is not None else self.child_cwd())
         if capture:
             for line in (proc.stdout or "").splitlines():
                 self.progress.event("log", level="out", message=line)
@@ -120,7 +134,7 @@ class Ctx:
             "    pass\n"
         )
         proc = subprocess.run([str(self.venv_python), "-c", code, dist],
-                              capture_output=True, text=True)
+                              capture_output=True, text=True, cwd=self.child_cwd())
         out = (proc.stdout or "").strip()
         return out or None
 
@@ -167,7 +181,7 @@ def pip_version(ctx: Ctx) -> Optional[tuple[int, int]]:
     if not ctx.venv_exists():
         return None
     proc = subprocess.run([str(ctx.venv_python), "-m", "pip", "--version"],
-                          capture_output=True, text=True)
+                          capture_output=True, text=True, cwd=ctx.child_cwd())
     if proc.returncode != 0:
         return None
     tokens = (proc.stdout or "").split()
@@ -186,7 +200,8 @@ def patch_state(ctx: Ctx) -> Optional[str]:
     if script is None or ctx.dist_version("nunchaku") is None:
         return None
     proc = subprocess.run([str(ctx.venv_python), str(script), "--check"],
-                          capture_output=True, text=True, timeout=180)
+                          capture_output=True, text=True, timeout=180,
+                          cwd=ctx.child_cwd())
     out = (proc.stdout or "") + (proc.stderr or "")
     if "already patched" in out:
         return "patched"
@@ -396,6 +411,7 @@ def build_steps() -> list[Step]:
     # -- 12. verify --------------------------------------------------------
     def verify_run(c: Ctx) -> str:
         env = dict(os.environ)
+        env.pop("PYTHONPATH", None)  # niente ombreggiamenti dal chiamante
         if c.dist_version("havc") is None:
             env["PYTHONPATH"] = str(paths.repo_root() or paths.package_dir().parent)
         proc = c.run([c.venv_python, "-m", "havc.doctor", "--json"],

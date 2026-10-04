@@ -66,8 +66,9 @@ esterni. Obiettivo di questo filone di lavoro:
   disponibile con `HAVC-Server.cmd [int4|fp4|q3|q4|longcat|qwen21]`.
   Layout: `<install>\gui` (GUI + scripts + settings pre-seedati),
   `<install>\config` (condivise da GUI e server), `<install>\tools`
-  (x265/x264/mkvmerge — NVEncC ancora da integrare: è un `.7z`). I launcher
-  sono generati dal bootstrap (ASCII, scritti con CRLF).
+  (x265/x264/mkvmerge + NVEncC 9.17 — il pacchetto `.7z` è stato ripubblicato
+  come `NVEncC_9.17_x64.zip` nella Release v1.0.0 e integrato il 04-10).
+  I launcher sono generati dal bootstrap (ASCII, scritti con CRLF).
 - **D7 — vs-cmnet2 completata dall'installer** (04-10): plugin e pesi
   scaricati automaticamente e pinnati (sha256) — `plugins_win.zip`
   (vs-cmnet2 v1.0.0), checkpoint DINOv3 + `dinov3-vitb16.zip` (cmnet2
@@ -313,3 +314,11 @@ Fase 0: run end-to-end su VM/Sandbox pulita, prima release di prova con
   all'installazione di riferimento, rerun tutto-skip, `havc doctor` a 9 check
   verdi (nuovo check `cmnet2`), dry-run del flag DINOv2 ok. Fix del link
   morto (v1.2.0→v1.3.0) in `GUI/README_GUI.md`.
+- **2026-10-04 (11)** — **NVEncC pubblicato e integrato.**
+  `NVEncC_9.17_x64.zip` (100,6 MB, prebuilt) caricato nella Release v1.0.0
+  accanto a `tools.zip`; passo `tools` esteso: scarica/estrae entrambi gli
+  archivi (estrazione "flat" supportata in `extract_archive`,
+  `required_root=None`); check di idempotenza su x265 **e** NVEncC64.
+  Verifiche su `D:\HAVCServerDiT_Test`: download reale + estrazione (22 file),
+  `NVEncC64.exe --version` → 9.17 (r3600), rerun "tool esterni già presenti".
+  Release v1.0.0: corpo aggiornato con la nota dell'asset.

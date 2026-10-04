@@ -72,7 +72,7 @@ lo schema è già fissato qui.
   `<install>\venv\` (ambiente), `<install>\cache\` (archivi scaricati e
   verificati), `<install>\config\` (config di pipeline, condivise da GUI e
   server), `<install>\gui\` (GUI + `scripts/*.vpy` + `gui_cmnet2_settings.json`),
-  `<install>\tools\` (x265/x264/mkvmerge; NVEncC ancora da integrare),
+  `<install>\tools\` (x265/x264/mkvmerge/NVEncC),
   `<install>\work\` (cartella di lavoro di default), launcher nella radice
   (**front-end di default: la GUI**).
 - Modelli: comportamento invariato (auto-download sotto
@@ -147,8 +147,9 @@ Passi, nell'ordine:
     `dinov3-vitb16.zip` (v1.1.0, estratto) in `vscmnet2\weights\`;
 17. `cmnet2-dinov2` — pesi DINOv2 legacy (`cmnet2` v1.0.0), **saltato di
     default**; si attiva con `--with-dinov2`;
-18. `tools` — estrae `tools.zip` (x265/x264/mkvmerge) in `<install>\tools`;
-    archivio pinnato (Release v1.0.0, sha256 verificato) o `--tools-zip`;
+18. `tools` — estrae in `<install>\tools` sia `tools.zip` (x265/x264/mkvmerge)
+    sia `NVEncC_9.17_x64.zip` (NVEncC 9.17, pacchetto flat); entrambi pinnati
+    (Release v1.0.0, sha256 verificato), o `--tools-zip` per la parte tools.zip;
 19. `gui-settings` — pre-seeda `gui_cmnet2_settings.json` (solo se assente):
     percorsi di `scripts/`, `vspipe`, tool e cartella di lavoro;
 20. `launchers` — scrive i launcher in `<install>`: `HAVC.cmd`/`HAVC.vbs`
@@ -331,6 +332,11 @@ Verificato il 2026-10-04 (in questo branch):
   rerun idempotente; `havc doctor` a **9 check verdi** (incluso `cmnet2`);
   dry-run del flag `--with-dinov2` verificato. Corretto il link morto in
   `GUI/README_GUI.md` (il checkpoint DINOv3 sta nella v1.3.0, non v1.2.0).
+- **NVEncC pubblicato e integrato** (2026-10-04): `NVEncC_9.17_x64.zip`
+  (100,6 MB) caricato nella Release v1.0.0 accanto a `tools.zip` (digest
+  verificato); passo `tools` esteso (gestisce entrambi gli archivi, estrazione
+  "flat" supportata); download reale + estrazione provati (22 file),
+  `NVEncC64.exe --version` → 9.17 (r3600); rerun idempotente.
 
 Da fare prima di chiudere la Fase 0:
 

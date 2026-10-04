@@ -661,32 +661,46 @@ def build_steps() -> list[Step]:
         return f"{copied} config copiate" if copied else "nessuna config nuova"
 
     # -- 13. gui -----------------------------------------------------------
+    def gui_files() -> Optional[dict[str, Path]]:
+        """Mappa percorso relativo -> sorgente per i file GUI gestiti."""
+        src = paths.gui_source_dir()
+        if src is None:
+            return None
+        files = {
+            "CMNET2_colorize_client_GUI.py": src / "CMNET2_colorize_client_GUI.py",
+            "load_image_DtD_GUI.py": src / "load_image_DtD_GUI.py",
+        }
+        for path in sorted((src / "scripts").glob("*.vpy")):
+            files[f"scripts/{path.name}"] = path
+        return files
+
     def gui_check(c: Ctx) -> Optional[str]:
-        target = c.install_dir / "gui" / "CMNET2_colorize_client_GUI.py"
-        return "file GUI già presenti" if target.is_file() else None
+        files = gui_files()
+        if files is None:
+            return None
+        dst_root = c.install_dir / "gui"
+        for rel, src_path in files.items():
+            target = dst_root / rel
+            if not target.is_file() or target.read_bytes() != src_path.read_bytes():
+                return None
+        return "file GUI già aggiornati"
 
     def gui_run(c: Ctx) -> str:
         if c.dry_run:
             c.progress.event("log", level="dry-run",
                              message=f"[dry-run] copia GUI -> {c.install_dir / 'gui'}")
             return "dry-run"
-        src = paths.gui_source_dir()
-        if src is None:
+        files = gui_files()
+        if files is None:
             raise BootstrapError(
                 "file GUI non trovati (né nel pacchetto né nel checkout)",
                 "reinstalla la wheel havc oppure esegui dal checkout del repo")
-        dst = c.install_dir / "gui"
-        dst.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(src / "CMNET2_colorize_client_GUI.py",
-                     dst / "CMNET2_colorize_client_GUI.py")
-        shutil.copy2(src / "load_image_DtD_GUI.py", dst / "load_image_DtD_GUI.py")
-        scripts_dst = dst / "scripts"
-        scripts_dst.mkdir(exist_ok=True)
-        count = 0
-        for path in sorted((src / "scripts").glob("*.vpy")):
-            shutil.copy2(path, scripts_dst / path.name)
-            count += 1
-        return f"{count} script .vpy"
+        dst_root = c.install_dir / "gui"
+        for rel, src_path in files.items():
+            target = dst_root / rel
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src_path, target)
+        return f"{len(files)} file (GUI + scripts)"
 
     # -- 14. gui-deps ------------------------------------------------------
     def gui_deps_check(c: Ctx) -> Optional[str]:
@@ -850,17 +864,24 @@ def build_steps() -> list[Step]:
         return "gui_cmnet2_settings.json creato"
 
     # -- 20. launchers -----------------------------------------------------
+    def launcher_files() -> dict[str, bytes]:
+        return {name: content.replace("\n", "\r\n").encode("utf-8")
+                for name, content in LAUNCHERS.items()}
+
     def launchers_check(c: Ctx) -> Optional[str]:
-        return "launcher già presenti" if (c.install_dir / "HAVC.cmd").is_file() else None
+        for name, data in launcher_files().items():
+            path = c.install_dir / name
+            if not path.is_file() or path.read_bytes() != data:
+                return None
+        return "launcher già aggiornati"
 
     def launchers_run(c: Ctx) -> str:
         if c.dry_run:
             c.progress.event("log", level="dry-run",
                              message=f"[dry-run] launcher -> {c.install_dir}")
             return "dry-run"
-        for name, content in LAUNCHERS.items():
-            path = c.install_dir / name
-            path.write_bytes(content.replace("\n", "\r\n").encode("utf-8"))
+        for name, data in launcher_files().items():
+            (c.install_dir / name).write_bytes(data)
         return ", ".join(LAUNCHERS)
 
     # -- 21. verify --------------------------------------------------------
@@ -919,7 +940,8 @@ def build_steps() -> list[Step]:
              wheel_check, wheel_run),
         Step("configs", "Config di pipeline in <install>/config", "copia le config mancanti",
              configs_check, configs_run),
-        Step("gui", "File GUI in <install>/gui", "GUI + scripts .vpy",
+        Step("gui", "File GUI in <install>/gui",
+             "GUI + scripts .vpy (aggiornati se diversi)",
              gui_check, gui_run),
         Step("gui-deps", "Dipendenze GUI (FreeSimpleGUI, tkinterdnd2, VapourSynth, vscmnet2, SCS)",
              "pip install -r requirements/gui.txt + wheel locali",
@@ -940,7 +962,7 @@ def build_steps() -> list[Step]:
              "gui_cmnet2_settings.json pre-seedato",
              gui_settings_check, gui_settings_run),
         Step("launchers", "Launcher in <install>",
-             "HAVC.cmd/.vbs (GUI), HAVC-Server.cmd, HAVC-Doctor.cmd",
+             "HAVC.cmd/.vbs (GUI), HAVC-Server.cmd, HAVC-Doctor.cmd (riscritti se diversi)",
              launchers_check, launchers_run),
         Step("verify", "Verifica finale (havc doctor)", "python -m havc.doctor",
              lambda c: None, verify_run),

@@ -7,4 +7,4 @@ wheel. Il server e la pipeline restano nei moduli top-level storici
 repo. Specifica: installer/PHASE0_SPEC.md.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"

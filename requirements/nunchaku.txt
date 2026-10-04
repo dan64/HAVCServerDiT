@@ -1,0 +1,4 @@
+# Nunchaku (MIT Han Lab) — wheel platform-specifica:
+# Windows / Python 3.12 / CUDA 13.0 / torch 2.10.
+# MAI `pip install nunchaku` da PyPI: è un pacchetto diverso, senza nunchaku.models.
+nunchaku @ https://github.com/nunchaku-ai/nunchaku/releases/download/v1.2.1/nunchaku-1.2.1+cu13.0torch2.10-cp312-cp312-win_amd64.whl

@@ -118,7 +118,7 @@ deduplication, encoding, and color merging). It is available from
 [github.com/dan64/vs-cmnet2](https://github.com/dan64/vs-cmnet2):
 
 ```powershell
-pip install packages\vscmnet2-1.1.0-py3-none-any.whl
+pip install packages\vscmnet2-1.2.1-py3-none-any.whl
 ```
 
 To complete the installation of this filter is necessary to install the models, weights and plugins, as described in the filter home page: [vs-cmnet2](https://github.com/dan64/vs-cmnet2#installation)

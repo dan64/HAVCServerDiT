@@ -40,7 +40,7 @@ git pull
 pip install -r GUI\requirements.txt
 
 # 4) Update vscmnet2 (if a newer wheel is available in packages/)
-pip install packages\vscmnet2-1.1.0-py3-none-any.whl
+pip install packages\vscmnet2-1.2.1-py3-none-any.whl
 
 # 5) Re-apply the Nunchaku patch
 python patch_nunchaku.py
@@ -104,6 +104,10 @@ pip show nunchaku    # Expected: 1.2.1+cu13.0torch2.10
 ---
 
 ## 📢 What's New
+
+### 2026-10-04 — new version vs-cmnet2 v1.2.1
+
+**vs-cmnet2:** fixed bug in vs-cmnet2 not allowing _vs_cmnet2_recolor()_ to properly load the reference frames. Due to the bug, the recolored clip had washed out colors in the recolored range. 
 
 ### 2026-10-02 — Run Server managed by the GUI, with a live Server Log (GUI)
 

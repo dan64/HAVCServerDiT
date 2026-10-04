@@ -1,7 +1,7 @@
-"""Emissione degli eventi di progresso: leggibile (default) o JSON (una riga per evento).
+"""Progress event emission: readable (default) or JSON (one line per event).
 
-Protocollo: installer/PHASE0_SPEC.md §5. In modalità JSON *stdout* contiene
-solo righe JSON; l'output dei processi figli viene incapsulato in eventi `log`.
+Protocol: installer/PHASE0_SPEC.md §5. In JSON mode *stdout* contains only
+JSON lines; child process output is wrapped into `log` events.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ import time
 
 
 def force_utf8() -> None:
-    """stdout/stderr in UTF-8: output stabile anche quando è rediretto (es. manager C#)."""
+    """stdout/stderr as UTF-8: stable output even when redirected (e.g. the C# manager)."""
     for stream in (sys.stdout, sys.stderr):
         try:
             stream.reconfigure(encoding="utf-8", errors="replace")
@@ -52,4 +52,4 @@ class Progress:
             print(f"    {data.get('message')}")
         elif kind == "result":
             print(f"\nEsito: {'OK' if data.get('ok') else 'FALLITO'}")
-        # altri eventi: ignorati in modalità umana
+        # other events: ignored in human mode

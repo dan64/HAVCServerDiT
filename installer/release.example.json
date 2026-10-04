@@ -1,5 +1,5 @@
 {
-  "$comment": "Esempio di manifest di release (Fase 0) — valori fittizi. Specifica: installer/PHASE0_SPEC.md §6.",
+  "$comment": "Example release manifest (Phase 0) — fake values. Specification: installer/PHASE0_SPEC.md §6.",
   "schema": 1,
   "channel": "stable",
   "app": "havc",

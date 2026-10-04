@@ -1,14 +1,14 @@
-"""Provisioning del runtime Python per l'installazione.
+"""Python runtime provisioning for the installation.
 
-Il runtime è una build **python-build-standalone** (Astral — gli stessi Python
-usati da `uv`), pinnata per versione e sha256, estratta in
-`<install-dir>\\runtime\\python`. Da lì viene creato il venv.
+The runtime is a **python-build-standalone** build (Astral — the same Pythons
+used by `uv`), pinned by version and sha256, extracted into
+`<install-dir>\\runtime\\python`. The venv is created from there.
 
-Scelta e verifica (2026-10-04): l'embed ufficiale di python.org è inadatto —
-privo di tkinter (serve alla GUI), venv ed ensurepip. La build
-`install_only_stripped` di python-build-standalone include tutto (tkinter 8.6,
-venv, ensurepip, pip) e si estrae senza installer né registry.
-Vedi installer/PHASE0_SPEC.md §4-bis.
+Choice and verification (2026-10-04): the official python.org embed is
+unsuitable — no tkinter (needed by the GUI), no venv, no ensurepip. The
+`install_only_stripped` python-build-standalone build includes everything
+(tkinter 8.6, venv, ensurepip, pip) and extracts without an installer or a
+registry. See installer/PHASE0_SPEC.md §4-bis.
 """
 
 from __future__ import annotations
@@ -22,10 +22,10 @@ import zipfile
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
-# Runtime pinnato. `url` punta al *nostro* mirror (release `runtime-312`,
-# pubblicata il 2026-10-04, asset invariato); `mirror_of` è l'URL upstream.
-# Lo sha256 è stato verificato contro il `digest` ufficiale GitHub di
-# entrambi gli asset e con un download end-to-end dal mirror (2026-10-04).
+# Pinned runtime. `url` points to *our* mirror (release `runtime-312`,
+# published on 2026-10-04, asset unchanged); `mirror_of` is the upstream URL.
+# The sha256 was verified against the official GitHub `digest` of both
+# assets and with an end-to-end download from the mirror (2026-10-04).
 # ---------------------------------------------------------------------------
 RUNTIME = {
     "name": "cpython-3.12.15+20261003-x86_64-pc-windows-msvc-install_only_stripped.tar.gz",
@@ -38,7 +38,7 @@ RUNTIME = {
 
 
 def runtime_python(install_dir: Path) -> Path:
-    """Percorso dell'interprete dentro il runtime provisionato."""
+    """Path of the interpreter inside the provisioned runtime."""
     if os.name == "nt":
         return install_dir / "runtime" / "python" / "python.exe"
     return install_dir / "runtime" / "python" / "bin" / "python3"
@@ -53,7 +53,7 @@ def sha256_of(path: Path) -> str:
 
 
 def probe_version(python_exe: Path) -> str | None:
-    """Versione dell'interprete, o None se assente/non eseguibile."""
+    """Interpreter version, or None if missing/not executable."""
     if not python_exe.is_file():
         return None
     try:
@@ -68,7 +68,7 @@ def probe_version(python_exe: Path) -> str | None:
 
 
 def download_archive(url: str, dest: Path, progress=None) -> None:
-    """Scarica `url` in `dest` in modo atomico (file `.part` + rename)."""
+    """Download `url` into `dest` atomically (`.part` file + rename)."""
     dest.parent.mkdir(parents=True, exist_ok=True)
     tmp = dest.with_name(dest.name + ".part")
     try:
@@ -96,11 +96,11 @@ def download_archive(url: str, dest: Path, progress=None) -> None:
 
 def extract_archive(archive: Path, dest: Path,
                     required_root: str | None = "python") -> None:
-    """Estrae un archivio (tar.gz/tgz/tar/zip).
+    """Extract an archive (tar.gz/tgz/tar/zip).
 
-    Se `required_root` è indicato, l'archivio deve contenere quella cartella
-    radice (protezione contro layout inattesi); con None estrae così com'è
-    (archivi "flat", es. NVEncC_9.17_x64.zip).
+    If `required_root` is given, the archive must contain that root folder
+    (protection against unexpected layouts); with None it extracts as-is
+    ("flat" archives, e.g. NVEncC_9.17_x64.zip).
     """
     name = archive.name.lower()
     dest.mkdir(parents=True, exist_ok=True)

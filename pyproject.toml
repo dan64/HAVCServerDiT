@@ -1,5 +1,5 @@
-# HAVC — packaging del progetto (wheel `havc`, stack server).
-# Specifica: installer/PHASE0_SPEC.md. La versione arriva da havc/__init__.py.
+# HAVC — project packaging (wheel `havc`, server stack).
+# Specification: installer/PHASE0_SPEC.md. The version comes from havc/__init__.py.
 [build-system]
 requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
@@ -18,9 +18,9 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Topic :: Multimedia :: Graphics",
 ]
-# Dipendenze volutamente VUOTE: l'installazione è orchestrata dal bootstrap
-# `havc-install` (ordine preciso, index CUDA dedicato, wheel nunchaku da URL,
-# patch post-install). Vedi installer/PHASE0_SPEC.md §2 e §4.
+# Dependencies intentionally EMPTY: installation is orchestrated by the
+# `havc-install` bootstrap (precise order, dedicated CUDA index, nunchaku
+# wheel from URL, post-install patch). See installer/PHASE0_SPEC.md §2 and §4.
 dependencies = []
 dynamic = ["version"]
 

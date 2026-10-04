@@ -1,8 +1,8 @@
-"""`havc doctor` — verifica non distruttiva dell'ambiente HAVC.
+"""`havc doctor` — non-destructive verification of the HAVC environment.
 
-Esegue un set di check e stampa un report (leggibile o JSON).
-Protocollo: installer/PHASE0_SPEC.md §7.
-Exit code: 0 = nessun FAIL, 1 = almeno un FAIL, 2 = errore d'uso.
+Runs a set of checks and prints a report (readable or JSON).
+Protocol: installer/PHASE0_SPEC.md §7.
+Exit code: 0 = no FAIL, 1 = at least one FAIL, 2 = usage error.
 """
 
 from __future__ import annotations
@@ -59,7 +59,7 @@ def check_packages(req_dir: Path) -> dict:
     expected = read_lock(req_dir)
     if not expected:
         return _result("packages", FAIL, f"nessun pin leggibile in {req_dir}")
-    missing, mismatch, conformi = [], [], 0
+    missing, mismatch, matching = [], [], 0
     for name, want in sorted(expected.items()):
         try:
             have = importlib_metadata.version(name)
@@ -67,7 +67,7 @@ def check_packages(req_dir: Path) -> dict:
             missing.append(name)
             continue
         if have == want:
-            conformi += 1
+            matching += 1
         else:
             mismatch.append(f"{name}: atteso {want}, trovato {have}")
     if missing or mismatch:
@@ -80,7 +80,7 @@ def check_packages(req_dir: Path) -> dict:
             "packages", FAIL, " | ".join(parts),
             "esegui `havc-install` (o install.cmd) per allineare l'ambiente",
         )
-    return _result("packages", OK, f"{conformi} pacchetti conformi al lock")
+    return _result("packages", OK, f"{matching} pacchetti conformi al lock")
 
 
 def check_patch() -> dict:
@@ -141,7 +141,7 @@ def check_gpu() -> dict:
 
 
 def check_gui() -> dict:
-    """GUI installata accanto al venv (in sviluppo: presente nel checkout)."""
+    """GUI installed next to the venv (in development: present in the checkout)."""
     in_venv = sys.prefix != getattr(sys, "base_prefix", sys.prefix)
     if in_venv:
         gui_dir = Path(sys.prefix).parent / "gui"
@@ -154,7 +154,7 @@ def check_gui() -> dict:
 
 
 def check_cmnet2() -> dict:
-    """Plugin e pesi di vscmnet2 (solo se vscmnet2 è installato)."""
+    """vscmnet2 plugins and weights (only if vscmnet2 is installed)."""
     if importlib.util.find_spec("vscmnet2") is None:
         return _result("cmnet2", SKIP, "vscmnet2 non installato")
     try:

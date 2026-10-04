@@ -1,9 +1,9 @@
-"""`havc-install` — bootstrap idempotente e convergente dello stack Python del server.
+"""`havc-install` — idempotent, convergent bootstrap of the server Python stack.
 
-Principio guida: "install = update da stato vuoto". Ogni passo verifica prima di
-agire e salta ciò che è già a posto (vedi installer/PHASE0_SPEC.md §4).
+Guiding principle: "install = update from an empty state". Every step checks
+first and skips what is already in place (see installer/PHASE0_SPEC.md §4).
 
-Esempi:
+Examples:
     havc-install --install-dir C:/HAVC --plan
     havc-install --install-dir C:/HAVC --runtime-zip runtime.tar.gz --tools-zip tools.zip --assets-dir packages --wheel dist\\havc-0.1.0-py3-none-any.whl
     havc-install --install-dir C:/HAVC --only runtime,venv,pip --json-progress
@@ -29,18 +29,18 @@ from .runtime import (RUNTIME, download_archive, extract_archive, probe_version,
                       sha256_of, runtime_python as find_runtime_python)
 
 TORCH_INDEX = "https://download.pytorch.org/whl/cu130"
-PIP_MIN = (24, 0)  # sotto questa soglia il passo `pip` aggiorna pip
+PIP_MIN = (24, 0)  # below this threshold the `pip` step upgrades pip
 
-# Tool esterni (x265/x264/mkvmerge) — archivio pinnato della Release v1.0.0;
-# sha256 verificato anche contro il `digest` ufficiale GitHub (2026-10-04).
+# External tools (x265/x264/mkvmerge) — archive pinned to Release v1.0.0;
+# sha256 also verified against the official GitHub `digest` (2026-10-04).
 TOOLS = {
     "name": "tools.zip",
     "url": "https://github.com/dan64/HAVCServerDiT/releases/download/v1.0.0/tools.zip",
     "sha256": "0a17002e1bb8964d81ab892fdcf250c760764a71b3d5990d3f7865b38765aef5",
 }
 
-# NVEncC (encoder GPU di rigaya) — pacchetto "flat" (NVEncC64.exe + DLL nella
-# radice dello zip): estratto in <install>\tools\NVEncC\. Stesso tag di TOOLS.
+# NVEncC (rigaya's GPU encoder) — "flat" package (NVEncC64.exe + DLLs in the
+# zip root): extracted into <install>\tools\NVEncC\. Same tag as TOOLS.
 NVENC = {
     "name": "NVEncC_9.17_x64.zip",
     "url": "https://github.com/dan64/HAVCServerDiT/releases/download/v1.0.0/NVEncC_9.17_x64.zip",
@@ -48,10 +48,10 @@ NVENC = {
     "size": 105481170,
 }
 
-# Asset cmnet2 (plugin + pesi) — pinnati; sha256 verificati anche contro i
-# `digest` ufficiali GitHub (2026-10-04). Pesi DINOv3 dalla release cmnet2
-# v1.3.0 (NON v1.2.0: il link nei README puntava a un asset inesistente) e
-# v1.1.0; plugin dalla release vs-cmnet2 v1.0.0.
+# cmnet2 assets (plugins + weights) — pinned; sha256 also verified against
+# the official GitHub `digest`s (2026-10-04). DINOv3 weights from cmnet2
+# release v1.3.0 (NOT v1.2.0: the link in the READMEs pointed to a missing
+# asset) and v1.1.0; plugins from vs-cmnet2 release v1.0.0.
 CMNET2_PLUGINS = {
     "name": "plugins_win.zip",
     "url": "https://github.com/dan64/vs-cmnet2/releases/download/v1.0.0/plugins_win.zip",
@@ -59,8 +59,8 @@ CMNET2_PLUGINS = {
     "size": 31056312,
 }
 
-# (dest è relativo alla cartella del pacchetto vscmnet2; extract_root=None
-#  significa "file singolo da copiare", altrimenti zip da estrarre)
+# (dest is relative to the vscmnet2 package folder; extract_root=None
+#  means "single file to copy", otherwise a zip to extract)
 CMNET2_DINOV3 = (
     {
         "name": "DINOv3FeatureV6_LocalAtten_p374099.pth",
@@ -115,9 +115,9 @@ CMNET2_DINOV2 = (
     },
 )
 
-# Launcher scritti nella cartella di installazione (front-end di default = GUI).
-# Contenuto ASCII; le righe vengono riscritte con CRLF al salvataggio (i .cmd
-# con soli LF possono essere mal interpretati da cmd.exe).
+# Launchers written into the install folder (default front-end = GUI).
+# ASCII content; lines are rewritten with CRLF on save (.cmd files with
+# LF-only line endings can be misparsed by cmd.exe).
 LAUNCHERS = {
     "HAVC.cmd": r"""@echo off
 setlocal
@@ -217,7 +217,7 @@ class Ctx:
 
     @property
     def env_dir(self) -> Path:
-        """Il venv dell'installazione (creato dal runtime provisionato)."""
+        """The installation venv (created from the provisioned runtime)."""
         return self.install_dir / "venv"
 
     @property
@@ -242,18 +242,18 @@ class Ctx:
         return (self.env_dir / "pyvenv.cfg").is_file() and self.venv_python.is_file()
 
     def child_cwd(self) -> str:
-        """CWD neutrale per i processi figli.
+        """Neutral CWD for child processes.
 
-        Evita che il CWD del bootstrap (es. un checkout del repo con
-        `havc.egg-info`) ombreggi i pacchetti del venv nelle query di
-        metadata e nell'import di `havc.doctor` — bug trovato il 2026-10-04
-        con l'end-to-end su cartella di test.
+        Prevents the bootstrap CWD (e.g. a repo checkout with
+        `havc.egg-info`) from shadowing the venv packages in metadata
+        queries and in the `havc.doctor` import — bug found on 2026-10-04
+        with the end-to-end test on the test folder.
         """
         return str(self.install_dir if self.install_dir.is_dir()
                    else Path(tempfile.gettempdir()))
 
     def env_python(self) -> Optional[Path]:
-        """Interprete per creare il venv: runtime provisionato, altrimenti --python/3.12 di sistema."""
+        """Interpreter used to create the venv: provisioned runtime, otherwise --python/system 3.12."""
         if not self.use_system_python and self.runtime_python.is_file():
             return self.runtime_python
         return self.python or find_python312()
@@ -319,8 +319,8 @@ class Step:
     id: str
     title: str
     hint: str
-    check: Callable[[Ctx], Optional[str]]  # None = da eseguire; str = motivo di salto
-    run: Callable[[Ctx], Optional[str]]    # dettaglio opzionale per step_ok
+    check: Callable[[Ctx], Optional[str]]  # None = must run; str = skip reason
+    run: Callable[[Ctx], Optional[str]]    # optional detail for step_ok
 
 
 # ---------------------------------------------------------------------------
@@ -328,7 +328,7 @@ class Step:
 # ---------------------------------------------------------------------------
 
 def find_python312() -> Optional[Path]:
-    """Interprete 3.12 per creare il venv: quello corrente, `py -3.12`, o python3.12."""
+    """Python 3.12 interpreter to create the venv: the current one, `py -3.12`, or python3.12."""
     if sys.version_info[:2] == (3, 12):
         return Path(sys.executable)
     if os.name == "nt":
@@ -360,7 +360,7 @@ def pip_version(ctx: Ctx) -> Optional[tuple[int, int]]:
 
 
 def patch_state(ctx: Ctx) -> Optional[str]:
-    """'patched' | 'original' | 'unknown' | None (= non determinabile)."""
+    """'patched' | 'original' | 'unknown' | None (= not determinable)."""
     script = paths.find_patch_script()
     if script is None or ctx.dist_version("nunchaku") is None:
         return None
@@ -376,7 +376,7 @@ def patch_state(ctx: Ctx) -> Optional[str]:
 
 
 def find_asset_wheel(ctx: Ctx, pattern: str) -> Optional[Path]:
-    """Prima wheel che corrisponde al pattern in --assets-dir."""
+    """First wheel matching the pattern in --assets-dir."""
     if ctx.assets_dir is None:
         return None
     wheels = sorted(ctx.assets_dir.glob(pattern))
@@ -388,9 +388,9 @@ def find_diffusers_wheel(ctx: Ctx) -> Optional[Path]:
 
 
 def vscmnet2_dir(ctx: Ctx) -> Optional[Path]:
-    """Cartella del pacchetto vscmnet2 nel venv (None se non installato).
+    """vscmnet2 package folder in the venv (None if not installed).
 
-    Usa `find_spec` senza eseguire il pacchetto (niente import di torch).
+    Uses `find_spec` without executing the package (no torch import).
     """
     code = (
         "import importlib.util as u\n"
@@ -406,8 +406,8 @@ def vscmnet2_dir(ctx: Ctx) -> Optional[Path]:
 
 
 def cached_download(ctx: Ctx, asset: dict, local: Optional[Path] = None) -> Path:
-    """Ottiene un asset pinnato — file locale, cache o download — sempre con
-    verifica sha256."""
+    """Obtain a pinned asset — local file, cache or download — always with
+    sha256 verification."""
     if local is not None:
         if not local.is_file():
             raise BootstrapError(f"archivio locale non trovato: {local}")
@@ -437,7 +437,7 @@ def cached_download(ctx: Ctx, asset: dict, local: Optional[Path] = None) -> Path
 
 
 # ---------------------------------------------------------------------------
-# Passi
+# Steps
 # ---------------------------------------------------------------------------
 
 def build_steps() -> list[Step]:
@@ -465,11 +465,11 @@ def build_steps() -> list[Step]:
                 f"lockfile non trovato: {req_dir}",
                 "esegui dal checkout del progetto o reinstalla la wheel `havc`",
             )
-        nota = "" if sys.version_info[:2] == (3, 12) else \
+        note = "" if sys.version_info[:2] == (3, 12) else \
             " (il venv userà il runtime 3.12 provisionato)"
-        return f"host: {sys.version.split()[0]}{nota}"
+        return f"host: {sys.version.split()[0]}{note}"
 
-    # -- 2. runtime (Python provisionato) ----------------------------------
+    # -- 2. runtime (provisioned Python) ----------------------------------
     def runtime_check(c: Ctx) -> Optional[str]:
         if c.use_system_python:
             return "uso il Python di sistema (--use-system-python)"
@@ -619,7 +619,7 @@ def build_steps() -> list[Step]:
         c.run([c.venv_python, "-m", "pip", "install", "-r", core_txt])
         return "dipendenze core"
 
-    # -- 11. wheel del progetto -------------------------------------------
+    # -- 11. project wheel -------------------------------------------
     def wheel_check(c: Ctx) -> Optional[str]:
         if c.wheel is None:
             return "nessuna wheel del progetto fornita"
@@ -662,7 +662,7 @@ def build_steps() -> list[Step]:
 
     # -- 13. gui -----------------------------------------------------------
     def gui_files() -> Optional[dict[str, Path]]:
-        """Mappa percorso relativo -> sorgente per i file GUI gestiti."""
+        """Map relative path -> source for the managed GUI files."""
         src = paths.gui_source_dir()
         if src is None:
             return None
@@ -887,7 +887,7 @@ def build_steps() -> list[Step]:
     # -- 21. verify --------------------------------------------------------
     def verify_run(c: Ctx) -> str:
         env = dict(os.environ)
-        env.pop("PYTHONPATH", None)  # niente ombreggiamenti dal chiamante
+        env.pop("PYTHONPATH", None)  # no shadowing from the caller
         if c.dist_version("havc") is None:
             env["PYTHONPATH"] = str(paths.repo_root() or paths.package_dir().parent)
         proc = c.run([c.venv_python, "-m", "havc.doctor", "--json"],
@@ -994,7 +994,7 @@ def run_steps(ctx: Ctx, steps: list[Step], only: Optional[set[str]]) -> bool:
                                remediation=exc.remediation)
             ok = False
             break
-        except Exception as exc:  # errore imprevisto: non nascondere il tipo
+        except Exception as exc:  # unexpected error: do not hide the type
             ctx.progress.event("step_error", id=step.id, error=f"{type(exc).__name__}: {exc}",
                                remediation="")
             ok = False

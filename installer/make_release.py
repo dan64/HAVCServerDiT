@@ -1,19 +1,20 @@
 #!/usr/bin/env python3
-"""Genera (o verifica) il manifest `release.json` di una release HAVC.
+"""Generate (or verify) the `release.json` manifest of a HAVC release.
 
-Contratto: installer/PHASE0_SPEC.md §6. Le fonti uniche restano nel repo:
-la versione in `havc/__init__.py`, il blocco `runtime` in `havc/runtime.py`.
-Questo script calcola sha256 e dimensioni dagli artefatti locali.
+Contract: installer/PHASE0_SPEC.md §6. The single sources of truth stay in
+the repo: the version in `havc/__init__.py`, the `runtime` block in
+`havc/runtime.py`. This script computes sha256 and sizes from local
+artifacts.
 
-Generazione (dopo aver buildato la wheel):
+Generation (after building the wheel):
 
     python installer/make_release.py --tag v0.1.0 --artifacts-dir dist/staging
 
-Verifica di un manifest contro gli artefatti locali:
+Verification of a manifest against local artifacts:
 
     python installer/make_release.py --verify dist/staging/release.json --artifacts-dir dist/staging
 
-Nessuna pubblicazione: l'upload su GitHub resta un passo separato
+No publishing: uploading to GitHub stays a separate step
 (gh release create/upload).
 """
 
@@ -52,7 +53,7 @@ def fail(message: str) -> None:
 
 
 def collect_wheels(artifacts_dir: Path, version: str) -> tuple[Path, list[Path]]:
-    """La wheel del progetto (una sola, versione coerente) e le altre wheel."""
+    """The project wheel (exactly one, with matching version) and the other wheels."""
     wheels = sorted(artifacts_dir.glob("*.whl"))
     if not wheels:
         fail(f"nessuna wheel trovata in {artifacts_dir}")

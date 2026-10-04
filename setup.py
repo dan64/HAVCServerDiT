@@ -1,19 +1,19 @@
-"""Build hook per la wheel `havc`.
+"""Build hook for the `havc` wheel.
 
-Il repo resta l'unica fonte di verità: al momento della build i dati che non
-sono pacchetti Python "classici" vengono copiati dentro la wheel:
+The repo stays the single source of truth: at build time, data that is not a
+"classic" Python package is copied into the wheel:
 
-    config/*.json        ->  havc/configs/        (config di pipeline)
-    requirements/*.txt   ->  havc/requirements/   (lockfile unico)
-    comfy_bridge/**      ->  comfy_bridge/**      (runtime ComfyUI vendored:
-                                                    file dati e cartelle non
-                                                    importabili, es.
+    config/*.json        ->  havc/configs/        (pipeline configs)
+    requirements/*.txt   ->  havc/requirements/   (single lockfile)
+    comfy_bridge/**      ->  comfy_bridge/**      (vendored ComfyUI runtime:
+                                                    data files and non-importable
+                                                    folders, e.g.
                                                     custom_nodes/ComfyUI-GGUF*)
-    GUI/ (script+scripts) ->  havc/gui/            (GUI: front-end di default)
+    GUI/ (script+scripts) ->  havc/gui/            (GUI: default front-end)
 
-Esclusioni volute: cache Python, backup degli editor/script e
-`comfy_bridge/blueprints/` (materiale della UI ComfyUI, non referenziato dal
-codice del runtime — vedi COPIES). Vedi installer/PHASE0_SPEC.md §2.
+Intentional exclusions: Python caches, editor/script backups and
+`comfy_bridge/blueprints/` (ComfyUI UI material, not referenced by the
+runtime code — see COPIES). See installer/PHASE0_SPEC.md §2.
 """
 
 import shutil
@@ -25,20 +25,20 @@ from setuptools.command.build_py import build_py as _build_py
 SKIP_DIRS = {"__pycache__", ".mypy_cache", ".pytest_cache"}
 SKIP_SUFFIXES = {".pyc", ".pyo", ".bak", ".orig", ".rej"}
 
-# (sorgente, destinazione, sottocartelle escluse).
-# Esclusione esplicita e reversibile (2026-10-04): `blueprints/` è materiale
-# della UI ComfyUI (80 template di workflow JSON + 14 shader `.frag` in
-# `.glsl/`). Nessun riferimento nel codice del runtime (grep case-insensitive
-# su tutto comfy_bridge + file di root); il runtime è usato solo via API.
-# Se un percorso reale dovesse mai richiederli, basta togliere la voce.
+# (source, destination, excluded subfolders).
+# Explicit, reversible exclusion (2026-10-04): `blueprints/` is ComfyUI UI
+# material (80 workflow JSON templates + 14 `.frag` shaders in `.glsl/`).
+# No references in the runtime code (case-insensitive grep over all of
+# comfy_bridge + root files); the runtime is used only via API.
+# If a real code path ever needs them, just remove the entry.
 COPIES = (
     ("config", "havc/configs", ()),
     ("requirements", "havc/requirements", ()),
     ("comfy_bridge", "comfy_bridge", ("blueprints",)),
 )
 
-# File singoli e gruppi della GUI da includere nella wheel (la GUI viene
-# installata in <install>\gui dai passi `gui`/`gui-deps` di havc-install).
+# Individual GUI files and groups to include in the wheel (the GUI is
+# installed into <install>\gui by the `gui`/`gui-deps` steps of havc-install).
 EXTRA_FILES = (
     ("GUI/CMNET2_colorize_client_GUI.py", "havc/gui/CMNET2_colorize_client_GUI.py"),
     ("GUI/load_image_DtD_GUI.py", "havc/gui/load_image_DtD_GUI.py"),
@@ -58,11 +58,11 @@ class build_py(_build_py):
             if not src.is_dir():
                 raise SystemExit(f"setup.py: cartella sorgente mancante: {src}")
             target = lib / dst_rel
-            # Copia deterministica: si riparte dalla destinazione vuota.
-            # Senza questo, i file già copiati in build/lib dalle build
-            # precedenti restano lì anche se rimossi/esclusi dal sorgente —
-            # e bdist_wheel impacchetta comunque tutto ciò che trova
-            # (trovato il 2026-10-04 con l'esclusione di blueprints).
+            # Deterministic copy: start from an empty destination.
+            # Without this, files already copied into build/lib by previous
+            # builds stay there even if removed/excluded from the source —
+            # and bdist_wheel packages everything it finds
+            # (found on 2026-10-04 with the blueprints exclusion).
             if target.exists():
                 shutil.rmtree(target)
             self._copy_tree(src, target, exclude_dirs)

@@ -1,9 +1,9 @@
-"""Risoluzione dei percorsi dati: wheel installata vs checkout del repo.
+"""Data path resolution: installed wheel vs repo checkout.
 
-Regola: la wheel contiene copie di `config/` e `requirements/` dentro il
-pacchetto (`havc/configs`, `havc/requirements`); se non ci sono (stiamo
-girando da un checkout), si usano le cartelle del repo.
-Vedi installer/PHASE0_SPEC.md §2.
+Rule: the wheel bundles copies of `config/` and `requirements/` inside the
+package (`havc/configs`, `havc/requirements`); if they are missing (running
+from a checkout), the repo folders are used.
+See installer/PHASE0_SPEC.md §2.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ def package_dir() -> Path:
 
 
 def repo_root() -> Path | None:
-    """La cartella del checkout che contiene `config/` e `requirements/`, se esiste."""
+    """The checkout folder containing `config/` and `requirements/`, if it exists."""
     parent = package_dir().parent
     if (parent / "config").is_dir() and (parent / "requirements").is_dir():
         return parent
@@ -24,13 +24,13 @@ def repo_root() -> Path | None:
 
 
 def _data_dir(name: str) -> Path:
-    packaged = package_dir() / name  # wheel installata
+    packaged = package_dir() / name  # installed wheel
     if packaged.is_dir():
         return packaged
     root = repo_root()
     if root is not None and (root / name).is_dir():
-        return root / name  # checkout del repo
-    return packaged  # il chiamante segnala l'errore
+        return root / name  # repo checkout
+    return packaged  # the caller reports the error
 
 
 def configs_dir() -> Path:
@@ -49,7 +49,7 @@ def config_path(name: str) -> Path:
 
 
 def find_patch_script() -> Path | None:
-    """patch_nunchaku.py come py-module installato (site-packages) o nel checkout."""
+    """patch_nunchaku.py as an installed py-module (site-packages) or in the checkout."""
     here = package_dir()
     for candidate in (here.parent / "patch_nunchaku.py", here / "patch_nunchaku.py"):
         if candidate.is_file():
@@ -58,8 +58,8 @@ def find_patch_script() -> Path | None:
 
 
 def gui_source_dir() -> Path | None:
-    """Cartella GUI (script principale + scripts/*.vpy): copia inclusa nel
-    pacchetto (`havc/gui`) oppure checkout del repo (`GUI/`)."""
+    """GUI folder (main script + scripts/*.vpy): copy bundled in the package
+    (`havc/gui`) or repo checkout (`GUI/`)."""
     packaged = package_dir() / "gui"
     if (packaged / "CMNET2_colorize_client_GUI.py").is_file():
         return packaged

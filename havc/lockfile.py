@@ -1,10 +1,10 @@
-"""Lettura del lockfile (`requirements/*.txt`): pin esatti e wheel da URL.
+"""Lockfile reading (`requirements/*.txt`): exact pins and URL wheels.
 
-Formati supportati:
-    name==version            pin esatto
-    name @ https://.../x.whl wheel diretta (la versione attesa è ricavata dal
-                             nome del file — es. nunchaku-1.2.1+cu13.0torch2.10-...whl)
-Commenti (#), opzioni (-...) e righe vuote sono ignorati.
+Supported formats:
+    name==version            exact pin
+    name @ https://.../x.whl direct wheel (the expected version is derived
+                             from the file name — e.g. nunchaku-1.2.1+cu13.0torch2.10-...whl)
+Comments (#), options (-...) and blank lines are ignored.
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ def _wheel_version_from_url(url: str) -> str | None:
 
 
 def read_pins_file(path: Path) -> dict[str, str]:
-    """Estrae {distribuzione: versione attesa} da un singolo file del lock."""
+    """Extract {distribution: expected version} from a single lock file."""
     expected: dict[str, str] = {}
     for raw in path.read_text(encoding="utf-8").splitlines():
         line = raw.strip()
@@ -45,7 +45,7 @@ def read_pins_file(path: Path) -> dict[str, str]:
 
 
 def read_lock(req_dir: Path) -> dict[str, str]:
-    """Tutti i pin della cartella del lock (unione di requirements/*.txt)."""
+    """All pins from the lock folder (union of requirements/*.txt)."""
     expected: dict[str, str] = {}
     for path in sorted(req_dir.glob("*.txt")):
         expected.update(read_pins_file(path))

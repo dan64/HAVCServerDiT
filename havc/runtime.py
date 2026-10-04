@@ -94,20 +94,28 @@ def download_archive(url: str, dest: Path, progress=None) -> None:
     tmp.replace(dest)
 
 
-def extract_archive(archive: Path, dest: Path, required_root: str = "python") -> None:
-    """Estrae mantenendo la radice richiesta dell'archivio (tar.gz/tgz/tar/zip)."""
+def extract_archive(archive: Path, dest: Path,
+                    required_root: str | None = "python") -> None:
+    """Estrae un archivio (tar.gz/tgz/tar/zip).
+
+    Se `required_root` è indicato, l'archivio deve contenere quella cartella
+    radice (protezione contro layout inattesi); con None estrae così com'è
+    (archivi "flat", es. NVEncC_9.17_x64.zip).
+    """
     name = archive.name.lower()
     dest.mkdir(parents=True, exist_ok=True)
     if name.endswith((".tar.gz", ".tgz", ".tar")):
         with tarfile.open(archive, "r:*") as tar:
-            _require_root(tar.getnames(), required_root)
+            if required_root is not None:
+                _require_root(tar.getnames(), required_root)
             try:
                 tar.extractall(dest, filter="data")  # PEP 706 (3.12+)
             except TypeError:
                 tar.extractall(dest)
     elif name.endswith(".zip"):
         with zipfile.ZipFile(archive) as zf:
-            _require_root(zf.namelist(), required_root)
+            if required_root is not None:
+                _require_root(zf.namelist(), required_root)
             zf.extractall(dest)
     else:
         raise ValueError(f"formato archivio non supportato: {archive.name}")

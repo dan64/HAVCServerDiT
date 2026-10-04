@@ -39,6 +39,15 @@ TOOLS = {
     "sha256": "0a17002e1bb8964d81ab892fdcf250c760764a71b3d5990d3f7865b38765aef5",
 }
 
+# NVEncC (encoder GPU di rigaya) — pacchetto "flat" (NVEncC64.exe + DLL nella
+# radice dello zip): estratto in <install>\tools\NVEncC\. Stesso tag di TOOLS.
+NVENC = {
+    "name": "NVEncC_9.17_x64.zip",
+    "url": "https://github.com/dan64/HAVCServerDiT/releases/download/v1.0.0/NVEncC_9.17_x64.zip",
+    "sha256": "81111c82b954e582f6c4b59102537af61e7deb22c87c9d000855ff8782b51624",
+    "size": 105481170,
+}
+
 # Asset cmnet2 (plugin + pesi) — pinnati; sha256 verificati anche contro i
 # `digest` ufficiali GitHub (2026-10-04). Pesi DINOv3 dalla release cmnet2
 # v1.3.0 (NON v1.2.0: il link nei README puntava a un asset inesistente) e
@@ -396,8 +405,18 @@ def vscmnet2_dir(ctx: Ctx) -> Optional[Path]:
     return Path(out) if out else None
 
 
-def cached_download(ctx: Ctx, asset: dict) -> Path:
-    """Scarica (o riusa dalla cache) un asset pinnato, verificando lo sha256."""
+def cached_download(ctx: Ctx, asset: dict, local: Optional[Path] = None) -> Path:
+    """Ottiene un asset pinnato — file locale, cache o download — sempre con
+    verifica sha256."""
+    if local is not None:
+        if not local.is_file():
+            raise BootstrapError(f"archivio locale non trovato: {local}")
+        digest = sha256_of(local)
+        if digest != asset["sha256"]:
+            raise BootstrapError(
+                f"sha256 di {local.name} non corrisponde: {digest} != {asset['sha256']}",
+                "il file locale è diverso dall'asset pinnato")
+        return local
     cached = ctx.cache_dir / asset["name"]
     if cached.is_file() and sha256_of(cached) == asset["sha256"]:
         ctx.progress.event("log", level="out",
@@ -775,42 +794,34 @@ def build_steps() -> list[Step]:
 
     # -- 18. tools ---------------------------------------------------------
     def tools_check(c: Ctx) -> Optional[str]:
-        if (c.install_dir / "tools" / "x265" / "x265.exe").is_file():
+        x265 = (c.install_dir / "tools" / "x265" / "x265.exe").is_file()
+        nvenc = (c.install_dir / "tools" / "NVEncC" / "NVEncC64.exe").is_file()
+        if x265 and nvenc:
             return "tool esterni già presenti"
         return None
 
     def tools_run(c: Ctx) -> str:
         if c.dry_run:
             c.progress.event("log", level="dry-run",
-                             message=f"[dry-run] tools -> {c.install_dir / 'tools'}")
+                             message=f"[dry-run] tools -> {c.install_dir / 'tools'} "
+                                     "(x265/x264/mkvmerge + NVEncC)")
             return "dry-run"
-        if c.tools_zip is not None:
-            if not c.tools_zip.is_file():
-                raise BootstrapError(f"archivio tool non trovato: {c.tools_zip}")
-            archive = c.tools_zip
-        else:
-            cached = c.cache_dir / TOOLS["name"]
-            if cached.is_file() and sha256_of(cached) == TOOLS["sha256"]:
-                archive = cached
-                c.progress.event("log", level="out",
-                                 message=f"uso l'archivio in cache: {cached}")
-            else:
-                c.progress.event("log", level="out",
-                                 message=f"scarico i tool esterni: {TOOLS['url']}")
-                try:
-                    download_archive(TOOLS["url"], cached, progress=c.progress)
-                except Exception as exc:
-                    raise BootstrapError(
-                        f"download dei tool fallito: {exc}",
-                        "verifica la connessione; oppure usa --tools-zip con un archivio locale")
-                archive = cached
-        digest = sha256_of(archive)
-        if digest != TOOLS["sha256"]:
-            raise BootstrapError(
-                f"sha256 dei tool non corrisponde: {digest} != {TOOLS['sha256']}",
-                "riscarica l'archivio; se persiste, il file sorgente è cambiato")
-        extract_archive(archive, c.install_dir, required_root="tools")
-        return "x265, x264, mkvmerge in <install>/tools"
+        done = []
+        if not (c.install_dir / "tools" / "x265" / "x265.exe").is_file():
+            archive = cached_download(c, TOOLS, local=c.tools_zip)
+            extract_archive(archive, c.install_dir, required_root="tools")
+            done.append("x265, x264, mkvmerge")
+        nvenc_exe = c.install_dir / "tools" / "NVEncC" / "NVEncC64.exe"
+        if not nvenc_exe.is_file():
+            archive = cached_download(c, NVENC)
+            extract_archive(archive, c.install_dir / "tools" / "NVEncC",
+                            required_root=None)
+            if not nvenc_exe.is_file():
+                raise BootstrapError(
+                    "NVEncC64.exe mancante dopo l'estrazione",
+                    "l'archivio potrebbe avere un layout inatteso")
+            done.append("NVEncC 9.17")
+        return ", ".join(done) if done else "già presenti"
 
     # -- 19. gui-settings --------------------------------------------------
     def gui_settings_check(c: Ctx) -> Optional[str]:
@@ -923,7 +934,7 @@ def build_steps() -> list[Step]:
              "solo con --with-dinov2",
              cmnet2_dinov2_check, cmnet2_dinov2_run),
         Step("tools", "Tool esterni in <install>/tools",
-             "tools.zip pinnato (Release v1.0.0) o --tools-zip",
+             "tools.zip + NVEncC_9.17_x64.zip (Release v1.0.0) o --tools-zip",
              tools_check, tools_run),
         Step("gui-settings", "Settings GUI (solo se assenti)",
              "gui_cmnet2_settings.json pre-seedato",
@@ -986,7 +997,7 @@ def main(argv=None) -> int:
     parser.add_argument("--runtime-zip", type=Path, default=None,
                         help="usa un archivio runtime locale invece di scaricarlo (verificato via sha256)")
     parser.add_argument("--tools-zip", type=Path, default=None,
-                        help="usa un archivio tool locale invece di scaricarlo (verificato via sha256)")
+                        help="usa un archivio tools.zip locale invece di scaricarlo (verificato via sha256)")
     parser.add_argument("--with-dinov2", action="store_true",
                         help="scarica anche i pesi DINOv2 legacy (backbone dinov2, ~740 MB)")
     parser.add_argument("--use-system-python", action="store_true",

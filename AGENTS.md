@@ -19,38 +19,82 @@
 
 ---
 
-## 0. Come riprendere (handoff — stato al 2026-10-04, chiusura sessione)
+## 0. Come riprendere (handoff — stato al 2026-10-04, sessione 2, chiusura)
 
-**Dove sta il lavoro**: branch `feature/installer` (pushato su GitHub) nel
-worktree `D:\PProjects\HAVCServerDiT_installer`; la cartella principale
-`D:\PProjects\HAVCServerDiT` è rimasta su `main` e operativa (la sua vecchia
-copia locale di `AGENTS.md`, superata, è stata rimossa il 04-10: finché il
-branch non arriva su `main`, la memoria è solo qui). Ultimo commit pushato:
-`7dc346a`; da lì si procede a **commit locali** — push rimandati finché non
-c'è "qualcosa di stabile" (regola in §9).
+**Dove sta il lavoro**: branch `feature/installer` nel worktree
+`D:\PProjects\HAVCServerDiT_installer`; la cartella principale
+`D:\PProjects\HAVCServerDiT` è su `main` (la sua vecchia copia superata di
+`AGENTS.md` è stata rimossa: finché il branch non arriva su `main`, la memoria
+è solo qui). Ultimo commit **pushato**: `7dc346a`; da lì tutto procede a
+**commit locali** — push rimandati finché non c'è "qualcosa di stabile"
+(regola in §9). Ultimo commit locale della sessione 2: `b8df5c2` (più questo
+commit di chiusura).
 
-**Installazione di test completa**: `D:\HAVCServerDiT_Test` — stack server +
-GUI + tool (x265/x264/mkvmerge/NVEncC) + vscmnet2 con plugin e pesi (DINOv3 +
-DINOv2), **aggiornata a havc 0.1.1** col test del flusso di update del 04-10
-(smoke/update/idempotenza: `install-run8/9/10.log` nella radice). Controllo
-rapido: `D:\HAVCServerDiT_Test\venv\Scripts\havc-doctor.exe`
-(9 check attesi verdi); per usarla: doppio click su `HAVC.vbs` dalla radice.
+**Stato a fine sessione 2**: Fase 0 chiusa e verificata (update incrementale
+0.1.0→0.1.1 testato, log (14)); decisioni Fase 1 prese (D8–D11, §2); **spec
+del manager scritta** (`installer/PHASE1_SPEC.md`); mirror nunchaku pubblicato
+(release `nunchaku-1.2.1`); codice, commenti, UI e spec allineati
+all'inglese (log (16), (19)).
 
-**Release coinvolte** (repo `dan64/HAVCServerDiT`):
+**Prossimo passo — M1**: skeleton del manager in `manager/` (`HavcManager.sln`:
+`HavcManager.Core` + `HavcManager.App` WPF, UI minima *Start installation*),
+come da `installer/PHASE1_SPEC.md` §13.
+**Decisione da chiudere all'avvio di M1**: SDK .NET — sul PC ci sono SDK 5.0 e
+9.0 e il *runtime* .NET 10.0.12 (WindowsDesktop incluso); per il target
+`net10` serve l'SDK 10 (`winget Microsoft.DotNet.SDK.10` → 10.0.401, oppure
+installazione per-utente senza admin); altrimenti si sviluppa su SDK 9 e si
+retargetta prima della release.
+
+**Installazione di test**: `D:\HAVCServerDiT_Test` — stack completo,
+aggiornata a havc 0.1.1 (smoke/update/idempotenza: `install-run8/9/10.log`
+nella radice). Check rapido: `venv\Scripts\havc-doctor.exe` (9 verdi); avvio:
+doppio click su `HAVC.vbs`.
+
+**Release coinvolte** (repo `dan64/HAVCServerDiT`; `gh` autenticato come
+`dan64`):
 - `runtime-312` — mirror del runtime Python (python-build-standalone pinnato)
-- `v1.0.0` — `tools.zip` + **`NVEncC_9.17_x64.zip`** (aggiunto il 04-10)
-- `v0.1.0-alpha` — release di prova dell'installer (wheel `havc`, diffusers,
-  vscmnet2, spatial_correlation_sampler, `release.json`)
+- `nunchaku-1.2.1` — mirror della wheel nunchaku ufficiale (invariata)
+- `v1.0.0` — `tools.zip` + `NVEncC_9.17_x64.zip`
+- `v0.1.0-alpha` — release di prova dell'installer (wheel `havc`, asset,
+  `release.json`)
 
-**Prossimi passi, in ordine**:
-1. **Fase 1: manager C#** (UI **WPF**, D9; wizard, update/repair) — vedi §4c
-   e §6; Fase 0 chiusa (log (14)) e decisioni di §7 complete (D4–D11) —
-   prossimo deliverable: **spec del manager**.
-2. (Facoltativo, pre-release) run su VM/Sandbox "macchina pulita".
+**Comandi pronti** (dev Python = `.venv-dev` nel worktree; CWD **neutrale**,
+mai il checkout — bug del 04-10):
 
-**Regola d'oro per riprendere**: `havc-install` è idempotente e convergente —
-rieseguirlo su `D:\HAVCServerDiT_Test` deve finire tutto-skip; usarlo come
-primo smoke per verificare che l'ambiente di lavoro è integro.
+```powershell
+# smoke ambiente di test (atteso: tutto-skip + doctor verde)
+Set-Location $env:TEMP
+& D:\HAVCServerDiT_Test\runtime\python\python.exe -m havc.install --install-dir D:\HAVCServerDiT_Test
+
+# piano col codice del worktree (veloce, read-only)
+Set-Location D:\PProjects\HAVCServerDiT_installer
+& .\.venv-dev\Scripts\python.exe -m havc.install --install-dir D:\HAVCServerDiT_Test --plan
+
+# nuova versione: build wheel → staging → manifest
+& .\.venv-dev\Scripts\python.exe -m build --wheel --outdir dist
+& .\.venv-dev\Scripts\python.exe installer\make_release.py --tag vX --artifacts-dir dist\staging-vX
+& .\.venv-dev\Scripts\python.exe installer\make_release.py --verify dist\staging-vX\release.json --artifacts-dir dist\staging-vX
+
+# update end-to-end sul test install (pattern log (14)): wheel nuova nel runtime,
+# poi rerun bootstrap con --wheel/--assets-dir → log in install-runN.log
+& D:\HAVCServerDiT_Test\runtime\python\python.exe -m pip install --force-reinstall --no-deps dist\staging-vX\havc-<ver>-py3-none-any.whl
+```
+
+*EOL*: i file del repo sono **LF** (`.gitattributes`); chi riscrive file
+(l'agente o uno script) usi i bytes — niente traduzione newline.
+
+**Mappa del codice nuovo (Fase 0)**: `havc/install.py` = bootstrap 21 passi
+(`havc-install`); `havc/doctor.py` = check ambiente (`havc-doctor`);
+`havc/runtime.py` = runtime pinnato (download/estrazione); `havc/lockfile.py`
+= parsing dei pin; `havc/progress.py` = eventi `--json-progress`;
+`havc/paths.py` = percorsi wheel/checkout; `installer/make_release.py` =
+manifest `release.json`; `setup.py` = build hook della wheel;
+`patch_nunchaku.py` = patch nunchaku. Strumenti una tantum in `dist/`
+(ignorata da git): `i18n_strings.py`, `spec_ui_english.py`.
+
+**Regola d'oro**: `havc-install` è idempotente e convergente — rieseguirlo sul
+test install deve finire tutto-skip; è il primo smoke per verificare che
+l'ambiente è integro.
 
 ---
 
@@ -472,3 +516,8 @@ storico.*
   make_release): convertite in questo giro le stringhe di `havc/*.py` e
   `installer/make_release.py` (script di conversione con asserzioni in
   `dist/`); spec Fase 1 aggiornata (§2).
+- **2026-10-04 (20)** — **Sessione 2 chiusa.** §0 riscritta come handoff
+  operativo (stato, prossimo passo M1 + decisione SDK .NET, comandi pronti,
+  mappa del codice nuovo, policy push). Nella sessione: update test (log 14),
+  decisioni Fase 1 (D8–D11), spec `installer/PHASE1_SPEC.md`, mirror
+  `nunchaku-1.2.1`, conversione inglese (commenti, stringhe, spec).

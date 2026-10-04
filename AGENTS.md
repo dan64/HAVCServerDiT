@@ -252,9 +252,9 @@ sostituita, refresh di GUI/launcher, `verify` verde, rerun idempotente — log
 (14)). Spec: `installer/PHASE0_SPEC.md`. Resta solo il run facoltativo su VM
 pulita.
 
-**Stato Fase 1 (04-10):** non iniziata; tutte le decisioni propedeutiche sono
-prese (§7 chiusa: D8–D11). Prossimo deliverable: **spec del manager C#**
-(wizard, update/repair, cartella modelli).
+**Stato Fase 1 (04-10):** decisioni prese (§7 chiusa: D8–D11) e **spec scritta**:
+`installer/PHASE1_SPEC.md` (architettura, flussi, stato, contratto col
+bootstrap). Prossimo passo: avvio sviluppo (M1 — skeleton WPF + Core).
 
 ---
 
@@ -288,6 +288,7 @@ storico.*
 
 - `install.cmd`, `quick_update.cmd`, `start_server.cmd`, `run_server_*.cmd` — installazione e avvio attuali
 - `installer/PHASE0_SPEC.md` — specifica Fase 0 (packaging, lockfile, bootstrap, `release.json`)
+- `installer/PHASE1_SPEC.md` — specifica del manager C# (Fase 1: wizard, update/ripara, stato locale)
 - `GUI/README_GUI.md` — installazione GUI, pesi DINOv3, tool esterni
 - `packages/`, `dist/` — wheel e tool già distribuiti
 - `_dev/AGENTS.md` (in `D:\PProjects\HAVCServerDiT_dev`) — architettura e cronologia del progetto
@@ -305,8 +306,9 @@ storico.*
 - **Lingua del codice**: commenti e docstring nei file pubblici vanno in
   **inglese** (convenzione dell'autore, 04-10; vale anche per il futuro
   codice C#); l'italiano resta per l'interazione, questa memoria e le spec.
-  Le stringhe visibili all'utente sono attualmente in italiano (eventuale
-  localizzazione: decisione futura).
+- **Lingua delle stringhe utente**: **inglese** — UI del manager e messaggi
+  visibili di bootstrap/doctor (decisione del 04-10); altre lingue solo in
+  seguito, con stringhe centralizzate.
 - Non duplicare qui l'architettura del progetto (vive in `_dev/AGENTS.md`);
   questo file resta focalizzato su installer/wheel/update/release.
 
@@ -455,3 +457,14 @@ storico.*
   confermato dal `digest` GitHub e con download end-to-end dal mirror);
   `requirements/nunchaku.txt` punta al mirror. Committate le modifiche
   pendenti (decisioni D8–D11, conversione lingua, mirror nunchaku).
+- **2026-10-04 (18)** — **Spec del manager C# scritta**
+  (`installer/PHASE1_SPEC.md`): architettura Core/App, flussi install/update/
+  ripara/disinstalla, `install.json` schema v1, contratto col bootstrap
+  (`--json-progress`, nuove opzioni `--models-dir` e `--with-dinov2` sempre),
+  cartella modelli (D10), distribuzione (D1/D8). Prossimo: avvio sviluppo
+  (M1 — skeleton WPF + Core).
+- **2026-10-04 (19)** — **Stringhe utente in inglese (decisione).** UI del
+  manager e messaggi visibili del nuovo stack (bootstrap, doctor, progress,
+  make_release): convertite in questo giro le stringhe di `havc/*.py` e
+  `installer/make_release.py` (script di conversione con asserzioni in
+  `dist/`); spec Fase 1 aggiornata (§2).

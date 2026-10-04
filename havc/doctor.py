@@ -153,6 +153,27 @@ def check_gui() -> dict:
     return _result("gui", WARN, "GUI non trovata (installazione server-only?)")
 
 
+def check_cmnet2() -> dict:
+    """Plugin e pesi di vscmnet2 (solo se vscmnet2 è installato)."""
+    if importlib.util.find_spec("vscmnet2") is None:
+        return _result("cmnet2", SKIP, "vscmnet2 non installato")
+    try:
+        pkg = Path(importlib.util.find_spec("vscmnet2").origin).parent
+    except Exception:
+        return _result("cmnet2", WARN, "percorso di vscmnet2 non determinabile")
+    missing = [
+        label for label, path in (
+            ("checkpoint DINOv3", pkg / "weights" / "DINOv3FeatureV6_LocalAtten_p374099.pth"),
+            ("dinov3-vitb16", pkg / "weights" / "dinov3-vitb16" / "model.safetensors"),
+            ("plugin", pkg / "plugins" / "SourceFilter" / "LSmashSource" / "LSMASHSource.dll"),
+        ) if not path.is_file()
+    ]
+    if missing:
+        return _result("cmnet2", WARN, "mancano: " + ", ".join(missing),
+                       "esegui `havc-install` (passi cmnet2-plugins / cmnet2-weights)")
+    return _result("cmnet2", OK, "plugin e pesi DINOv3 presenti")
+
+
 def check_havc() -> dict:
     return _result("havc", OK, f"havc {__version__} ({paths.package_dir().parent})")
 
@@ -168,6 +189,7 @@ def run_checks(lock_dir: Path | None = None, fast: bool = False) -> list[dict]:
         checks.append(check_cuda())
         checks.append(check_gpu())
     checks.append(check_gui())
+    checks.append(check_cmnet2())
     checks.append(check_havc())
     return checks
 

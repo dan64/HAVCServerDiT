@@ -39,6 +39,73 @@ TOOLS = {
     "sha256": "0a17002e1bb8964d81ab892fdcf250c760764a71b3d5990d3f7865b38765aef5",
 }
 
+# Asset cmnet2 (plugin + pesi) — pinnati; sha256 verificati anche contro i
+# `digest` ufficiali GitHub (2026-10-04). Pesi DINOv3 dalla release cmnet2
+# v1.3.0 (NON v1.2.0: il link nei README puntava a un asset inesistente) e
+# v1.1.0; plugin dalla release vs-cmnet2 v1.0.0.
+CMNET2_PLUGINS = {
+    "name": "plugins_win.zip",
+    "url": "https://github.com/dan64/vs-cmnet2/releases/download/v1.0.0/plugins_win.zip",
+    "sha256": "3fa5117519e0d49211c90d496c65905a036c0a364e7b2b1addc00ca38d9bf256",
+    "size": 31056312,
+}
+
+# (dest è relativo alla cartella del pacchetto vscmnet2; extract_root=None
+#  significa "file singolo da copiare", altrimenti zip da estrarre)
+CMNET2_DINOV3 = (
+    {
+        "name": "DINOv3FeatureV6_LocalAtten_p374099.pth",
+        "url": "https://github.com/dan64/cmnet2/releases/download/v1.3.0/DINOv3FeatureV6_LocalAtten_p374099.pth",
+        "sha256": "ccb635feeba003b63e9aa7d226e7de09ff0da3824f2b6709cc1b1aa163cad312",
+        "size": 758716232,
+        "dest": "weights",
+        "extract_root": None,
+    },
+    {
+        "name": "dinov3-vitb16.zip",
+        "url": "https://github.com/dan64/cmnet2/releases/download/v1.1.0/dinov3-vitb16.zip",
+        "sha256": "9a8eecd00d326552f78df733c322868d161246c015ea10ceaee3d3036c7f61b2",
+        "size": 318219242,
+        "dest": "weights",
+        "extract_root": "dinov3-vitb16",
+    },
+)
+
+CMNET2_DINOV2 = (
+    {
+        "name": "DINOv2FeatureV6_LocalAtten_s2_154000.pth",
+        "url": "https://github.com/dan64/cmnet2/releases/download/v1.0.0/DINOv2FeatureV6_LocalAtten_s2_154000.pth",
+        "sha256": "eaf6301d1a088c0d7133008079a83b5fac1fc0f791061b2cf1b657602013457a",
+        "size": 494884817,
+        "dest": "weights",
+        "extract_root": None,
+    },
+    {
+        "name": "dinov2_vits14_pretrain.pth",
+        "url": "https://github.com/dan64/cmnet2/releases/download/v1.0.0/dinov2_vits14_pretrain.pth",
+        "sha256": "b938bf1bc15cd2ec0feacfe3a1bb553fe8ea9ca46a7e1d8d00217f29aef60cd9",
+        "size": 88283115,
+        "dest": "models/checkpoints",
+        "extract_root": None,
+    },
+    {
+        "name": "resnet18-5c106cde.pth",
+        "url": "https://github.com/dan64/cmnet2/releases/download/v1.0.0/resnet18-5c106cde.pth",
+        "sha256": "5c106cde386e87d4033832f2996f5493238eda96ccf559d1d62760c4de0613f8",
+        "size": 46827520,
+        "dest": "models/checkpoints",
+        "extract_root": None,
+    },
+    {
+        "name": "resnet50-19c8e357.pth",
+        "url": "https://github.com/dan64/cmnet2/releases/download/v1.0.0/resnet50-19c8e357.pth",
+        "sha256": "19c8e3572231adff6824a2da93fd67b5986919a2e65f8b6007eab4edee220097",
+        "size": 102502400,
+        "dest": "models/checkpoints",
+        "extract_root": None,
+    },
+)
+
 # Launcher scritti nella cartella di installazione (front-end di default = GUI).
 # Contenuto ASCII; le righe vengono riscritte con CRLF al salvataggio (i .cmd
 # con soli LF possono essere mal interpretati da cmd.exe).
@@ -136,6 +203,7 @@ class Ctx:
     python: Optional[Path] = None
     runtime_zip: Optional[Path] = None
     tools_zip: Optional[Path] = None
+    with_dinov2: bool = False
     use_system_python: bool = False
 
     @property
@@ -308,6 +376,45 @@ def find_asset_wheel(ctx: Ctx, pattern: str) -> Optional[Path]:
 
 def find_diffusers_wheel(ctx: Ctx) -> Optional[Path]:
     return find_asset_wheel(ctx, "diffusers-*.whl")
+
+
+def vscmnet2_dir(ctx: Ctx) -> Optional[Path]:
+    """Cartella del pacchetto vscmnet2 nel venv (None se non installato).
+
+    Usa `find_spec` senza eseguire il pacchetto (niente import di torch).
+    """
+    code = (
+        "import importlib.util as u\n"
+        "s = u.find_spec('vscmnet2')\n"
+        "loc = list(s.submodule_search_locations)[0] "
+        "if s and s.submodule_search_locations else ''\n"
+        "print(loc)\n"
+    )
+    proc = subprocess.run([str(ctx.venv_python), "-c", code],
+                          capture_output=True, text=True, cwd=ctx.child_cwd())
+    out = (proc.stdout or "").strip()
+    return Path(out) if out else None
+
+
+def cached_download(ctx: Ctx, asset: dict) -> Path:
+    """Scarica (o riusa dalla cache) un asset pinnato, verificando lo sha256."""
+    cached = ctx.cache_dir / asset["name"]
+    if cached.is_file() and sha256_of(cached) == asset["sha256"]:
+        ctx.progress.event("log", level="out",
+                           message=f"uso l'archivio in cache: {cached}")
+        return cached
+    ctx.progress.event("log", level="out", message=f"scarico: {asset['url']}")
+    try:
+        download_archive(asset["url"], cached, progress=ctx.progress)
+    except Exception as exc:
+        raise BootstrapError(f"download fallito ({asset['name']}): {exc}",
+                             "verifica la connessione; riprova")
+    digest = sha256_of(cached)
+    if digest != asset["sha256"]:
+        raise BootstrapError(
+            f"sha256 non corrisponde per {asset['name']}: {digest} != {asset['sha256']}",
+            "riscarica l'archivio; se persiste, il file sorgente è cambiato")
+    return cached
 
 
 # ---------------------------------------------------------------------------
@@ -579,7 +686,94 @@ def build_steps() -> list[Step]:
             c.run([c.venv_python, "-m", "pip", "install", str(wheel)])
         return "GUI + vscmnet2 + spatial_correlation_sampler"
 
-    # -- 15. tools ---------------------------------------------------------
+    # -- 15. cmnet2-plugins ------------------------------------------------
+    def cmnet2_plugins_check(c: Ctx) -> Optional[str]:
+        pkg = vscmnet2_dir(c)
+        if pkg is None:
+            return "vscmnet2 non installato"
+        if (pkg / "plugins" / "SourceFilter" / "LSmashSource" / "LSMASHSource.dll").is_file():
+            return "plugin già presenti"
+        return None
+
+    def cmnet2_plugins_run(c: Ctx) -> str:
+        if c.dry_run:
+            c.progress.event("log", level="dry-run",
+                             message="[dry-run] plugin vs-cmnet2 -> vscmnet2/plugins")
+            return "dry-run"
+        pkg = vscmnet2_dir(c)
+        if pkg is None:
+            raise BootstrapError("vscmnet2 non installato nel venv",
+                                 "esegui prima il passo `gui-deps`")
+        archive = cached_download(c, CMNET2_PLUGINS)
+        extract_archive(archive, pkg, required_root="plugins")
+        return "plugin in vscmnet2/plugins"
+
+    # -- 16. cmnet2-weights ------------------------------------------------
+    def cmnet2_weights_check(c: Ctx) -> Optional[str]:
+        pkg = vscmnet2_dir(c)
+        if pkg is None:
+            return "vscmnet2 non installato"
+        checkpoint = pkg / "weights" / CMNET2_DINOV3[0]["name"]
+        vitb16 = pkg / "weights" / "dinov3-vitb16" / "model.safetensors"
+        if (checkpoint.is_file() and checkpoint.stat().st_size == CMNET2_DINOV3[0]["size"]
+                and vitb16.is_file()):
+            return "pesi DINOv3 già presenti"
+        return None
+
+    def cmnet2_weights_run(c: Ctx) -> str:
+        if c.dry_run:
+            c.progress.event("log", level="dry-run",
+                             message="[dry-run] pesi DINOv3 -> vscmnet2/weights")
+            return "dry-run"
+        pkg = vscmnet2_dir(c)
+        if pkg is None:
+            raise BootstrapError("vscmnet2 non installato nel venv",
+                                 "esegui prima il passo `gui-deps`")
+        weights = pkg / "weights"
+        weights.mkdir(parents=True, exist_ok=True)
+        done = []
+        for asset in CMNET2_DINOV3:
+            archive = cached_download(c, asset)
+            if asset["extract_root"]:
+                extract_archive(archive, weights, required_root=asset["extract_root"])
+                done.append(f"{asset['name']} (estratto)")
+            else:
+                shutil.copy2(archive, weights / asset["name"])
+                done.append(asset["name"])
+        if not (weights / "dinov3-vitb16" / "model.safetensors").is_file():
+            raise BootstrapError(
+                "dinov3-vitb16/model.safetensors mancante dopo l'estrazione",
+                "l'archivio potrebbe avere un layout inatteso")
+        return ", ".join(done)
+
+    # -- 17. cmnet2-dinov2 -------------------------------------------------
+    def cmnet2_dinov2_check(c: Ctx) -> Optional[str]:
+        if not c.with_dinov2:
+            return "non richiesto (--with-dinov2)"
+        pkg = vscmnet2_dir(c)
+        if pkg is None:
+            return "vscmnet2 non installato"
+        missing = [a["name"] for a in CMNET2_DINOV2
+                   if not (pkg / a["dest"] / a["name"]).is_file()]
+        return "pesi DINOv2 già presenti" if not missing else None
+
+    def cmnet2_dinov2_run(c: Ctx) -> str:
+        if c.dry_run:
+            c.progress.event("log", level="dry-run",
+                             message="[dry-run] pesi DINOv2 -> vscmnet2/weights + models/checkpoints")
+            return "dry-run"
+        pkg = vscmnet2_dir(c)
+        if pkg is None:
+            raise BootstrapError("vscmnet2 non installato nel venv",
+                                 "esegui prima il passo `gui-deps`")
+        for asset in CMNET2_DINOV2:
+            dest_dir = pkg / asset["dest"]
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            archive = cached_download(c, asset)
+            shutil.copy2(archive, dest_dir / asset["name"])
+        return f"{len(CMNET2_DINOV2)} file DINOv2 (legacy)"
+
+    # -- 18. tools ---------------------------------------------------------
     def tools_check(c: Ctx) -> Optional[str]:
         if (c.install_dir / "tools" / "x265" / "x265.exe").is_file():
             return "tool esterni già presenti"
@@ -618,7 +812,7 @@ def build_steps() -> list[Step]:
         extract_archive(archive, c.install_dir, required_root="tools")
         return "x265, x264, mkvmerge in <install>/tools"
 
-    # -- 16. gui-settings --------------------------------------------------
+    # -- 19. gui-settings --------------------------------------------------
     def gui_settings_check(c: Ctx) -> Optional[str]:
         settings = c.install_dir / "gui" / "gui_cmnet2_settings.json"
         return "settings già presenti" if settings.is_file() else None
@@ -644,7 +838,7 @@ def build_steps() -> list[Step]:
             fh.write(json.dumps(settings, indent=4) + "\n")
         return "gui_cmnet2_settings.json creato"
 
-    # -- 17. launchers -----------------------------------------------------
+    # -- 20. launchers -----------------------------------------------------
     def launchers_check(c: Ctx) -> Optional[str]:
         return "launcher già presenti" if (c.install_dir / "HAVC.cmd").is_file() else None
 
@@ -658,7 +852,7 @@ def build_steps() -> list[Step]:
             path.write_bytes(content.replace("\n", "\r\n").encode("utf-8"))
         return ", ".join(LAUNCHERS)
 
-    # -- 18. verify --------------------------------------------------------
+    # -- 21. verify --------------------------------------------------------
     def verify_run(c: Ctx) -> str:
         env = dict(os.environ)
         env.pop("PYTHONPATH", None)  # niente ombreggiamenti dal chiamante
@@ -719,6 +913,15 @@ def build_steps() -> list[Step]:
         Step("gui-deps", "Dipendenze GUI (FreeSimpleGUI, tkinterdnd2, VapourSynth, vscmnet2, SCS)",
              "pip install -r requirements/gui.txt + wheel locali",
              gui_deps_check, gui_deps_run),
+        Step("cmnet2-plugins", "Plugin vs-cmnet2 in vscmnet2/plugins",
+             "plugins_win.zip (vs-cmnet2 v1.0.0, sha256)",
+             cmnet2_plugins_check, cmnet2_plugins_run),
+        Step("cmnet2-weights", "Pesi DINOv3 di vs-cmnet2",
+             "checkpoint (cmnet2 v1.3.0) + dinov3-vitb16.zip (v1.1.0)",
+             cmnet2_weights_check, cmnet2_weights_run),
+        Step("cmnet2-dinov2", "Pesi DINOv2 legacy (opzionale)",
+             "solo con --with-dinov2",
+             cmnet2_dinov2_check, cmnet2_dinov2_run),
         Step("tools", "Tool esterni in <install>/tools",
              "tools.zip pinnato (Release v1.0.0) o --tools-zip",
              tools_check, tools_run),
@@ -784,6 +987,8 @@ def main(argv=None) -> int:
                         help="usa un archivio runtime locale invece di scaricarlo (verificato via sha256)")
     parser.add_argument("--tools-zip", type=Path, default=None,
                         help="usa un archivio tool locale invece di scaricarlo (verificato via sha256)")
+    parser.add_argument("--with-dinov2", action="store_true",
+                        help="scarica anche i pesi DINOv2 legacy (backbone dinov2, ~740 MB)")
     parser.add_argument("--use-system-python", action="store_true",
                         help="salta il provisioning del runtime e usa il Python di sistema (sviluppo)")
     parser.add_argument("--assets-dir", type=Path, default=None,
@@ -828,6 +1033,7 @@ def main(argv=None) -> int:
         python=args.python,
         runtime_zip=args.runtime_zip.resolve() if args.runtime_zip else None,
         tools_zip=args.tools_zip.resolve() if args.tools_zip else None,
+        with_dinov2=args.with_dinov2,
         use_system_python=args.use_system_python,
     )
     ok = run_steps(ctx, steps, only)

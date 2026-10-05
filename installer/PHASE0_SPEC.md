@@ -161,7 +161,8 @@ Passi, nell'ordine:
 
 Flag: `--install-dir` (obbligatorio), `--python`, `--runtime-zip`,
 `--tools-zip`, `--with-dinov2`, `--use-system-python`, `--assets-dir`,
-`--wheel`, `--only a,b`, `--plan`, `--dry-run`, `--json-progress`.
+`--wheel`, `--models-dir <dir>` (wiring cartella modelli, Fase 1),
+`--only a,b`, `--plan`, `--dry-run`, `--json-progress`.
 
 Exit code: `0` = ok (anche se tutto era già a posto), `1` = passo fallito,
 `2` = errore d'uso.
@@ -215,6 +216,11 @@ Eventi:
 - `step_error` — `id`, `error`, `remediation`;
 - `log` — `level` (`cmd` | `out` | `err` | `dry-run`), `message`;
 - `result` — `ok`, `steps`, `skipped`.
+
+**Cancel cooperativo (Fase 1)**: se all'avvio di un passo esiste
+`<install>\cache\.stop-request`, il bootstrap si ferma prima di eseguirlo
+(il file viene rimosso all'avvio di ogni run). Usato dal pulsante *Cancel*
+del manager.
 
 Tutti gli eventi hanno `event` e `ts` (epoch). Esempio:
 

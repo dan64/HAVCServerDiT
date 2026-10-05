@@ -160,13 +160,18 @@ Invocazione standard dal manager:
   `runtime\python -m pip install --force-reinstall --no-deps <wheel>` (flusso
   a due stadi, già verificato).
 - **Nuove opzioni bootstrap (Fase 1)**:
-  - `--models-dir <dir>`: wiring della cartella modelli (§7) — seed `hf_cache`
+  - `--models-dir <dir>` (**implementato nel bootstrap il 05-10**): wiring
+    della cartella modelli (§7) — seed `hf_cache`
     in `gui_cmnet2_settings.json` **solo se assente**; `cache_dir` nei config
     `qwen_nunchaku_*` **solo se vuoto**; variabile `HAVC_MODELS_DIR` nei
     launcher generati;
   - `--with-dinov2` già esiste: il manager lo passa **sempre** (D10).
 - `--runtime-zip`/`--tools-zip` non usati dal manager (download diretti da URL
   pinnati, con cache nella cartella di installazione).
+- **Cancel cooperativo (implementato nel bootstrap il 05-10)**: per fermare un
+  run il manager crea `<install>\cache\.stop-request`; il bootstrap lo
+  controlla tra un passo e l'altro e si ferma a fine passo corrente (file
+  rimosso all'avvio di ogni run). Secondo click del *Cancel*: kill del processo.
 
 ---
 
@@ -370,7 +375,8 @@ folder*); in caso di rollback, messaggio dedicato + log.
 - **M1** — skeleton: soluzione `manager/`, Core (manifest, downloader, runner),
   UI minima *Start installation*.
 - **M2** — prima installazione end-to-end (preflight, cartelle, download, due
-  stadi, progresso, chiusura, disinstallazione).
+  stadi, progresso, chiusura, disinstallazione). **Completata il 05-10**
+  (log (24) in `AGENTS.md`).
 - **M3** — update incrementale + rollback + ripara (sul test install) + lock
   istanze.
 - **M4** — rifinitura UI, log, scorciatoie/registrazione, tag di test; poi run

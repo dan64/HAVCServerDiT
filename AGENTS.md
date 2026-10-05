@@ -19,7 +19,7 @@
 
 ---
 
-## 0. Come riprendere (handoff — aggiornato al 2026-10-05; SDK 10, VS 2026 e M1 — log (21)–(23))
+## 0. Come riprendere (handoff — aggiornato al 2026-10-05; SDK 10, VS 2026, M1–M2 — log (21)–(24))
 
 **Dove sta il lavoro**: branch `feature/installer` nel worktree
 `D:\PProjects\HAVCServerDiT_installer`; la cartella principale
@@ -36,9 +36,9 @@ del manager scritta** (`installer/PHASE1_SPEC.md`); mirror nunchaku pubblicato
 (release `nunchaku-1.2.1`); codice, commenti, UI e spec allineati
 all'inglese (log (16), (19)).
 
-**Prossimo passo — M2**: prima installazione end-to-end (preflight, cartelle,
-download a due stadi, progresso live, chiusura, disinstallazione), come da
-`installer/PHASE1_SPEC.md` §13. M1 (skeleton) completato — log (23).
+**Prossimo passo — M3**: update incrementale + rollback + ripara + lock
+istanze (spec §13). M1–M2 completate — log (23), (24). Per l'e2e reale del
+wizard: nuova release (wheel aggiornata + manifest) e run in VM.
 **Decisione SDK chiusa (05-10)**: target **.NET 10** — SDK **10.0.401**
 installato machine-wide (standalone) e **VS 2026** (Community v18.10)
 installato lo stesso giorno: l'MSBuild 18.10 compila `net10` (smoke WPF verde)
@@ -300,8 +300,8 @@ pulita.
 
 **Stato Fase 1 (04-10):** decisioni prese (§7 chiusa: D8–D11) e **spec scritta**:
 `installer/PHASE1_SPEC.md` (architettura, flussi, stato, contratto col
-bootstrap). M1 (skeleton WPF + Core) completato il 05-10 (log (23));
-prossimo passo: M2 (prima installazione end-to-end).
+bootstrap). M1 completata (log (23)); M2 completata (log (24));
+prossimo passo: M3 (update/ripara).
 
 ---
 
@@ -555,3 +555,19 @@ storico.*
   aggiornati (bin/obj, LF per i sorgenti .NET). Verifiche: build verde con
   `dotnet` CLI e MSBuild VS 2026; smoke di avvio GUI ok. Prossimo: M2 (prima
   installazione end-to-end).
+- **2026-10-05 (24)** — **M2 completata: prima installazione end-to-end.**
+  Bootstrap (Python): nuovo `--models-dir` (wiring §7 — `hf_cache`/`cache_dir`
+  solo se vuoti, `HAVC_MODELS_DIR` nei launcher; mai sovrascritto un valore
+  esistente), cancel cooperativo (`.stop-request`, stop a fine passo), fix
+  `paths.configs_dir()` dal checkout (cercava `configs/` invece di `config/`)
+  e guardia venv in `vscmnet2_dir` (`--plan` su cartella vuota). Manager: Core
+  implementato (Downloader sha256+cache, StateStore, Preflight,
+  BootstrapRunner con eventi+jsonl, `PythonRuntime` per il tar.gz,
+  `DownloadPlan`, `InstallFlow` a due stadi); progetto test xUnit (19 unit +
+  2 integrazione gated); **wizard WPF completo** (Welcome→Preflight→Folders→
+  Components→Summary→Progress→Finish + pagina Installed con disinstallazione
+  e auto-rimozione, scorciatoie Start Menu, registrazione HKCU; opzioni
+  `--manifest/--release-tag/--install-dir/--uninstall`). Verifiche: build 0
+  warning (CLI + VS 2026); unit 19/19; integrazione 2/2 (runtime reale
+  estratto + pip + `--plan` in scratch con la wheel nuova; download reale con
+  sha256); smoke del wizard ok. Prossimo: M3 (update/ripara).

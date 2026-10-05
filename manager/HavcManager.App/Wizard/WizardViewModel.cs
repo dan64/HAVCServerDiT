@@ -821,10 +821,12 @@ public sealed class WizardViewModel : INotifyPropertyChanged
         string? self = Environment.ProcessPath;
         if (self is not null && IsUnder(self, installDir))
         {
-            // The manager itself lives in the install folder: self-removal worker.
-            string tempCopy = Path.Combine(
-                Path.GetTempPath(), $"HAVCManager-uninstall-{Guid.NewGuid():N}.exe");
-            File.Copy(self, tempCopy, overwrite: true);
+            // The manager itself lives in the install folder: self-removal
+            // worker (copy the whole application so it runs standalone).
+            string tempDir = Path.Combine(
+                Path.GetTempPath(), $"HAVCManager-uninstall-{Guid.NewGuid():N}");
+            string tempCopy = Path.Combine(tempDir, "HAVCManager.exe");
+            ShellIntegration.CopyManagerFiles(tempCopy);
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
                 tempCopy, $"--uninstall-run \"{installDir}\""));
             Application.Current.Shutdown();

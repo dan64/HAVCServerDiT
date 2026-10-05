@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO;
+using HavcManager.Core.Preflight;
 using Microsoft.Win32;
 
 namespace HavcManager.App.Windows;
@@ -105,16 +106,45 @@ public static class ShellIntegration
     }
 
     // --------------------------------------------------------------- launching --
-    public static void CopyManagerTo(string installDir)
+    /// <summary>
+    /// Copies the manager application next to <paramref name="targetExePath"/> so
+    /// the copy runs standalone (PHASE1_SPEC §6.2 step 7, §6.5). A
+    /// framework-dependent build also needs its managed assemblies and host
+    /// files next to the apphost; a single-file publish needs only the exe
+    /// (Assembly.Location is empty, nothing external to copy).
+    /// </summary>
+    public static void CopyApplicationFiles(string sourceExePath, string targetExePath)
     {
-        string? self = Environment.ProcessPath;
-        if (self is null)
+        string target = Path.GetFullPath(targetExePath);
+        if (string.Equals(Path.GetFullPath(sourceExePath), target, StringComparison.OrdinalIgnoreCase))
             return;
-        string target = Path.Combine(installDir, "HAVCManager.exe");
-        if (string.Equals(Path.GetFullPath(self), Path.GetFullPath(target), StringComparison.OrdinalIgnoreCase))
-            return;
-        File.Copy(self, target, overwrite: true);
+        string targetDir = Path.GetDirectoryName(target)!;
+        Directory.CreateDirectory(targetDir);
+        File.Copy(sourceExePath, target, overwrite: true);
+        foreach (Type anchor in new[] { typeof(ShellIntegration), typeof(PreflightReport) })
+        {
+            string location = anchor.Assembly.Location;
+            if (string.IsNullOrEmpty(location))
+                continue;  // single-file publish: the exe is self-contained
+            string baseName = Path.GetFileNameWithoutExtension(location);
+            string sourceDir = Path.GetDirectoryName(location)!;
+            foreach (string suffix in new[] { ".dll", ".deps.json", ".runtimeconfig.json" })
+            {
+                string source = Path.Combine(sourceDir, baseName + suffix);
+                if (File.Exists(source))
+                    File.Copy(source, Path.Combine(targetDir, baseName + suffix), overwrite: true);
+            }
+        }
     }
+
+    public static void CopyManagerFiles(string targetExePath)
+    {
+        if (Environment.ProcessPath is { } self)
+            CopyApplicationFiles(self, targetExePath);
+    }
+
+    public static void CopyManagerTo(string installDir)
+        => CopyManagerFiles(Path.Combine(installDir, "HAVCManager.exe"));
 
     public static void LaunchGui(string installDir)
         => StartShell(Path.Combine(installDir, "HAVC.vbs"), "", installDir);

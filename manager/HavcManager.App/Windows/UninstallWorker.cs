@@ -37,9 +37,13 @@ internal static class UninstallWorker
         {
             try
             {
-                Process.Start(new ProcessStartInfo(
-                    "cmd.exe",
-                    $"/c ping -n 2 127.0.0.1 >nul & del /f /q \"{self}\"")
+                string? selfDir = Path.GetDirectoryName(self);
+                string parentName = string.IsNullOrEmpty(selfDir) ? "" : Path.GetFileName(selfDir);
+                string command = parentName.StartsWith("HAVCManager-uninstall-", StringComparison.OrdinalIgnoreCase)
+                    // Dedicated temp folder: remove the whole copy (exe + companions).
+                    ? $"ping -n 2 127.0.0.1 >nul & rmdir /s /q \"{selfDir}\""
+                    : $"ping -n 2 127.0.0.1 >nul & del /f /q \"{self}\"";
+                Process.Start(new ProcessStartInfo("cmd.exe", "/c " + command)
                 {
                     CreateNoWindow = true,
                     UseShellExecute = false,

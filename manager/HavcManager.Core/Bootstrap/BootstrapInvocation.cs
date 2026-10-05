@@ -17,9 +17,6 @@ public sealed record BootstrapInvocation
     /// <summary>Folder with the extra asset wheels (vscmnet2, spatial_correlation_sampler).</summary>
     public required string AssetsDir { get; init; }
 
-    /// <summary>Unified models folder (D10); passed through --models-dir.</summary>
-    public string? ModelsDir { get; init; }
-
     /// <summary>
     /// GUI default model (--default-model): "longcat-gguf" below the RAM
     /// threshold, else "qwen21-viggle"; seeds gui_cmnet2_settings.json when empty.

@@ -6,7 +6,8 @@ namespace HavcManager.App;
 ///   --manifest &lt;file|url&gt;    manifest override for tests
 ///   --release-tag &lt;tag&gt;      manifest URL from an explicit release tag
 ///   --uninstall               open in uninstall mode
-///   --uninstall-run &lt;dir&gt;    internal: self-removal worker (deletes the folder)
+///   --uninstall-run &lt;dir&gt;    internal: self-removal worker
+///   --uninstall-delete-models internal: also delete the model files (worker)
 /// </summary>
 public sealed class AppOptions
 {
@@ -15,6 +16,7 @@ public sealed class AppOptions
     public string? ReleaseTag { get; private set; }
     public bool Uninstall { get; private set; }
     public string? UninstallRunDir { get; private set; }
+    public bool UninstallRunDeleteModels { get; private set; }
 
     public static AppOptions Parse(string[] args)
     {
@@ -44,6 +46,9 @@ public sealed class AppOptions
                     break;
                 case "--uninstall-run":
                     options.UninstallRunDir = TakeValue();
+                    break;
+                case "--uninstall-delete-models":
+                    options.UninstallRunDeleteModels = true;
                     break;
                 default:
                     throw new ArgumentException($"Unknown argument: {args[i]}");

@@ -8,6 +8,7 @@ using HavcManager.App.Dialogs;
 using HavcManager.App.Resources;
 using HavcManager.App.Windows;
 using HavcManager.Core.Bootstrap;
+using HavcManager.Core.Deployment;
 using HavcManager.Core.Download;
 using HavcManager.Core.Install;
 using HavcManager.Core.Log;
@@ -52,7 +53,6 @@ public sealed class WizardViewModel : INotifyPropertyChanged
     private int _stopStage;
 
     private string _installDir = "";
-    private string _modelsDir = "";
     private bool _desktopShortcut;
     private string _statusText = "";
     private bool _isRunning;
@@ -79,12 +79,6 @@ public sealed class WizardViewModel : INotifyPropertyChanged
     {
         get => _installDir;
         set => Set(ref _installDir, value);
-    }
-
-    public string ModelsDir
-    {
-        get => _modelsDir;
-        set => Set(ref _modelsDir, value);
     }
 
     public bool DesktopShortcut
@@ -172,7 +166,6 @@ public sealed class WizardViewModel : INotifyPropertyChanged
     public void Initialize()
     {
         InstallDir = _options.InstallDir ?? InstallLocator.DefaultInstallDir;
-        ModelsDir = SuggestModelsDir();
 
         ReloadExisting();
         if (Existing is not null)
@@ -194,7 +187,6 @@ public sealed class WizardViewModel : INotifyPropertyChanged
         if (Existing is not null)
         {
             InstallDir = Existing.InstallDir;
-            ModelsDir = Existing.State.ModelsDir ?? ModelsDir;
         }
         RefreshInstalledLines();
         Notify(nameof(Existing));
@@ -211,9 +203,8 @@ public sealed class WizardViewModel : INotifyPropertyChanged
         }
         InstalledLines.Add($"{Strings.SummaryVersionLabel}: {state.AppVersion}");
         InstalledLines.Add($"{Strings.LabelInstallFolder}: {Existing!.InstallDir}");
-        InstalledLines.Add($"{Strings.LabelModelsFolder}: {state.ModelsDir ?? "—"}");
         InstalledLines.Add(LastVerifyText(state));
-        InstalledLines.Add(string.Format(CultureInfo.InvariantCulture, Strings.FreeSpaceFormat, FreeSpace(state.ModelsDir)));
+        InstalledLines.Add(string.Format(CultureInfo.InvariantCulture, Strings.FreeSpaceFormat, FreeSpace(Existing!.InstallDir)));
         DirtyWarningVisible = state.Dirty;
     }
 
@@ -268,7 +259,7 @@ public sealed class WizardViewModel : INotifyPropertyChanged
         try
         {
             var report = await new Preflight()
-                .RunAsync(InstallDir, ModelsDir, ResolveManifestSource(), LocalFallbackManifestPath());
+                .RunAsync(InstallDir, ResolveManifestSource(), LocalFallbackManifestPath());
             _preflightReport = report;
             _defaultModelName = report.DefaultModelName;
             foreach (PreflightCheck check in report.Checks)
@@ -287,9 +278,9 @@ public sealed class WizardViewModel : INotifyPropertyChanged
 
     public async Task ContinueFromFoldersAsync()
     {
-        if (string.IsNullOrWhiteSpace(InstallDir) || string.IsNullOrWhiteSpace(ModelsDir))
+        if (string.IsNullOrWhiteSpace(InstallDir))
         {
-            ShowError(Strings.ErrorTitle, "Choose both the install folder and the models folder.");
+            ShowError(Strings.ErrorTitle, "Choose the install folder.");
             return;
         }
         if (IsBusy)
@@ -330,7 +321,7 @@ public sealed class WizardViewModel : INotifyPropertyChanged
             reset: true,
             (observe, ct) => _flow!.RunAsync(
                 new InstallPlan(
-                    _manifest, InstallDir, ModelsDir, WithDinov2: true,
+                    _manifest, InstallDir, WithDinov2: true,
                     DefaultModel: _defaultModelName ?? Preflight.DefaultModelForThisMachine()),
                 observe, ct));
         if (outcome.Ok)
@@ -421,7 +412,7 @@ public sealed class WizardViewModel : INotifyPropertyChanged
             reset: true,
             (observe, ct) => _flow!.RunAsync(
                 new InstallPlan(
-                    _updateManifest, InstallDir, ModelsDir, WithDinov2: true,
+                    _updateManifest, InstallDir, WithDinov2: true,
                     DefaultModel: Preflight.DefaultModelForThisMachine()),
                 observe, ct));
 
@@ -462,7 +453,7 @@ public sealed class WizardViewModel : INotifyPropertyChanged
         if (oldWheel is not null)
         {
             var repair = new RepairPlan(
-                InstallDir, ModelsDir, PythonRuntime.PythonExePath(InstallDir), oldWheel,
+                InstallDir, PythonRuntime.PythonExePath(InstallDir), oldWheel,
                 RuntimeArchive: RuntimeArchivePath(state, cacheDir),
                 WithDinov2: true,
                 DefaultModel: Preflight.DefaultModelForThisMachine());
@@ -518,7 +509,7 @@ public sealed class WizardViewModel : INotifyPropertyChanged
             return;
 
         var plan = new RepairPlan(
-            InstallDir, ModelsDir, PythonRuntime.PythonExePath(InstallDir), wheel,
+            InstallDir, PythonRuntime.PythonExePath(InstallDir), wheel,
             RuntimeArchive: RuntimeArchivePath(state, cacheDir),
             WithDinov2: true,
             DefaultModel: Preflight.DefaultModelForThisMachine());
@@ -661,7 +652,6 @@ public sealed class WizardViewModel : INotifyPropertyChanged
             AppVersion = _manifest!.AppVersion,
             InstalledAt = DateTimeOffset.UtcNow.ToString("o"),
             InstallDir = InstallDir,
-            ModelsDir = ModelsDir,
             Runtime = _manifest.Runtime is { } runtime
                 ? new RuntimeState { Name = runtime.Name, Sha256 = runtime.Sha256, Python = runtime.Python }
                 : null,
@@ -808,9 +798,6 @@ public sealed class WizardViewModel : INotifyPropertyChanged
     public async Task UninstallAsync(bool deleteModels)
     {
         string installDir = Existing?.InstallDir ?? InstallDir;
-        string? modelsDir = Existing?.State.ModelsDir;
-        if (string.IsNullOrWhiteSpace(modelsDir))
-            modelsDir = null;
 
         try
         {
@@ -826,17 +813,6 @@ public sealed class WizardViewModel : INotifyPropertyChanged
         catch (Exception)
         {
         }
-        if (deleteModels && modelsDir is not null)
-        {
-            try
-            {
-                DeleteWithRetry(modelsDir);
-            }
-            catch (Exception ex)
-            {
-                ShowError(Strings.ErrorTitle, $"{Strings.UninstallPartialMessage}\n{modelsDir}\n\n{ex.Message}");
-            }
-        }
 
         string? self = Environment.ProcessPath;
         if (self is not null && IsUnder(self, installDir))
@@ -848,14 +824,19 @@ public sealed class WizardViewModel : INotifyPropertyChanged
             string tempCopy = Path.Combine(tempDir, "HAVCManager.exe");
             ShellIntegration.CopyManagerFiles(tempCopy);
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
-                tempCopy, $"--uninstall-run \"{installDir}\""));
+                tempCopy,
+                $"--uninstall-run \"{installDir}\""
+                + (deleteModels ? " --uninstall-delete-models" : "")));
             Application.Current.Shutdown();
             return;
         }
 
         try
         {
-            DeleteWithRetry(installDir);
+            // Model files live inside the install folder (<install>\comfy_bridge\models):
+            // everything else goes, the models survive unless the user asked
+            // to delete them too.
+            InstallTreeCleanup.Delete(installDir, keepComfyModels: !deleteModels);
         }
         catch (Exception ex)
         {
@@ -863,27 +844,6 @@ public sealed class WizardViewModel : INotifyPropertyChanged
         }
         MessageDialog.Show(Application.Current.MainWindow, Strings.AppTitle, Strings.UninstallDoneMessage);
         Application.Current.Shutdown();
-    }
-
-    private static void DeleteWithRetry(string dir)
-    {
-        for (int attempt = 0; ; attempt++)
-        {
-            try
-            {
-                if (Directory.Exists(dir))
-                    Directory.Delete(dir, recursive: true);
-                return;
-            }
-            catch (IOException) when (attempt < 40)
-            {
-                Thread.Sleep(500);
-            }
-            catch (UnauthorizedAccessException) when (attempt < 40)
-            {
-                Thread.Sleep(500);
-            }
-        }
     }
 
     private static bool IsUnder(string file, string dir)
@@ -928,31 +888,6 @@ public sealed class WizardViewModel : INotifyPropertyChanged
             }
             throw;
         }
-    }
-
-    private static string SuggestModelsDir()
-    {
-        try
-        {
-            string? bestRoot = null;
-            long bestFree = -1;
-            foreach (DriveInfo drive in DriveInfo.GetDrives())
-            {
-                if (drive.DriveType != DriveType.Fixed || !drive.IsReady)
-                    continue;
-                if (drive.AvailableFreeSpace > bestFree)
-                {
-                    bestFree = drive.AvailableFreeSpace;
-                    bestRoot = drive.RootDirectory.FullName;
-                }
-            }
-            if (bestRoot is not null)
-                return Path.Combine(bestRoot, "HAVCModels");
-        }
-        catch (IOException)
-        {
-        }
-        return Path.Combine(InstallLocator.DefaultInstallDir, "models");
     }
 
     internal static string FormatBytes(long bytes)

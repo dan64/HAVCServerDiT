@@ -16,14 +16,12 @@ public sealed record FlowEvent(string Kind, string Message, long Done = 0, long 
 public sealed record InstallPlan(
     ReleaseManifest Manifest,
     string InstallDir,
-    string ModelsDir,
     bool WithDinov2 = true,
     string? DefaultModel = null);
 
 /// <summary>Parameters of a repair run (§6.4): cached wheel, no downloads.</summary>
 public sealed record RepairPlan(
     string InstallDir,
-    string ModelsDir,
     string PythonExe,
     string WheelPath,
     string? RuntimeArchive = null,
@@ -64,9 +62,6 @@ public sealed class InstallFlow
                          Path.Combine(plan.InstallDir, "cache"),
                          Path.Combine(plan.InstallDir, "cache", "assets"),
                          Path.Combine(plan.InstallDir, "logs"),
-                         plan.ModelsDir,
-                         Path.Combine(plan.ModelsDir, "hf-cache"),
-                         Path.Combine(plan.ModelsDir, "comfy"),
                      })
             {
                 Directory.CreateDirectory(dir);
@@ -123,7 +118,7 @@ public sealed class InstallFlow
             cancellationToken.ThrowIfCancellationRequested();
 
             return await RunStage2Async(
-                plan.InstallDir, pythonExe, wheelPath, plan.ModelsDir, plan.WithDinov2, plan.DefaultModel,
+                plan.InstallDir, pythonExe, wheelPath, plan.WithDinov2, plan.DefaultModel,
                 observe, log, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
@@ -168,7 +163,7 @@ public sealed class InstallFlow
             cancellationToken.ThrowIfCancellationRequested();
 
             return await RunStage2Async(
-                plan.InstallDir, plan.PythonExe, plan.WheelPath, plan.ModelsDir, plan.WithDinov2, plan.DefaultModel,
+                plan.InstallDir, plan.PythonExe, plan.WheelPath, plan.WithDinov2, plan.DefaultModel,
                 observe, log, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
@@ -187,7 +182,6 @@ public sealed class InstallFlow
         string installDir,
         string pythonExe,
         string wheelPath,
-        string modelsDir,
         bool withDinov2,
         string? defaultModel,
         Action<FlowEvent>? observe,
@@ -201,7 +195,6 @@ public sealed class InstallFlow
             InstallDir = installDir,
             WheelPath = wheelPath,
             AssetsDir = Path.Combine(installDir, "cache", "assets"),
-            ModelsDir = modelsDir,
             WithDinov2 = withDinov2,
             DefaultModel = defaultModel,
         };

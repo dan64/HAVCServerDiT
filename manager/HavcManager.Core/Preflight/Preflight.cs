@@ -34,8 +34,9 @@ public sealed record PreflightReport(IReadOnlyList<PreflightCheck> Checks, strin
 /// </summary>
 public sealed class Preflight
 {
-    private const long MinInstallBytes = 15L * 1024 * 1024 * 1024;  // ~15 GB (indicative)
-    private const long MinModelsBytes = 50L * 1024 * 1024 * 1024;   // ~50 GB (indicative)
+    // The install folder also holds the model files (comfy_bridge\models,
+    // 2026-10-05): the threshold covers runtime + tools + ~15 GB of weights.
+    private const long MinInstallBytes = 30L * 1024 * 1024 * 1024;  // ~30 GB (indicative)
     private const string DefaultModelName = "qwen21-viggle";        // name in the GUI model list
     private const string LighterModelName = "longcat-gguf";         // below the RAM threshold
     private const long MinDefaultModelVramMiB = 12 * 1024;          // 12 GiB
@@ -43,7 +44,6 @@ public sealed class Preflight
 
     public async Task<PreflightReport> RunAsync(
         string installDir,
-        string modelsDir,
         string manifestUrl,
         string? fallbackManifestPath = null,
         CancellationToken cancellationToken = default)
@@ -103,7 +103,6 @@ public sealed class Preflight
         }
 
         checks.Add(SpaceCheck("Disk space (install)", installDir, MinInstallBytes));
-        checks.Add(SpaceCheck("Disk space (models)", modelsDir, MinModelsBytes));
 
         bool isRemote = Uri.TryCreate(manifestUrl, UriKind.Absolute, out var manifestUri)
                         && (manifestUri.Scheme == Uri.UriSchemeHttp || manifestUri.Scheme == Uri.UriSchemeHttps);

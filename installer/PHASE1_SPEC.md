@@ -25,9 +25,9 @@ Principi:
   nel bootstrap, non nel manager.
 - **Niente Inno o packager esterni** (D8): l'exe è l'installer; nessun doppio
   strato.
-- **Per-utente, senza admin**; tutto ciò che è pesante (runtime, venv, cache)
-  vive dentro la cartella di installazione; i modelli in una cartella dedicata
-  (D10).
+- **Per-utente, senza admin**; tutto ciò che è pesante (runtime, venv, cache,
+  modelli) vive dentro la cartella di installazione — i modelli in
+  `<install>\comfy_bridge\models`, preservati in disinstallazione (D14).
 - **Update = rerun convergente**: stessa logica "install = update da stato
   vuoto" del bootstrap (flusso già verificato end-to-end v0.1.0 → 0.1.1,
   log (14)).
@@ -113,7 +113,9 @@ Path: `<install>\install.json`. Campi:
 - `manager_version`: versione del manager che ha scritto lo stato;
 - `app_version`: versione `havc` installata;
 - `installed_at`, `updated_at`: timestamp ISO-8601;
-- `install_dir`, `models_dir`: percorsi assoluti (modelli, §7);
+- `install_dir`: percorso assoluto; `models_dir` è accettato per compatibilità
+  (schema additivo) ma dalla 0.1.8 non viene più scritto — i modelli stanno
+  in `<install>\comfy_bridge\models` (§7, D14);
 - `runtime`: `{name, sha256, python}` — runtime provisionato (dal manifest);
 - `components`: `["server", "gui"]` (fissa in v0);
 - `dinov2`: true (D10);
@@ -149,7 +151,7 @@ Invocazione standard dal manager:
     --wheel <cache>\havc-<ver>-py3-none-any.whl
     --assets-dir <cache>\assets
     --with-dinov2
-    --models-dir <models>          # nuova opzione Fase 1
+    --default-model qwen21-viggle  # sotto 32 GB di RAM: longcat-gguf
     --json-progress
 ```
 
@@ -165,13 +167,11 @@ Invocazione standard dal manager:
   `runtime\python -m pip install --force-reinstall --no-deps <wheel>` (flusso
   a due stadi, già verificato).
 - **Nuove opzioni bootstrap (Fase 1)**:
-  - `--models-dir <dir>` (**implementato nel bootstrap il 05-10**): wiring
-    della cartella modelli (§7) — seed `hf_cache`
-    in `gui_cmnet2_settings.json` **solo se assente**; `cache_dir` nei config
-    `qwen_nunchaku_*` **solo se vuoto**; variabile `HAVC_MODELS_DIR` nei
-    launcher generati. Il seed/wiring dei settings GUI include anche
-    `model_name`/`model_precision` (modello di default, vedi
-    `--default-model`) **solo se assenti**;
+  - `--comfy-zip <zip>` (**implementato il 05-10**, con
+    `comfy_bridge_v0.30.zip`): comfy_bridge locale per staging/offline; il
+    passo `comfy-bridge` usa anche la copia in `--assets-dir` (dal manifest)
+    e in mancanza scarica dall'URL pinnato (sha256). Il seed/wiring dei
+    settings GUI (`model_name`/`model_precision`) è di `--default-model`;
   - `--default-model <nome>` (**implementato nel bootstrap il 05-10**): nome
     GUI del modello di default per il seed/wiring dei settings
     (`longcat-gguf` seeda anche `model_precision` = `q3`); il manager lo
@@ -204,22 +204,24 @@ prima installazione.
    bloccante); **requisiti del modello di default** (qwen21-viggle: ≥ 12 GB
    VRAM e ≥ 32 GB RAM; sotto 32 GB di RAM il default passa a **longcat-gguf
    Q3** — seed GUI + `backend_default`; avvisi non bloccanti); spazio:
-   install ≥ ~15 GB (indicativo), models con avviso sotto ~50 GB (D10);
+   install ≥ ~30 GB (indicativo — include i pesi: i modelli stanno
+   nell'installazione, D14);
    connettività al manifest (se offline: **fallback al `release.json` accanto
    all'exe** — se presente e `--manifest` non è stato passato — altrimenti
    avviso con l'opzione manifest locale).
-2. **Folders**: install dir (default `%LOCALAPPDATA%\HAVCServerDiT`); **models
-   dir** con proposta automatica (§7); opzioni scorciatoie (Start Menu ON,
-   desktop opzionale).
+2. **Folders**: install dir (default `%LOCALAPPDATA%\HAVCServerDiT`); opzioni
+   scorciatoie (Start Menu ON, desktop opzionale). Niente scelta "cartella
+   modelli" (D14): i modelli stanno nell'installazione.
 3. **Manifest**: fetch `release.json` (override `--manifest`/`--release-tag`
    per i test; **fallback a `<exe folder>\release.json`** se il fetch di rete
    fallisce e `--manifest` non è stato passato); mostra versione e note.
-4. **Download**: archivio runtime + wheel `havc` + asset wheels →
+4. **Download**: archivio runtime + wheel `havc` + asset wheel +
+   `comfy_bridge_v0.30.zip` →
    `<install>\cache\` (nomi originali), ognuno verificato sha256; riuso dei
    file in cache se il digest combacia.
 5. **Stadio 1**: estrazione runtime in `<install>\runtime\python` (tar.gz,
    `System.Formats.Tar`); `runtime\python -m pip install --no-deps <wheel>`.
-6. **Stadio 2**: run bootstrap (§5) con progresso live sui 22 passi.
+6. **Stadio 2**: run bootstrap (§5) con progresso live sui 23 passi.
 7. **Chiusura**: scorciatoie (Start Menu: "HAVC" → `HAVC.vbs`; "HAVC Manager"
    → `HAVCManager.exe`), registrazione disinstallazione, copia del manager in
    `<install>\HAVCManager.exe`, scrittura `install.json`, pagina finale
@@ -249,11 +251,14 @@ macchina dell'update, senza download nuovo. Usato anche per completare un
 
 ### 6.5 Disinstallazione
 
-Conferma; checkbox *Also delete the models folder* (**default OFF**, D10);
+Conferma; checkbox *Also delete the model files* (**default OFF**);
 lock istanze; rimozione: scorciatoie, chiave `Uninstall`,
-`Software\HAVCServerDiT`, cartella di installazione. Il manager si
-auto-rimuove: copia di sé in `%TEMP%`, rilancio da lì, rimozione di
-`<install>`. I modelli restano se non richiesto esplicitamente.
+`Software\HAVCServerDiT`, cartella di installazione — con un'eccezione:
+`<install>\comfy_bridge\models` **viene preservata** (i modelli costano
+decine di GB e un reinstall sulla stessa cartella li riusa), a meno che la
+checkbox sia spuntata. Il manager si auto-rimuove: copia di sé in `%TEMP%`,
+rilancio da lì (`--uninstall-run`, `--uninstall-delete-models` se richiesto),
+`InstallTreeCleanup.Delete` sul percorso.
 
 ### 6.6 Lock istanze
 
@@ -271,24 +276,20 @@ rimozione) è Fase 2.
 
 ---
 
-## 7. Cartella modelli (D10)
+## 7. Modelli e comfy_bridge (D14, 2026-10-05 — sostituisce la "cartella modelli" D10)
 
-- Scelta nel wizard: proposta = **unità con più spazio libero** tra i dischi
-  fissi; avviso se il libero è sotto ~50 GB (indicativo); sempre modificabile
-  in installazione.
-- Layout: `<models>\hf-cache` (→ `HF_HOME`, con `<models>\hf-cache\hub` come
-  `HF_HUB_CACHE`) e `<models>\comfy` (→ `COMFYUI_MODELS_DIR`, stessa struttura
-  `clip/ unet/ loras/ …` di oggi). I pesi cmnet2 (~1 GB) restano nel pacchetto
-  `vscmnet2` (rivisitabile in Fase 2).
-- Wiring (implementato nel bootstrap via `--models-dir`, §5): seed `hf_cache`
-  nei settings GUI se assente; `model_name` di default (`qwen21-viggle`) nei
-  settings GUI se assente; `cache_dir` nei config `qwen_nunchaku_*` se
-  vuoto; `HAVC_MODELS_DIR` nei launcher; `comfy_bridge/_bootstrap.py` usa
-  `HAVC_MODELS_DIR` se presente (fallback: comportamento attuale).
-- Persistenza: `install.json.models_dir`; gli **update la riusano senza
-  toccarla** (niente riscarichi); in disinstallazione resta salvo richiesta
-  esplicita; **nessuna migrazione automatica** da cartelle preesistenti in v0
-  (una tantum: copia manuale o riscarico).
+- **I modelli vivono dentro l'installazione**: `<install>\comfy_bridge\models\…`
+  (unet/clip/loras/vae + `.cache` dei download). Il runtime ComfyUI
+  (`comfy_bridge/`, zip pinnato `comfy_bridge_v0.30.zip`) è estratto nella
+  root; import e percorsi modelli coincidono per costruzione (PHASE0 §2).
+- **Preservati** a update/ripara; in disinstallazione restano salvo la
+  checkbox *Also delete the model files* (§6.5). Reinstall sulla stessa
+  cartella ⇒ riuso senza riscarichi.
+- **Niente cartella modelli nel wizard** (`--models-dir` ritirata): la cache
+  HF usa la posizione di default (`hf_cache` vuoto) ed è condivisa con gli
+  altri ambienti.
+- I pesi cmnet2 (~1 GB) restano nel pacchetto `vscmnet2`; la soglia disco del
+  preflight (install) è ~30 GB (runtime + tool + pesi tipici).
 
 ---
 
@@ -305,18 +306,18 @@ Schermate v0 (wizard):
 2. **Preflight** — esiti dei check (inclusi VRAM e RAM rispetto ai requisiti
    del modello di default, qwen21-viggle: ≥ 12 GB VRAM, ≥ 32 GB RAM; sotto
    i 32 GB di RAM il default diventa longcat-gguf Q3).
-3. **Folders** — install dir, models dir (proposta + avviso spazio),
-   scorciatoie.
+3. **Folders** — install dir, scorciatoie (nota: i modelli stanno in
+   `<install>\comfy_bridge\models`).
 4. **Components** — *Server+GUI* (fisso in v0); riga informativa: *DINOv2
    weights included*.
 5. **Summary** — cosa verrà scaricato.
-6. **Progress** — barra + lista dei 22 passi con stato (*pending* / *running* /
+6. **Progress** — barra + lista dei 23 passi con stato (*pending* / *running* /
    *skipped* / *ok* / *error*), log espandibile, pulsante *Cancel* (termina a
    fine passo corrente; lo stato resta recuperabile con *Repair*).
 7. **Finish** — *Open GUI* · *Start server* · *Open work folder* · *Show log*.
 
 Finestra principale (installato): stato (versione app, esito ultima verifica,
-cartella modelli, spazio), pulsanti **Open GUI**, **Start server** (avvia col
+cartella di installazione, spazio), pulsanti **Open GUI**, **Start server** (avvia col
 modello di default `backend_default`; gli altri modelli si scelgono dalla GUI
 di HAVC), **Check for updates**, **Repair**,
 **Uninstall**, **Log**; sezione *About* con link al download del manager
@@ -413,9 +414,9 @@ folder*); in caso di rollback, messaggio dedicato + log.
 
 - **D1** niente firma (SmartScreen accettata + istruzioni); **D8** niente Inno
   (l'exe è l'installer); **D9** UI WPF;
-- **D10** wizard: *Server+GUI* (v0), DINOv2 inclusi, cartella modelli unica
-  "intelligente" e modificabile, riuso negli update, mai cancellata in
-  disinstallazione;
+- **D10** (rivista da **D14**, 2026-10-05): wizard *Server+GUI* (v0), DINOv2
+  inclusi; i modelli stanno in `<install>\comfy_bridge\models` (preservati in
+  disinstallazione salvo richiesta), niente cartella modelli utente;
 - **D11** nunchaku pin + patch + mirror (nessun impatto sul manager oltre agli
   URL);
 - Fase 0 (PHASE0_SPEC): `--json-progress`, "install = update", `release.json`,

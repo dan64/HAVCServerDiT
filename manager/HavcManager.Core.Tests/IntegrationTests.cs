@@ -47,7 +47,7 @@ public class IntegrationTests
                 scratch);
             Assert.Equal(0, pipExit);
 
-            // stage 2 (plan): the manager runner against the new code, with --models-dir
+            // stage 2 (plan): the manager runner against the new code
             Directory.CreateDirectory(Path.Combine(scratch, "gui"));
             var runner = new BootstrapRunner();
             var events = new List<BootstrapEvent>();
@@ -62,7 +62,6 @@ public class IntegrationTests
                 InstallDir = scratch,
                 WheelPath = wheel,
                 AssetsDir = Path.Combine(scratch, "cache", "assets"),
-                ModelsDir = Path.Combine(scratch, "models"),
                 WithDinov2 = true,
                 ExtraArgs = new[] { "--plan" },
             });

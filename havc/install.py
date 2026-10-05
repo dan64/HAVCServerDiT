@@ -48,6 +48,18 @@ NVENC = {
     "size": 105481170,
 }
 
+# Vendored ComfyUI runtime (comfy_bridge) — no longer part of the wheel
+# (2026-10-05): it ships as a pinned zip, published as a release asset and
+# extracted at the install root (<install>\comfy_bridge), where both the
+# runtime imports and the model paths resolve consistently. Extracted by the
+# `comfy-bridge` step; existing `models/` files are preserved on update.
+COMFY_BRIDGE = {
+    "name": "comfy_bridge_v0.30.zip",
+    "url": "https://github.com/dan64/HAVCServerDiT/releases/download/v0.1.8/comfy_bridge_v0.30.zip",
+    "sha256": "294311d0ca6b0b373bef64ea691429f14eba7252314ab58693234d0d4b4b7736",
+    "size": 10557227,
+}
+
 # cmnet2 assets (plugins + weights) — pinned; sha256 also verified against
 # the official GitHub `digest`s (2026-10-04). DINOv3 weights from cmnet2
 # release v1.3.0 (NOT v1.2.0: the link in the READMEs pointed to a missing
@@ -171,6 +183,9 @@ if not exist "%PY%" (
     pause
     exit /b 1
 )
+rem Anchor the working directory: `-m dit_rpc_server` imports comfy_bridge
+rem from the install root (root copy).
+cd /d "%HERE%"
 set "WHICH=%~1"
 if "%WHICH%"=="" set "WHICH=int4"
 set "CFG="
@@ -292,7 +307,7 @@ class Ctx:
     python: Optional[Path] = None
     runtime_zip: Optional[Path] = None
     tools_zip: Optional[Path] = None
-    models_dir: Optional[Path] = None
+    comfy_zip: Optional[Path] = None
     default_model: str = DEFAULT_MODEL_NAME
     with_dinov2: bool = False
     use_system_python: bool = False
@@ -520,17 +535,26 @@ def cached_download(ctx: Ctx, asset: dict, local: Optional[Path] = None) -> Path
     return cached
 
 
+def staged_asset(ctx: Ctx, asset: dict, local: Optional[Path] = None) -> Path:
+    """Obtain a pinned asset, preferring `local`, then a copy staged in
+    `--assets-dir` (as delivered by the release manifest), then cache/download."""
+    if local is None and ctx.assets_dir is not None:
+        candidate = ctx.assets_dir / asset["name"]
+        if candidate.is_file():
+            local = candidate
+    return cached_download(ctx, asset, local=local)
+
+
 # ---------------------------------------------------------------------------
-# Models folder wiring (Fase 1 — PHASE1_SPEC §7)
+# GUI settings wiring
 #
-# `--models-dir` wires a unified models folder into the managed files. Rule:
-# only empty/absent values are filled in; user values are never overwritten.
+# Fill empty/absent managed values in gui_cmnet2_settings.json (rules: only
+# empty/absent values are filled in; user values are never overwritten).
 # ---------------------------------------------------------------------------
 
 def wire_gui_settings(ctx: Ctx, settings_path: Path) -> int:
     """Fill empty/absent managed values in gui_cmnet2_settings.json
-    (`hf_cache` from --models-dir; default `model_name`/`model_precision`).
-    Returns 1 if changed."""
+    (default `model_name`/`model_precision`). Returns 1 if changed."""
     if not settings_path.is_file():
         return 0
     try:
@@ -538,9 +562,6 @@ def wire_gui_settings(ctx: Ctx, settings_path: Path) -> int:
     except (OSError, ValueError):
         return 0
     changed = False
-    if ctx.models_dir is not None and not data.get("hf_cache"):
-        data["hf_cache"] = str(ctx.models_dir / "hf-cache")
-        changed = True
     if not data.get("model_name"):
         data["model_name"] = ctx.default_model
         precision = DEFAULT_MODEL_PRECISION.get(ctx.default_model)
@@ -552,38 +573,6 @@ def wire_gui_settings(ctx: Ctx, settings_path: Path) -> int:
     with settings_path.open("w", encoding="utf-8", newline="\n") as fh:
         fh.write(json.dumps(data, indent=4) + "\n")
     return 1
-
-
-def wire_nunchaku_configs(ctx: Ctx, config_dir: Path) -> int:
-    """Set `cache_dir` in qwen_nunchaku_*.json when empty. Returns files changed."""
-    if ctx.models_dir is None or not config_dir.is_dir():
-        return 0
-    changed = 0
-    for path in sorted(config_dir.glob("qwen_nunchaku_*.json")):
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            continue
-        if data.get("cache_dir"):
-            continue
-        data["cache_dir"] = str(ctx.models_dir / "hf-cache")
-        with path.open("w", encoding="utf-8", newline="\n") as fh:
-            fh.write(json.dumps(data, indent=4) + "\n")
-        changed += 1
-    return changed
-
-
-def _needs_nunchaku_wiring(ctx: Ctx, config_dir: Path) -> bool:
-    """True when --models-dir is set and some qwen_nunchaku_* config has an empty cache_dir."""
-    if ctx.models_dir is None or not config_dir.is_dir():
-        return False
-    for path in sorted(config_dir.glob("qwen_nunchaku_*.json")):
-        try:
-            if not json.loads(path.read_text(encoding="utf-8")).get("cache_dir"):
-                return True
-        except (OSError, ValueError):
-            continue
-    return False
 
 
 # ---------------------------------------------------------------------------
@@ -820,7 +809,30 @@ def build_steps() -> list[Step]:
                 copied.append(name)
         return ", ".join(copied) if copied else "already up to date"
 
-    # -- 13. configs -------------------------------------------------------
+    # -- 13. comfy-bridge --------------------------------------------------
+    def comfy_bridge_check(c: Ctx) -> Optional[str]:
+        root = c.install_dir / "comfy_bridge"
+        if not (root / "folder_paths.py").is_file():
+            return None
+        try:
+            if (root / ".source").read_text(encoding="utf-8").strip() != COMFY_BRIDGE["name"]:
+                return None
+        except OSError:
+            return None
+        return "comfy_bridge already extracted"
+
+    def comfy_bridge_run(c: Ctx) -> str:
+        if c.dry_run:
+            c.progress.event("log", level="dry-run",
+                             message=f"[dry-run] comfy_bridge ({COMFY_BRIDGE['name']}) -> {c.install_dir / 'comfy_bridge'}")
+            return "dry-run"
+        archive = staged_asset(c, COMFY_BRIDGE, c.comfy_zip)
+        extract_archive(archive, c.install_dir, required_root="comfy_bridge")
+        (c.install_dir / "comfy_bridge" / ".source").write_text(
+            COMFY_BRIDGE["name"] + "\n", encoding="utf-8")
+        return COMFY_BRIDGE["name"]
+
+    # -- 14. configs -------------------------------------------------------
     def configs_check(c: Ctx) -> Optional[str]:
         src = paths.configs_dir()
         if not src.is_dir():
@@ -829,15 +841,12 @@ def build_steps() -> list[Step]:
         missing = [p.name for p in src.glob("*.json") if not (dst / p.name).exists()]
         if missing:
             return None
-        if _needs_nunchaku_wiring(c, dst):
-            return None
         return "configs already present"
 
     def configs_run(c: Ctx) -> str:
         if c.dry_run:
-            note = " + models wiring" if c.models_dir is not None else ""
             c.progress.event("log", level="dry-run",
-                             message=f"[dry-run] copy configs -> {c.install_dir / 'config'}{note}")
+                             message=f"[dry-run] copy configs -> {c.install_dir / 'config'}")
             return "dry-run"
         src = paths.configs_dir()
         if not src.is_dir():
@@ -851,13 +860,9 @@ def build_steps() -> list[Step]:
             if not target.exists():
                 shutil.copy2(path, target)
                 copied += 1
-        wired = wire_nunchaku_configs(c, dst)
-        parts = [f"{copied} configs copied" if copied else "no new configs"]
-        if wired:
-            parts.append(f"{wired} cache_dir wired")
-        return ", ".join(parts)
+        return f"{copied} configs copied" if copied else "no new configs"
 
-    # -- 14. gui -----------------------------------------------------------
+    # -- 15. gui -----------------------------------------------------------
     def gui_files() -> Optional[dict[str, Path]]:
         """Map relative path -> source for the managed GUI files."""
         src = paths.gui_source_dir()
@@ -899,7 +904,7 @@ def build_steps() -> list[Step]:
             shutil.copy2(src_path, target)
         return f"{len(files)} file (GUI + scripts)"
 
-    # -- 15. gui-deps ------------------------------------------------------
+    # -- 16. gui-deps ------------------------------------------------------
     def gui_deps_check(c: Ctx) -> Optional[str]:
         return "GUI dependencies already in place" if not c.unmet(gui_pins) else None
 
@@ -916,7 +921,7 @@ def build_steps() -> list[Step]:
             c.run([c.venv_python, "-m", "pip", "install", str(wheel)])
         return "GUI + vscmnet2 + spatial_correlation_sampler"
 
-    # -- 16. cmnet2-plugins ------------------------------------------------
+    # -- 17. cmnet2-plugins ------------------------------------------------
     def cmnet2_plugins_check(c: Ctx) -> Optional[str]:
         pkg = vscmnet2_dir(c)
         if pkg is None:
@@ -938,7 +943,7 @@ def build_steps() -> list[Step]:
         extract_archive(archive, pkg, required_root="plugins")
         return "plugins in vscmnet2/plugins"
 
-    # -- 17. cmnet2-weights ------------------------------------------------
+    # -- 18. cmnet2-weights ------------------------------------------------
     def cmnet2_weights_check(c: Ctx) -> Optional[str]:
         pkg = vscmnet2_dir(c)
         if pkg is None:
@@ -976,7 +981,7 @@ def build_steps() -> list[Step]:
                 "the archive may have an unexpected layout")
         return ", ".join(done)
 
-    # -- 18. cmnet2-dinov2 -------------------------------------------------
+    # -- 19. cmnet2-dinov2 -------------------------------------------------
     def cmnet2_dinov2_check(c: Ctx) -> Optional[str]:
         if not c.with_dinov2:
             return "not requested (--with-dinov2)"
@@ -1003,7 +1008,7 @@ def build_steps() -> list[Step]:
             shutil.copy2(archive, dest_dir / asset["name"])
         return f"{len(CMNET2_DINOV2)} DINOv2 files (legacy)"
 
-    # -- 19. tools ---------------------------------------------------------
+    # -- 20. tools ---------------------------------------------------------
     def tools_check(c: Ctx) -> Optional[str]:
         x265 = (c.install_dir / "tools" / "x265" / "x265.exe").is_file()
         nvenc = (c.install_dir / "tools" / "NVEncC" / "NVEncC64.exe").is_file()
@@ -1034,7 +1039,7 @@ def build_steps() -> list[Step]:
             done.append("NVEncC 9.17")
         return ", ".join(done) if done else "already present"
 
-    # -- 20. gui-settings --------------------------------------------------
+    # -- 21. gui-settings --------------------------------------------------
     def gui_settings_check(c: Ctx) -> Optional[str]:
         settings = c.install_dir / "gui" / "gui_cmnet2_settings.json"
         if not settings.is_file():
@@ -1043,8 +1048,6 @@ def build_steps() -> list[Step]:
             data = json.loads(settings.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             return "settings already present"
-        if c.models_dir is not None and not data.get("hf_cache"):
-            return None
         if not data.get("model_name"):
             return None
         return "settings already present"
@@ -1070,7 +1073,6 @@ def build_steps() -> list[Step]:
             "base_dir": str(c.install_dir / "work"),
             "fixv_base_dir": str(c.install_dir / "work"),
             "model_name": c.default_model,
-            "hf_cache": str(c.models_dir / "hf-cache") if c.models_dir else "",
         }
         precision = DEFAULT_MODEL_PRECISION.get(c.default_model)
         if precision:
@@ -1079,15 +1081,10 @@ def build_steps() -> list[Step]:
             fh.write(json.dumps(settings, indent=4) + "\n")
         return "gui_cmnet2_settings.json created"
 
-    # -- 21. launchers -----------------------------------------------------
+    # -- 22. launchers -----------------------------------------------------
     def launcher_files(c: Ctx) -> dict[str, bytes]:
         files: dict[str, bytes] = {}
-        models_line = (f'\nset "HAVC_MODELS_DIR={c.models_dir}"'
-                       if c.models_dir is not None else "")
         for name, content in LAUNCHERS.items():
-            if models_line and name.endswith(".cmd"):
-                content = content.replace('set "HERE=%~dp0"',
-                                          'set "HERE=%~dp0"' + models_line, 1)
             files[name] = content.replace("\n", "\r\n").encode("utf-8")
         return files
 
@@ -1107,7 +1104,7 @@ def build_steps() -> list[Step]:
             (c.install_dir / name).write_bytes(data)
         return ", ".join(LAUNCHERS)
 
-    # -- 22. verify --------------------------------------------------------
+    # -- 23. verify --------------------------------------------------------
     def verify_run(c: Ctx) -> str:
         env = dict(os.environ)
         env.pop("PYTHONPATH", None)  # no shadowing from the caller
@@ -1164,6 +1161,9 @@ def build_steps() -> list[Step]:
         Step("server", "Server entry points in <install>",
              "dit_rpc_server.py + dit_colorize_main.py (copied from the venv, rewritten if different)",
              server_check, server_run),
+        Step("comfy-bridge", "comfy_bridge in <install>",
+             f"{COMFY_BRIDGE['name']} (pinned; models/ is preserved)",
+             comfy_bridge_check, comfy_bridge_run),
         Step("configs", "Pipeline configs in <install>/config", "copy missing configs",
              configs_check, configs_run),
         Step("gui", "GUI files in <install>/gui",
@@ -1185,7 +1185,7 @@ def build_steps() -> list[Step]:
              "tools.zip + NVEncC_9.17_x64.zip (Release v1.0.0) or --tools-zip",
              tools_check, tools_run),
         Step("gui-settings", "GUI settings (seeded/wired when missing)",
-             "gui_cmnet2_settings.json: model_name/precision + hf_cache only if empty",
+             "gui_cmnet2_settings.json: model_name/model_precision only if empty",
              gui_settings_check, gui_settings_run),
         Step("launchers", "Launcher in <install>",
              "HAVC.cmd/.vbs (GUI), HAVC-Server.cmd, HAVC-Doctor.cmd, start_server.cmd/run_server_qwen21.cmd (rewritten if different)",
@@ -1271,9 +1271,9 @@ def main(argv=None) -> int:
                         help="folder with the local wheels (default: packages/ of the checkout)")
     parser.add_argument("--wheel", type=Path, default=None,
                         help="project wheel (havc-*.whl) to install")
-    parser.add_argument("--models-dir", type=Path, default=None,
-                        help="unified models folder: HF cache + comfy models "
-                             "(wired into configs, GUI settings and launchers)")
+    parser.add_argument("--comfy-zip", type=Path, default=None,
+                        help="use a local comfy_bridge zip archive instead of downloading it "
+                             "(sha256 verified)")
     parser.add_argument("--default-model", default=DEFAULT_MODEL_NAME,
                         help="GUI default model seeded/wired in the GUI settings "
                              f"when empty (default: {DEFAULT_MODEL_NAME}; "
@@ -1316,7 +1316,7 @@ def main(argv=None) -> int:
         python=args.python,
         runtime_zip=args.runtime_zip.resolve() if args.runtime_zip else None,
         tools_zip=args.tools_zip.resolve() if args.tools_zip else None,
-        models_dir=args.models_dir.resolve() if args.models_dir else None,
+        comfy_zip=args.comfy_zip.resolve() if args.comfy_zip else None,
         default_model=args.default_model,
         with_dinov2=args.with_dinov2,
         use_system_python=args.use_system_python,

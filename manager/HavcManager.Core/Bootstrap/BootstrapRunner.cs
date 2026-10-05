@@ -8,7 +8,7 @@ namespace HavcManager.Core.Bootstrap;
 /// Runs the bootstrap as a child process and streams its --json-progress events
 /// (PHASE1_SPEC §5). Standard invocation:
 ///   runtime\python -m havc.install --install-dir ... --wheel ... --assets-dir ...
-///   --with-dinov2 --models-dir ... --json-progress
+///   --with-dinov2 --default-model ... --json-progress
 /// Exit codes: 0 = ok (all-skip counts as ok), 1 = step failed, 2 = usage error.
 /// The working directory is always the install folder (never a source checkout).
 /// </summary>
@@ -136,11 +136,6 @@ public sealed class BootstrapRunner
         }
         if (invocation.WithDinov2)
             yield return "--with-dinov2";
-        if (invocation.ModelsDir is not null)
-        {
-            yield return "--models-dir";
-            yield return invocation.ModelsDir;
-        }
         if (invocation.DefaultModel is not null)
         {
             yield return "--default-model";

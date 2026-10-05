@@ -43,42 +43,46 @@ lo schema è già fissato qui.
   - `havc/` (CLI `install`/`doctor`, `paths`, `lockfile`, `progress`);
   - `dit_rpc_server.py`, `dit_colorize_main.py`, `patch_nunchaku.py`
     (moduli top-level storici);
-  - `comfy_bridge/**` (runtime ComfyUI vendored: file `.py` + dati, incluse le
-    cartelle non importabili come `custom_nodes/ComfyUI-GGUF*`);
   - `config/*.json` → `havc/configs/`;
   - `requirements/*.txt` → `havc/requirements/`;
   - GUI → `havc/gui/` (`CMNET2_colorize_client_GUI.py`,
     `load_image_DtD_GUI.py`, `scripts/*.vpy`): è il **front-end di default**
     dell'installazione (vedi §4, passi 12-17).
-- **Esclusi dalla wheel** (esplicito e reversibile in `setup.py`, costante
-  `COPIES`): cache Python (`.pyc`, `__pycache__`), backup (`.bak`/`.orig`/`.rej`)
-  e — dal 2026-10-04 — **`comfy_bridge/blueprints/`** (96 file / 3,1 MB di
-  contenuto: 80 template di workflow della UI ComfyUI + 14 shader `.frag` in
-  `.glsl/`; nessun riferimento nel codice del runtime, verificato con grep
-  case-insensitive su tutto l'albero). Effetto misurato sulla wheel: −96 file,
-  −389.901 byte compressi (11.034.021 → 10.644.120). Togliere la voce da
-  `COPIES` ripristina completamente.
+- **Esclusi dalla wheel**: cache Python (`.pyc`, `__pycache__`) e backup
+  (`.bak`/`.orig`/`.rej`). **`comfy_bridge/` non è più nella wheel** (dal
+  2026-10-05): il runtime ComfyUI venduto si distribuisce come zip pinnato
+  (`comfy_bridge_v0.30.zip`, script `installer/build_comfy_zip.py`) ed è
+  estratto nella root dell'installazione dal passo `comfy-bridge` (D14). Lo
+  zip esclude — come prima la wheel — **`comfy_bridge/blueprints/`** (96 file
+  di materiale UI, nessun riferimento nel runtime: nessun caso d'uso).
+  Effetto sulla wheel: ~10,7 MB → ~0,11 MB.
 - **Nota di build**: il build hook azzera le destinazioni dentro `build/lib`
   prima di ogni copia (copia deterministica) — senza questo, i file già copiati
   dalle build precedenti restano impacchettati da `bdist_wheel` anche se
   rimossi/esclusi dal sorgente (bug trovato e corretto il 2026-10-04 proprio
-  con l'esclusione di `blueprints/`).
+  con l'esclusione di `blueprints/`; dal 2026-10-05 lo stesso meccanismo
+  rimuove dalla `build/lib` la copia storica di `comfy_bridge/`).
 - Risoluzione percorsi a runtime: `havc.paths` cerca prima la copia inclusa
-  nella wheel, poi il checkout. `dit_colorize_main.py` continua a risolvere
-  `comfy_bridge/` come sibling del proprio file — vale sia nel repo sia in
-  `site-packages`.
+  nella wheel, poi il checkout. `dit_colorize_main.py` risolve
+  `comfy_bridge/` come sibling del proprio file: dalla 0.1.8 i due
+  `dit_*.py` e il tree `comfy_bridge/` stanno tutti nella **root**
+  dell'installazione (passi `server`/`comfy-bridge`), quindi import e
+  percorsi dei modelli coincidono per costruzione (fix del 2026-10-05); nel
+  repo il sibling è la cartella del progetto.
 - **Layout di installazione** (root gestita dal bootstrap/manager):
   `<install>\runtime\python\` (runtime Python provisionato, §4-bis),
   `<install>\venv\` (ambiente), `<install>\cache\` (archivi scaricati e
   verificati), `<install>\config\` (config di pipeline, condivise da GUI e
   server), `<install>\gui\` (GUI + `scripts/*.vpy` + `gui_cmnet2_settings.json`),
   `<install>\tools\` (x265/x264/mkvmerge/NVEncC),
+  `<install>\comfy_bridge\` (runtime ComfyUI dal zip pinnato + `models\`),
   `<install>\work\` (cartella di lavoro di default), launcher nella radice
   (**front-end di default: la GUI**).
-- Modelli: comportamento invariato (auto-download sotto
-  `comfy_bridge/models/…` dentro il venv; `COMFYUI_MODELS_DIR` forzato da
-  `comfy_bridge/_bootstrap.py`). Il passaggio a una cartella modelli utente
-  configurabile (scelta nel wizard) è materia delle Fasi 1–2.
+- Modelli: dentro l'installazione, in `<install>\comfy_bridge\models\…`
+  (auto-download dei backend; **preservati** a update/ripara/disinstallazione
+  salvo richiesta esplicita — D14, 2026-10-05). La cartella modelli utente
+  configurabile (scelta nel wizard) è stata ritirata (D14); la cache HF sta
+  nella posizione di default (`hf_cache` vuoto).
 - Wheel GUI (`havc-gui`): rinviata. Le dipendenze GUI e i percorsi dei dati
   utente (settings, tool esterni, cartella di lavoro) richiedono un progetto a
   parte — non basta impacchettare i file così come sono.
@@ -139,38 +143,42 @@ Passi, nell'ordine:
 12. `server` — copia `dit_rpc_server.py` e `dit_colorize_main.py` dalla wheel
     (site-packages del venv) nella root di `<install>`, riscritti se diversi:
     la GUI avvia il server da lì (file path + `--module-dir`);
-13. `configs` — copia le config di pipeline in `<install>\config` (solo mancanti);
-14. `gui` — copia i file GUI in `<install>\gui` (script principale, helper,
+13. `comfy-bridge` — scarica/verifica `comfy_bridge_v0.30.zip` (pinnato,
+    sha256; `--comfy-zip` per staging/offline) e lo estrae in
+    `<install>\comfy_bridge`, **preservando `models/`**; marker `.source` per
+    l'idempotenza;
+14. `configs` — copia le config di pipeline in `<install>\config` (solo mancanti);
+15. `gui` — copia i file GUI in `<install>\gui` (script principale, helper,
     `scripts/*.vpy` — dalla copia inclusa nella wheel o dal checkout);
     aggiorna i file se il contenuto differisce (skip solo se identici);
-15. `gui-deps` — `pip install -r requirements/gui.txt` + wheel `vscmnet2` e
+16. `gui-deps` — `pip install -r requirements/gui.txt` + wheel `vscmnet2` e
     `spatial_correlation_sampler` da `--assets-dir`;
-16. `cmnet2-plugins` — estrae `plugins_win.zip` (vs-cmnet2 v1.0.0, sha256)
+17. `cmnet2-plugins` — estrae `plugins_win.zip` (vs-cmnet2 v1.0.0, sha256)
     in `vscmnet2\plugins\`;
-17. `cmnet2-weights` — scarica il checkpoint DINOv3 (`cmnet2` v1.3.0) e
+18. `cmnet2-weights` — scarica il checkpoint DINOv3 (`cmnet2` v1.3.0) e
     `dinov3-vitb16.zip` (v1.1.0, estratto) in `vscmnet2\weights\`;
-18. `cmnet2-dinov2` — pesi DINOv2 legacy (`cmnet2` v1.0.0), **saltato di
+19. `cmnet2-dinov2` — pesi DINOv2 legacy (`cmnet2` v1.0.0), **saltato di
     default**; si attiva con `--with-dinov2`;
-19. `tools` — estrae in `<install>\tools` sia `tools.zip` (x265/x264/mkvmerge)
+20. `tools` — estrae in `<install>\tools` sia `tools.zip` (x265/x264/mkvmerge)
     sia `NVEncC_9.17_x64.zip` (NVEncC 9.17, pacchetto flat); entrambi pinnati
     (Release v1.0.0, sha256 verificato), o `--tools-zip` per la parte tools.zip;
-20. `gui-settings` — pre-seeda `gui_cmnet2_settings.json` (solo se assente):
+21. `gui-settings` — pre-seeda `gui_cmnet2_settings.json` (solo se assente):
     percorsi di `scripts/`, `vspipe`, tool, cartella di lavoro e `model_name`
     di default (`qwen21-viggle`, o `longcat-gguf` con precision `q3` via
     `--default-model`); su file esistente riempie solo i valori vuoti
-    (`hf_cache`, `model_name`/`model_precision`), senza mai sovrascrivere;
-21. `launchers` — scrive i launcher in `<install>`: `HAVC.cmd`/`HAVC.vbs`
+    (`model_name`/`model_precision`), senza mai sovrascrivere;
+22. `launchers` — scrive i launcher in `<install>`: `HAVC.cmd`/`HAVC.vbs`
     (**front-end di default = GUI**), `HAVC-Server.cmd` (server con scelta
     modello), `HAVC-Doctor.cmd`, `start_server.cmd`/`run_server_qwen21.cmd`
     (avvio in console per la modalità *External console* della GUI e uso
     manuale; stessi nomi argomento dello storico `start_server.cmd`);
     riscritti se il contenuto differisce;
-22. `verify` — esegue `havc doctor --json` **nel venv di destinazione**;
+23. `verify` — esegue `havc doctor --json` **nel venv di destinazione**;
     un FAIL qui è un errore del bootstrap.
 
 Flag: `--install-dir` (obbligatorio), `--python`, `--runtime-zip`,
 `--tools-zip`, `--with-dinov2`, `--use-system-python`, `--assets-dir`,
-`--wheel`, `--models-dir <dir>` (wiring cartella modelli, Fase 1),
+`--wheel`, `--comfy-zip <zip>` (comfy_bridge locale per staging/offline),
 `--default-model <nome>` (modello GUI di default nel seed settings),
 `--only a,b`, `--plan`, `--dry-run`, `--json-progress`.
 
@@ -263,7 +271,8 @@ Campi: `schema`, `channel`, `app`, `app_version`, `published_at`,
 `requires_python`, `requires_env_rebuild`, `bootstrap_min_version`,
 `runtime` (`name`, `url`, `sha256`, `python`, `kind`, `mirror_of` — la build
 Python provisionata, §4-bis), `wheels[]` (`name`, `url`, `sha256`, `size`,
-`kind`, `install`), `assets[]` (wheel di terze parti, es. diffusers),
+`kind`, `install`), `assets[]` (wheel di terze parti, es. diffusers, e
+`comfy_bridge_v0.30.zip` con `kind: comfy-bridge`),
 `weights[]` e `tools[]` (riservati alle fasi GUI, per ora vuoti), `notes_url`.
 
 Regole: **sha256 obbligatori** per ogni artefatto; `requires_env_rebuild` a

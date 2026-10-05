@@ -25,20 +25,8 @@
                         Margin="8,0,0,0" Padding="12,6" Click="OnBrowseInstall"/>
             </Grid>
 
-            <TextBlock Text="{x:Static res:Strings.LabelModelsFolder}" FontWeight="SemiBold"
-                       Margin="0,18,0,0"/>
-            <Grid Margin="0,6,0,0">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                <TextBox Text="{Binding ModelsDir, UpdateSourceTrigger=PropertyChanged}"
-                         Padding="6,5" VerticalContentAlignment="Center"/>
-                <Button Grid.Column="1" Content="{x:Static res:Strings.Browse}"
-                        Margin="8,0,0,0" Padding="12,6" Click="OnBrowseModels"/>
-            </Grid>
             <TextBlock Text="{x:Static res:Strings.ModelsHint}" Opacity="0.7"
-                       FontSize="12" TextWrapping="Wrap" Margin="0,6,0,0"/>
+                       FontSize="12" TextWrapping="Wrap" Margin="0,12,0,0"/>
 
             <CheckBox Content="{x:Static res:Strings.DesktopShortcutCheck}"
                       Margin="0,18,0,0" IsChecked="{Binding DesktopShortcut}"/>

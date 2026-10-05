@@ -112,14 +112,11 @@
   <data name="LabelInstallFolder" xml:space="preserve">
     <value>Install folder</value>
   </data>
-  <data name="LabelModelsFolder" xml:space="preserve">
-    <value>Models folder</value>
-  </data>
   <data name="LogLabel" xml:space="preserve">
     <value>Log</value>
   </data>
   <data name="ModelsHint" xml:space="preserve">
-    <value>Shared Hugging Face cache and ComfyUI models. Updates reuse this folder; uninstalling keeps it.</value>
+    <value>Models are stored inside the install folder (comfy_bridge\models). Updates reuse them; uninstalling keeps them unless you ask to delete them.</value>
   </data>
   <data name="OpenFolderButton" xml:space="preserve">
     <value>Open folder</value>
@@ -188,7 +185,7 @@
     <value>Remove</value>
   </data>
   <data name="UninstallDeleteModelsCheck" xml:space="preserve">
-    <value>Also delete the models folder (models will need to be downloaded again).</value>
+    <value>Also delete the model files (they will need to be downloaded again).</value>
   </data>
   <data name="UninstallDialogText" xml:space="preserve">
     <value>Remove HAVC from this PC? Shortcuts and registry entries will be removed.</value>

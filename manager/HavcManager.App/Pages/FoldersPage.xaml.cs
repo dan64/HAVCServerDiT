@@ -22,17 +22,6 @@ public partial class FoldersPage : UserControl
             ViewModel.InstallDir = dialog.FolderName;
     }
 
-    private void OnBrowseModels(object sender, RoutedEventArgs e)
-    {
-        var dialog = new Microsoft.Win32.OpenFolderDialog
-        {
-            Title = Strings.LabelModelsFolder,
-            InitialDirectory = ViewModel.ModelsDir,
-        };
-        if (dialog.ShowDialog() == true)
-            ViewModel.ModelsDir = dialog.FolderName;
-    }
-
     private void OnBackClick(object sender, RoutedEventArgs e)
         => ViewModel.Navigate(WizardPage.Preflight);
 

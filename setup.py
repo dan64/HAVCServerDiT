@@ -1,19 +1,19 @@
-"""Build hook for the `havc` wheel.
+r"""Build hook for the `havc` wheel.
 
 The repo stays the single source of truth: at build time, data that is not a
 "classic" Python package is copied into the wheel:
 
     config/*.json        ->  havc/configs/        (pipeline configs)
     requirements/*.txt   ->  havc/requirements/   (single lockfile)
-    comfy_bridge/**      ->  comfy_bridge/**      (vendored ComfyUI runtime:
-                                                    data files and non-importable
-                                                    folders, e.g.
-                                                    custom_nodes/ComfyUI-GGUF*)
     GUI/ (script+scripts) ->  havc/gui/            (GUI: default front-end)
 
-Intentional exclusions: Python caches, editor/script backups and
-`comfy_bridge/blueprints/` (ComfyUI UI material, not referenced by the
-runtime code — see COPIES). See installer/PHASE0_SPEC.md §2.
+The vendored ComfyUI runtime is NOT part of the wheel (2026-10-05): it ships
+as a pinned zip (`dist/comfy_bridge_v0.30.zip`, built by
+`installer/build_comfy_zip.py`) that havc-install extracts at the install
+root (`<install>\comfy_bridge`) — models are preserved on update.
+
+Intentional exclusions: Python caches and editor/script backups. See
+installer/PHASE0_SPEC.md §2.
 """
 
 import shutil
@@ -26,15 +26,11 @@ SKIP_DIRS = {"__pycache__", ".mypy_cache", ".pytest_cache"}
 SKIP_SUFFIXES = {".pyc", ".pyo", ".bak", ".orig", ".rej"}
 
 # (source, destination, excluded subfolders).
-# Explicit, reversible exclusion (2026-10-04): `blueprints/` is ComfyUI UI
-# material (80 workflow JSON templates + 14 `.frag` shaders in `.glsl/`).
-# No references in the runtime code (case-insensitive grep over all of
-# comfy_bridge + root files); the runtime is used only via API.
-# If a real code path ever needs them, just remove the entry.
+# comfy_bridge left the wheel on 2026-10-05 (see the docstring): its zip is
+# built by installer/build_comfy_zip.py with the same `blueprints` exclusion.
 COPIES = (
     ("config", "havc/configs", ()),
     ("requirements", "havc/requirements", ()),
-    ("comfy_bridge", "comfy_bridge", ("blueprints",)),
 )
 
 # Individual GUI files and groups to include in the wheel (the GUI is
@@ -53,6 +49,12 @@ class build_py(_build_py):
         super().run()
         root = Path(__file__).parent
         lib = Path(self.build_lib)
+        # comfy_bridge is no longer part of the wheel: remove any copy left in
+        # build/lib by previous builds (the loop below only cleans what it
+        # copies from COPIES).
+        stale = lib / "comfy_bridge"
+        if stale.exists():
+            shutil.rmtree(stale)
         for src_rel, dst_rel, exclude_dirs in COPIES:
             src = root / src_rel
             if not src.is_dir():

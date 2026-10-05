@@ -60,6 +60,7 @@ def collect_wheels(artifacts_dir: Path, version: str) -> tuple[Path, list[Path]]
     ignored = [
         p.name for p in sorted(artifacts_dir.iterdir())
         if p.is_file() and p.suffix != ".whl" and p.name != "release.json"
+        and not p.name.startswith("comfy_bridge_v")
     ]
     if ignored:
         print(f"[warning] ignored files (not wheels): {', '.join(ignored)}")
@@ -96,6 +97,15 @@ def generate(args: argparse.Namespace) -> None:
     assets = [{**make_entry(path, args.repo, args.tag),
                "kind": "python-wheel", "target": path.name.split("-")[0]}
               for path in others]
+
+    # Vendored ComfyUI runtime: a versioned zip asset (e.g.
+    # comfy_bridge_v0.30.zip), extracted by the `comfy-bridge` bootstrap
+    # step at the install root. Optional: installs can also fall back to the
+    # pinned URL in havc/install.py.
+    comfy_zips = sorted(artifacts_dir.glob("comfy_bridge_v*.zip"))
+    assets += [{**make_entry(path, args.repo, args.tag),
+                "kind": "comfy-bridge", "target": "comfy_bridge"}
+               for path in comfy_zips]
 
     manifest = {
         "schema": SCHEMA,

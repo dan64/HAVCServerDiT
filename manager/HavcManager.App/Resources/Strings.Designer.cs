@@ -50,8 +50,6 @@ public static class Strings
 
     public static string LabelInstallFolder => ResourceManager.GetString("LabelInstallFolder")!;
 
-    public static string LabelModelsFolder => ResourceManager.GetString("LabelModelsFolder")!;
-
     public static string LogLabel => ResourceManager.GetString("LogLabel")!;
 
     public static string ModelsHint => ResourceManager.GetString("ModelsHint")!;

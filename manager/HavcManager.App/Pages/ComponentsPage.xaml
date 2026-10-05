@@ -14,8 +14,6 @@
         <StackPanel Grid.Row="1" Margin="0,16,0,0">
             <TextBlock Text="{x:Static res:Strings.ComponentsServerGui}" FontSize="14"/>
             <TextBlock Text="{x:Static res:Strings.ComponentsDinov2}" FontSize="14" Margin="0,8,0,0"/>
-            <TextBlock Text="{Binding ModelsDir, StringFormat=Models folder: {0}}"
-                       Opacity="0.7" FontSize="12" Margin="0,16,0,0" TextWrapping="Wrap"/>
         </StackPanel>
 
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">

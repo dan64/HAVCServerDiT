@@ -1067,6 +1067,12 @@ def run_steps(ctx: Ctx, steps: list[Step], only: Optional[set[str]]) -> bool:
         return True
     ok = True
     skipped = 0
+    # Announce the plan up-front so the manager can show all step rows as
+    # pending; skip reasons are computed on the fly by the loop below.
+    ctx.progress.event("plan", steps=[
+        {"id": s.id, "title": s.title, "hint": s.hint, "skip_reason": None}
+        for s in selected
+    ])
     stop = ctx.cache_dir / ".stop-request"
     if not ctx.dry_run:
         try:

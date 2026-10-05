@@ -209,7 +209,10 @@ previsto in §8. Il bootstrap v0 non scrive stato.
 
 Eventi:
 
-- `plan` — `steps[]` con `{id, title, hint, skip_reason}` (in modalità `--plan`);
+- `plan` — `steps[]` con `{id, title, hint, skip_reason}`: **emesso all'avvio
+  di ogni run** (nei run normali `skip_reason` è `null` e gli stati arrivano
+  con gli eventi successivi; in modalità `--plan` i `skip_reason` sono
+  calcolati e non viene eseguito nulla);
 - `step_begin` — `id`, `title`;
 - `step_ok` — `id`, `detail`;
 - `step_skip` — `id`, `reason`;

@@ -391,18 +391,18 @@ public sealed class WizardViewModel : INotifyPropertyChanged
                 Notify(nameof(ProgressValue));
                 break;
             case "step_begin":
-                SetStep(e.StepId, "running", null);
+                SetStep(e.StepId, e.StepTitle, "running", null);
                 break;
             case "step_ok":
-                SetStep(e.StepId, "ok", e.Detail);
+                SetStep(e.StepId, null, "ok", e.Detail);
                 break;
             case "step_skip":
-                SetStep(e.StepId, "skipped", e.Reason);
+                SetStep(e.StepId, null, "skipped", e.Reason);
                 break;
             case "step_error":
                 _failureDetail = e.Error;
                 _failureRemediation = e.Remediation;
-                SetStep(e.StepId, "error", e.Error);
+                SetStep(e.StepId, null, "error", e.Error);
                 break;
             case "log":
                 AppendLog(e.Message);
@@ -410,11 +410,18 @@ public sealed class WizardViewModel : INotifyPropertyChanged
         }
     }
 
-    private void SetStep(string? id, string status, string? detail)
+    private void SetStep(string? id, string? title, string status, string? detail)
     {
+        if (string.IsNullOrEmpty(id))
+            return;
         StepItem? item = Steps.FirstOrDefault(s => s.Id == id);
         if (item is null)
-            return;
+        {
+            // Defensive: keep the run visible even if the plan was not received.
+            item = new StepItem(id, title ?? id);
+            Steps.Add(item);
+            Notify(nameof(ProgressMaximum));
+        }
         item.Status = status;
         if (!string.IsNullOrEmpty(detail))
             item.Detail = detail;

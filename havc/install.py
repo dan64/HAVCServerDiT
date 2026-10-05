@@ -134,6 +134,8 @@ LAUNCHERS = {
 setlocal
 set "HERE=%~dp0"
 set "PY=%HERE%venv\Scripts\python.exe"
+rem The GUI starts the managed server with a bare "python": put the venv first.
+set "PATH=%HERE%venv\Scripts;%PATH%"
 if not exist "%PY%" (
     echo [ERROR] HAVC environment not found under "%HERE%".
     echo         Run the installer first, or check that the folder is complete.
@@ -714,7 +716,45 @@ def build_steps() -> list[Step]:
                "--no-deps", str(c.wheel)])
         return c.wheel.name
 
-    # -- 12. configs -------------------------------------------------------
+    # -- 12. server entry points -------------------------------------------
+    def server_entry_files(c: Ctx) -> dict[str, Path]:
+        """Server entry points as installed by the wheel (venv top level)."""
+        if os.name == "nt":
+            site = c.env_dir / "Lib" / "site-packages"
+        else:
+            matches = sorted((c.env_dir / "lib").glob("python3*/site-packages"))
+            site = matches[-1] if matches else c.env_dir / "lib" / "site-packages"
+        return {name: site / name
+                for name in ("dit_rpc_server.py", "dit_colorize_main.py")}
+
+    def server_check(c: Ctx) -> Optional[str]:
+        for name, source in server_entry_files(c).items():
+            target = c.install_dir / name
+            if not source.is_file():
+                return None
+            if not target.is_file() or target.read_bytes() != source.read_bytes():
+                return None
+        return "server entry points up to date"
+
+    def server_run(c: Ctx) -> str:
+        if c.dry_run:
+            c.progress.event("log", level="dry-run",
+                             message=f"[dry-run] server entry points -> {c.install_dir}")
+            return "dry-run"
+        copied = []
+        for name, source in server_entry_files(c).items():
+            if not source.is_file():
+                raise BootstrapError(
+                    f"{name} missing in the venv",
+                    "run the `wheel` step first")
+            target = c.install_dir / name
+            data = source.read_bytes()
+            if not target.is_file() or target.read_bytes() != data:
+                target.write_bytes(data)
+                copied.append(name)
+        return ", ".join(copied) if copied else "already up to date"
+
+    # -- 13. configs -------------------------------------------------------
     def configs_check(c: Ctx) -> Optional[str]:
         src = paths.configs_dir()
         if not src.is_dir():
@@ -751,7 +791,7 @@ def build_steps() -> list[Step]:
             parts.append(f"{wired} cache_dir wired")
         return ", ".join(parts)
 
-    # -- 13. gui -----------------------------------------------------------
+    # -- 14. gui -----------------------------------------------------------
     def gui_files() -> Optional[dict[str, Path]]:
         """Map relative path -> source for the managed GUI files."""
         src = paths.gui_source_dir()
@@ -793,7 +833,7 @@ def build_steps() -> list[Step]:
             shutil.copy2(src_path, target)
         return f"{len(files)} file (GUI + scripts)"
 
-    # -- 14. gui-deps ------------------------------------------------------
+    # -- 15. gui-deps ------------------------------------------------------
     def gui_deps_check(c: Ctx) -> Optional[str]:
         return "GUI dependencies already in place" if not c.unmet(gui_pins) else None
 
@@ -810,7 +850,7 @@ def build_steps() -> list[Step]:
             c.run([c.venv_python, "-m", "pip", "install", str(wheel)])
         return "GUI + vscmnet2 + spatial_correlation_sampler"
 
-    # -- 15. cmnet2-plugins ------------------------------------------------
+    # -- 16. cmnet2-plugins ------------------------------------------------
     def cmnet2_plugins_check(c: Ctx) -> Optional[str]:
         pkg = vscmnet2_dir(c)
         if pkg is None:
@@ -832,7 +872,7 @@ def build_steps() -> list[Step]:
         extract_archive(archive, pkg, required_root="plugins")
         return "plugins in vscmnet2/plugins"
 
-    # -- 16. cmnet2-weights ------------------------------------------------
+    # -- 17. cmnet2-weights ------------------------------------------------
     def cmnet2_weights_check(c: Ctx) -> Optional[str]:
         pkg = vscmnet2_dir(c)
         if pkg is None:
@@ -870,7 +910,7 @@ def build_steps() -> list[Step]:
                 "the archive may have an unexpected layout")
         return ", ".join(done)
 
-    # -- 17. cmnet2-dinov2 -------------------------------------------------
+    # -- 18. cmnet2-dinov2 -------------------------------------------------
     def cmnet2_dinov2_check(c: Ctx) -> Optional[str]:
         if not c.with_dinov2:
             return "not requested (--with-dinov2)"
@@ -897,7 +937,7 @@ def build_steps() -> list[Step]:
             shutil.copy2(archive, dest_dir / asset["name"])
         return f"{len(CMNET2_DINOV2)} DINOv2 files (legacy)"
 
-    # -- 18. tools ---------------------------------------------------------
+    # -- 19. tools ---------------------------------------------------------
     def tools_check(c: Ctx) -> Optional[str]:
         x265 = (c.install_dir / "tools" / "x265" / "x265.exe").is_file()
         nvenc = (c.install_dir / "tools" / "NVEncC" / "NVEncC64.exe").is_file()
@@ -928,7 +968,7 @@ def build_steps() -> list[Step]:
             done.append("NVEncC 9.17")
         return ", ".join(done) if done else "already present"
 
-    # -- 19. gui-settings --------------------------------------------------
+    # -- 20. gui-settings --------------------------------------------------
     def gui_settings_check(c: Ctx) -> Optional[str]:
         settings = c.install_dir / "gui" / "gui_cmnet2_settings.json"
         if not settings.is_file():
@@ -973,7 +1013,7 @@ def build_steps() -> list[Step]:
             fh.write(json.dumps(settings, indent=4) + "\n")
         return "gui_cmnet2_settings.json created"
 
-    # -- 20. launchers -----------------------------------------------------
+    # -- 21. launchers -----------------------------------------------------
     def launcher_files(c: Ctx) -> dict[str, bytes]:
         files: dict[str, bytes] = {}
         models_line = (f'\nset "HAVC_MODELS_DIR={c.models_dir}"'
@@ -1001,7 +1041,7 @@ def build_steps() -> list[Step]:
             (c.install_dir / name).write_bytes(data)
         return ", ".join(LAUNCHERS)
 
-    # -- 21. verify --------------------------------------------------------
+    # -- 22. verify --------------------------------------------------------
     def verify_run(c: Ctx) -> str:
         env = dict(os.environ)
         env.pop("PYTHONPATH", None)  # no shadowing from the caller
@@ -1055,6 +1095,9 @@ def build_steps() -> list[Step]:
              deps_check, deps_run),
         Step("wheel", "Project wheel (havc)", "pip install --no-deps havc-*.whl",
              wheel_check, wheel_run),
+        Step("server", "Server entry points in <install>",
+             "dit_rpc_server.py + dit_colorize_main.py (copied from the venv, rewritten if different)",
+             server_check, server_run),
         Step("configs", "Pipeline configs in <install>/config", "copy missing configs",
              configs_check, configs_run),
         Step("gui", "GUI files in <install>/gui",

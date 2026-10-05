@@ -219,7 +219,7 @@ prima installazione.
    file in cache se il digest combacia.
 5. **Stadio 1**: estrazione runtime in `<install>\runtime\python` (tar.gz,
    `System.Formats.Tar`); `runtime\python -m pip install --no-deps <wheel>`.
-6. **Stadio 2**: run bootstrap (§5) con progresso live sui 21 passi.
+6. **Stadio 2**: run bootstrap (§5) con progresso live sui 22 passi.
 7. **Chiusura**: scorciatoie (Start Menu: "HAVC" → `HAVC.vbs`; "HAVC Manager"
    → `HAVCManager.exe`), registrazione disinstallazione, copia del manager in
    `<install>\HAVCManager.exe`, scrittura `install.json`, pagina finale
@@ -310,7 +310,7 @@ Schermate v0 (wizard):
 4. **Components** — *Server+GUI* (fisso in v0); riga informativa: *DINOv2
    weights included*.
 5. **Summary** — cosa verrà scaricato.
-6. **Progress** — barra + lista dei 21 passi con stato (*pending* / *running* /
+6. **Progress** — barra + lista dei 22 passi con stato (*pending* / *running* /
    *skipped* / *ok* / *error*), log espandibile, pulsante *Cancel* (termina a
    fine passo corrente; lo stato resta recuperabile con *Repair*).
 7. **Finish** — *Open GUI* · *Start server* · *Open work folder* · *Show log*.

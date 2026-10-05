@@ -136,30 +136,33 @@ Passi, nell'ordine:
    default `packages/`);
 10. `deps` — `pip install -r requirements/core.txt`;
 11. `wheel` — installa la wheel del progetto (`--wheel`, con `--no-deps`);
-12. `configs` — copia le config di pipeline in `<install>\config` (solo mancanti);
-13. `gui` — copia i file GUI in `<install>\gui` (script principale, helper,
+12. `server` — copia `dit_rpc_server.py` e `dit_colorize_main.py` dalla wheel
+    (site-packages del venv) nella root di `<install>`, riscritti se diversi:
+    la GUI avvia il server da lì (file path + `--module-dir`);
+13. `configs` — copia le config di pipeline in `<install>\config` (solo mancanti);
+14. `gui` — copia i file GUI in `<install>\gui` (script principale, helper,
     `scripts/*.vpy` — dalla copia inclusa nella wheel o dal checkout);
     aggiorna i file se il contenuto differisce (skip solo se identici);
-14. `gui-deps` — `pip install -r requirements/gui.txt` + wheel `vscmnet2` e
+15. `gui-deps` — `pip install -r requirements/gui.txt` + wheel `vscmnet2` e
     `spatial_correlation_sampler` da `--assets-dir`;
-15. `cmnet2-plugins` — estrae `plugins_win.zip` (vs-cmnet2 v1.0.0, sha256)
+16. `cmnet2-plugins` — estrae `plugins_win.zip` (vs-cmnet2 v1.0.0, sha256)
     in `vscmnet2\plugins\`;
-16. `cmnet2-weights` — scarica il checkpoint DINOv3 (`cmnet2` v1.3.0) e
+17. `cmnet2-weights` — scarica il checkpoint DINOv3 (`cmnet2` v1.3.0) e
     `dinov3-vitb16.zip` (v1.1.0, estratto) in `vscmnet2\weights\`;
-17. `cmnet2-dinov2` — pesi DINOv2 legacy (`cmnet2` v1.0.0), **saltato di
+18. `cmnet2-dinov2` — pesi DINOv2 legacy (`cmnet2` v1.0.0), **saltato di
     default**; si attiva con `--with-dinov2`;
-18. `tools` — estrae in `<install>\tools` sia `tools.zip` (x265/x264/mkvmerge)
+19. `tools` — estrae in `<install>\tools` sia `tools.zip` (x265/x264/mkvmerge)
     sia `NVEncC_9.17_x64.zip` (NVEncC 9.17, pacchetto flat); entrambi pinnati
     (Release v1.0.0, sha256 verificato), o `--tools-zip` per la parte tools.zip;
-19. `gui-settings` — pre-seeda `gui_cmnet2_settings.json` (solo se assente):
+20. `gui-settings` — pre-seeda `gui_cmnet2_settings.json` (solo se assente):
     percorsi di `scripts/`, `vspipe`, tool, cartella di lavoro e `model_name`
     di default (`qwen21-viggle`, o `longcat-gguf` con precision `q3` via
     `--default-model`); su file esistente riempie solo i valori vuoti
     (`hf_cache`, `model_name`/`model_precision`), senza mai sovrascrivere;
-20. `launchers` — scrive i launcher in `<install>`: `HAVC.cmd`/`HAVC.vbs`
+21. `launchers` — scrive i launcher in `<install>`: `HAVC.cmd`/`HAVC.vbs`
     (**front-end di default = GUI**), `HAVC-Server.cmd` (server con scelta
     modello), `HAVC-Doctor.cmd`; riscritti se il contenuto differisce;
-21. `verify` — esegue `havc doctor --json` **nel venv di destinazione**;
+22. `verify` — esegue `havc doctor --json` **nel venv di destinazione**;
     un FAIL qui è un errore del bootstrap.
 
 Flag: `--install-dir` (obbligatorio), `--python`, `--runtime-zip`,

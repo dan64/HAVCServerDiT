@@ -879,5 +879,16 @@ storico.*
   col comando identico alla GUI** → "HAVC DiT Server listening on
   127.0.0.1:8898" (kill pulito); **riproduzione fedele dello spawn GUI**
   (stesso Popen della GUI: probe `.venv`, porta 8799, `--load-pipeline`)
-  → pipeline caricata + "listening on 127.0.0.1:8799". Da fare: test autore
-  *Run Server* dalla GUI; pubblicare la pre-release `v0.1.9`.
+  → pipeline caricata + "listening on 127.0.0.1:8799". **Meccanismo chiarito
+  (dagli alberi di processo del test autore)**: `venv\Scripts\python.exe` è
+  un *launcher* (262 KB) che genera il processo reale
+  `runtime\python\python.exe` (91 KB) con `sys.executable`/prefix del venv —
+  ogni run del venv appare quindi come coppia launcher→figlio. Il crash
+  pre-fix si spiega così: la GUI (vero exe = `runtime\python\python.exe`) non
+  trovava `.venv` e ripiegava su `python` nudo → la ricerca CreateProcess
+  parte dalla cartella dell'exe padre (`runtime\python\`) → runtime spoglio
+  → PIL assente. Post-fix la GUI spawna `.venv\Scripts\python.exe` →
+  launcher → stack del venv: **verificato dal vivo sul run dell'autore**
+  (coppia launcher/interprete, `LISTENING` su 8765, pipeline qwen21 carica
+  ≈14,5 GB VRAM) e **tab #4/#5 (Fix Image / Fix Colors) testati OK**. Da
+  fare: pubblicare la pre-release `v0.1.9`.

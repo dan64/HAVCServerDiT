@@ -110,6 +110,8 @@ public static class Strings
 
     public static string UninstallPartialMessage => ResourceManager.GetString("UninstallPartialMessage")!;
 
+    public static string UnexpectedErrorTitle => ResourceManager.GetString("UnexpectedErrorTitle")!;
+
     public static string WelcomeSubtitle => ResourceManager.GetString("WelcomeSubtitle")!;
 
     public static string WelcomeTitle => ResourceManager.GetString("WelcomeTitle")!;

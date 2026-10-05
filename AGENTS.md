@@ -578,3 +578,16 @@ storico.*
   generato e verificato) pronta da pubblicare come release **`v0.1.2`**;
   creato `dist/test-manifest-local.json` (wheel/asset in `file://`, runtime
   dal mirror) per provare il wizard end-to-end senza pubblicare.
+- **2026-10-05 (26)** — **Fix: crash del manager alla pagina Progress
+  (segnalato dall'utente al primo run reale).** `ProgressBar.Value/Maximum`
+  sono TwoWay di default e il VM espone proprietà read-only →
+  `InvalidOperationException` appena aperta la pagina Progress (`Mode=OneWay`
+  su entrambe). Aggiunto anche un handler `DispatcherUnhandledException` che
+  mostra l'eccezione invece di far sparire l'app in silenzio. Verifica nuova:
+  **test UI automatizzato** (PowerShell + UI Automation) che pilota il wizard
+  reale (scratch + manifest locale): Start→Preflight→Folders→Components→
+  Summary→Install→Progress; a 45 s download completati (runtime 22 MB +
+  wheel + asset) e runtime estratto; `Cancel` → `.stop-request` scritto;
+  `Force stop` → processo vivo; Event Log pulito dopo il fix. Resta: run
+  completo col bootstrap pesante (utente/VM) e pagine Finish/Installed da
+  esercitare davvero.

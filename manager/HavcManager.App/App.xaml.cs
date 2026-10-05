@@ -1,4 +1,5 @@
 using System.Windows;
+using HavcManager.App.Resources;
 using HavcManager.App.Windows;
 
 namespace HavcManager.App;
@@ -9,6 +10,16 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        // Surface unexpected errors instead of vanishing silently (debug aid).
+        DispatcherUnhandledException += (_, args) =>
+        {
+            MessageBox.Show(
+                args.Exception.ToString(),
+                Strings.UnexpectedErrorTitle,
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        };
         AppOptions options;
         try
         {

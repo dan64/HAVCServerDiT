@@ -18,8 +18,8 @@
                    FontSize="22" FontWeight="SemiBold"/>
         <ProgressBar Grid.Row="1" Height="8" Margin="0,12,0,0"
                      Minimum="0"
-                     Maximum="{Binding ProgressMaximum}"
-                     Value="{Binding ProgressValue}"/>
+                     Maximum="{Binding ProgressMaximum, Mode=OneWay}"
+                     Value="{Binding ProgressValue, Mode=OneWay}"/>
 
         <Grid Grid.Row="2" Margin="0,14,0,0">
             <Grid.RowDefinitions>

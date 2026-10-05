@@ -202,6 +202,9 @@
   <data name="UninstallPartialMessage" xml:space="preserve">
     <value>Some files could not be removed — see the details below:</value>
   </data>
+  <data name="UnexpectedErrorTitle" xml:space="preserve">
+    <value>HAVC Setup — unexpected error</value>
+  </data>
   <data name="WelcomeSubtitle" xml:space="preserve">
     <value>Install HAVC Server + GUI on this PC.</value>
   </data>

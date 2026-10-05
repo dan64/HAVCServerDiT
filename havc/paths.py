@@ -23,18 +23,19 @@ def repo_root() -> Path | None:
     return None
 
 
-def _data_dir(name: str) -> Path:
+def _data_dir(name: str, repo_name: str | None = None) -> Path:
     packaged = package_dir() / name  # installed wheel
     if packaged.is_dir():
         return packaged
     root = repo_root()
-    if root is not None and (root / name).is_dir():
-        return root / name  # repo checkout
+    if root is not None and (root / (repo_name or name)).is_dir():
+        return root / (repo_name or name)  # repo checkout
     return packaged  # the caller reports the error
 
 
 def configs_dir() -> Path:
-    return _data_dir("configs")
+    # Wheel: bundled as `havc/configs`. Checkout: the source folder is `config/`.
+    return _data_dir("configs", repo_name="config")
 
 
 def requirements_dir() -> Path:

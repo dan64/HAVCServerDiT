@@ -212,6 +212,7 @@ class Ctx:
     python: Optional[Path] = None
     runtime_zip: Optional[Path] = None
     tools_zip: Optional[Path] = None
+    models_dir: Optional[Path] = None
     with_dinov2: bool = False
     use_system_python: bool = False
 
@@ -392,6 +393,8 @@ def vscmnet2_dir(ctx: Ctx) -> Optional[Path]:
 
     Uses `find_spec` without executing the package (no torch import).
     """
+    if not ctx.venv_exists():
+        return None
     code = (
         "import importlib.util as u\n"
         "s = u.find_spec('vscmnet2')\n"
@@ -434,6 +437,61 @@ def cached_download(ctx: Ctx, asset: dict, local: Optional[Path] = None) -> Path
             f"sha256 mismatch for {asset['name']}: {digest} != {asset['sha256']}",
             "re-download the archive; if it persists, the source file has changed")
     return cached
+
+
+# ---------------------------------------------------------------------------
+# Models folder wiring (Fase 1 — PHASE1_SPEC §7)
+#
+# `--models-dir` wires a unified models folder into the managed files. Rule:
+# only empty/absent values are filled in; user values are never overwritten.
+# ---------------------------------------------------------------------------
+
+def wire_gui_settings(ctx: Ctx, settings_path: Path) -> int:
+    """Set `hf_cache` in gui_cmnet2_settings.json when empty. Returns 1 if changed."""
+    if ctx.models_dir is None or not settings_path.is_file():
+        return 0
+    try:
+        data = json.loads(settings_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return 0
+    if data.get("hf_cache"):
+        return 0
+    data["hf_cache"] = str(ctx.models_dir / "hf-cache")
+    with settings_path.open("w", encoding="utf-8", newline="\n") as fh:
+        fh.write(json.dumps(data, indent=4) + "\n")
+    return 1
+
+
+def wire_nunchaku_configs(ctx: Ctx, config_dir: Path) -> int:
+    """Set `cache_dir` in qwen_nunchaku_*.json when empty. Returns files changed."""
+    if ctx.models_dir is None or not config_dir.is_dir():
+        return 0
+    changed = 0
+    for path in sorted(config_dir.glob("qwen_nunchaku_*.json")):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if data.get("cache_dir"):
+            continue
+        data["cache_dir"] = str(ctx.models_dir / "hf-cache")
+        with path.open("w", encoding="utf-8", newline="\n") as fh:
+            fh.write(json.dumps(data, indent=4) + "\n")
+        changed += 1
+    return changed
+
+
+def _needs_nunchaku_wiring(ctx: Ctx, config_dir: Path) -> bool:
+    """True when --models-dir is set and some qwen_nunchaku_* config has an empty cache_dir."""
+    if ctx.models_dir is None or not config_dir.is_dir():
+        return False
+    for path in sorted(config_dir.glob("qwen_nunchaku_*.json")):
+        try:
+            if not json.loads(path.read_text(encoding="utf-8")).get("cache_dir"):
+                return True
+        except (OSError, ValueError):
+            continue
+    return False
 
 
 # ---------------------------------------------------------------------------
@@ -639,12 +697,17 @@ def build_steps() -> list[Step]:
             return None
         dst = c.install_dir / "config"
         missing = [p.name for p in src.glob("*.json") if not (dst / p.name).exists()]
-        return "configs already present" if not missing else None
+        if missing:
+            return None
+        if _needs_nunchaku_wiring(c, dst):
+            return None
+        return "configs already present"
 
     def configs_run(c: Ctx) -> str:
         if c.dry_run:
+            note = " + models wiring" if c.models_dir is not None else ""
             c.progress.event("log", level="dry-run",
-                             message=f"[dry-run] copy configs -> {c.install_dir / 'config'}")
+                             message=f"[dry-run] copy configs -> {c.install_dir / 'config'}{note}")
             return "dry-run"
         src = paths.configs_dir()
         if not src.is_dir():
@@ -658,7 +721,11 @@ def build_steps() -> list[Step]:
             if not target.exists():
                 shutil.copy2(path, target)
                 copied += 1
-        return f"{copied} configs copied" if copied else "no new configs"
+        wired = wire_nunchaku_configs(c, dst)
+        parts = [f"{copied} configs copied" if copied else "no new configs"]
+        if wired:
+            parts.append(f"{wired} cache_dir wired")
+        return ", ".join(parts)
 
     # -- 13. gui -----------------------------------------------------------
     def gui_files() -> Optional[dict[str, Path]]:
@@ -840,7 +907,15 @@ def build_steps() -> list[Step]:
     # -- 19. gui-settings --------------------------------------------------
     def gui_settings_check(c: Ctx) -> Optional[str]:
         settings = c.install_dir / "gui" / "gui_cmnet2_settings.json"
-        return "settings already present" if settings.is_file() else None
+        if not settings.is_file():
+            return None
+        if c.models_dir is not None:
+            try:
+                if not json.loads(settings.read_text(encoding="utf-8")).get("hf_cache"):
+                    return None
+            except (OSError, ValueError):
+                pass
+        return "settings already present"
 
     def gui_settings_run(c: Ctx) -> str:
         if c.dry_run:
@@ -850,6 +925,11 @@ def build_steps() -> list[Step]:
         gui_dir = c.install_dir / "gui"
         if not gui_dir.is_dir():
             raise BootstrapError("gui folder missing", "run the `gui` step first")
+        path = gui_dir / "gui_cmnet2_settings.json"
+        if path.is_file():
+            wired = wire_gui_settings(c, path)
+            return ("hf_cache wired in gui_cmnet2_settings.json" if wired
+                    else "settings already present")
         settings = {
             "script_dir": str(gui_dir / "scripts"),
             "vspipe_path": str(c.venv_python.parent / "vspipe.exe"),
@@ -857,19 +937,26 @@ def build_steps() -> list[Step]:
             "mkv_path": str(c.install_dir / "tools" / "MKVToolNix" / "mkvmerge.exe"),
             "base_dir": str(c.install_dir / "work"),
             "fixv_base_dir": str(c.install_dir / "work"),
+            "hf_cache": str(c.models_dir / "hf-cache") if c.models_dir else "",
         }
-        path = gui_dir / "gui_cmnet2_settings.json"
         with path.open("w", encoding="utf-8", newline="\n") as fh:
             fh.write(json.dumps(settings, indent=4) + "\n")
         return "gui_cmnet2_settings.json created"
 
     # -- 20. launchers -----------------------------------------------------
-    def launcher_files() -> dict[str, bytes]:
-        return {name: content.replace("\n", "\r\n").encode("utf-8")
-                for name, content in LAUNCHERS.items()}
+    def launcher_files(c: Ctx) -> dict[str, bytes]:
+        files: dict[str, bytes] = {}
+        models_line = (f'\nset "HAVC_MODELS_DIR={c.models_dir}"'
+                       if c.models_dir is not None else "")
+        for name, content in LAUNCHERS.items():
+            if models_line and name.endswith(".cmd"):
+                content = content.replace('set "HERE=%~dp0"',
+                                          'set "HERE=%~dp0"' + models_line, 1)
+            files[name] = content.replace("\n", "\r\n").encode("utf-8")
+        return files
 
     def launchers_check(c: Ctx) -> Optional[str]:
-        for name, data in launcher_files().items():
+        for name, data in launcher_files(c).items():
             path = c.install_dir / name
             if not path.is_file() or path.read_bytes() != data:
                 return None
@@ -880,7 +967,7 @@ def build_steps() -> list[Step]:
             c.progress.event("log", level="dry-run",
                              message=f"[dry-run] launcher -> {c.install_dir}")
             return "dry-run"
-        for name, data in launcher_files().items():
+        for name, data in launcher_files(c).items():
             (c.install_dir / name).write_bytes(data)
         return ", ".join(LAUNCHERS)
 
@@ -980,7 +1067,18 @@ def run_steps(ctx: Ctx, steps: list[Step], only: Optional[set[str]]) -> bool:
         return True
     ok = True
     skipped = 0
+    stop = ctx.cache_dir / ".stop-request"
+    if not ctx.dry_run:
+        try:
+            stop.unlink()
+        except FileNotFoundError:
+            pass
     for step in selected:
+        if not ctx.dry_run and stop.is_file():
+            ctx.progress.event("log", level="out",
+                               message="stop requested: aborting after the previous step")
+            ok = False
+            break
         reason = step.check(ctx)
         if reason is not None:
             skipped += 1
@@ -1028,6 +1126,9 @@ def main(argv=None) -> int:
                         help="folder with the local wheels (default: packages/ of the checkout)")
     parser.add_argument("--wheel", type=Path, default=None,
                         help="project wheel (havc-*.whl) to install")
+    parser.add_argument("--models-dir", type=Path, default=None,
+                        help="unified models folder: HF cache + comfy models "
+                             "(wired into configs, GUI settings and launchers)")
     parser.add_argument("--only", default="",
                         help="run only these steps (comma-separated ids)")
     parser.add_argument("--plan", action="store_true",
@@ -1066,6 +1167,7 @@ def main(argv=None) -> int:
         python=args.python,
         runtime_zip=args.runtime_zip.resolve() if args.runtime_zip else None,
         tools_zip=args.tools_zip.resolve() if args.tools_zip else None,
+        models_dir=args.models_dir.resolve() if args.models_dir else None,
         with_dinov2=args.with_dinov2,
         use_system_python=args.use_system_python,
     )

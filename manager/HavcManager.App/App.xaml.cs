@@ -14,11 +14,14 @@ public partial class App : Application
         // Surface unexpected errors instead of vanishing silently (debug aid).
         DispatcherUnhandledException += (_, args) =>
         {
-            MessageBox.Show(
-                args.Exception.ToString(),
-                Strings.UnexpectedErrorTitle,
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
+            try
+            {
+                Dialogs.MessageDialog.Show(MainWindow, Strings.UnexpectedErrorTitle, args.Exception.ToString());
+            }
+            catch (Exception)
+            {
+                // the handler must never throw
+            }
         };
         AppOptions options;
         try

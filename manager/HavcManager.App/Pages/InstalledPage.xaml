@@ -2,38 +2,63 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:res="clr-namespace:HavcManager.App.Resources">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+    </UserControl.Resources>
     <Grid Margin="32">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <TextBlock Text="{x:Static res:Strings.InstalledTitle}"
                    FontSize="22" FontWeight="SemiBold"/>
-        <StackPanel Grid.Row="1" Margin="0,16,0,0">
-            <TextBlock FontSize="14">
-                <Run Text="{x:Static res:Strings.SummaryVersionLabel}"/><Run Text=": "/><Run Text="{Binding Existing.State.AppVersion, Mode=OneWay}"/>
-            </TextBlock>
-            <TextBlock Margin="0,8,0,0" FontSize="13" TextWrapping="Wrap">
-                <Run Text="{x:Static res:Strings.LabelInstallFolder}"/><Run Text=": "/><Run Text="{Binding Existing.InstallDir, Mode=OneWay}"/>
-            </TextBlock>
-            <TextBlock Margin="0,8,0,0" FontSize="13" TextWrapping="Wrap">
-                <Run Text="{x:Static res:Strings.LabelModelsFolder}"/><Run Text=": "/><Run Text="{Binding Existing.State.ModelsDir, Mode=OneWay}"/>
-            </TextBlock>
-            <TextBlock Margin="0,18,0,0" Opacity="0.6" FontSize="12" TextWrapping="Wrap">
-                Updating and repairing arrive in a later milestone.
-            </TextBlock>
+
+        <StackPanel Grid.Row="1" Margin="0,14,0,0">
+            <ItemsControl ItemsSource="{Binding InstalledLines}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding}" FontSize="13" Margin="0,3" TextWrapping="Wrap"/>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock Text="{x:Static res:Strings.DirtyWarning}" Foreground="Firebrick"
+                       Margin="0,12,0,0" TextWrapping="Wrap"
+                       Visibility="{Binding DirtyWarningVisible, Converter={StaticResource BoolToVis}}"/>
         </StackPanel>
 
-        <WrapPanel Grid.Row="2" HorizontalAlignment="Right" Margin="0,16,0,0">
-            <Button Content="{x:Static res:Strings.OpenGui}" Padding="16,9" Margin="0,0,8,0"
-                    Click="OnOpenGuiClick"/>
-            <Button Content="{x:Static res:Strings.OpenFolderButton}" Padding="16,9" Margin="0,0,8,0"
-                    Click="OnOpenFolderClick"/>
-            <Button Content="{x:Static res:Strings.UninstallButton}" Padding="16,9" Margin="0,0,8,0"
-                    Click="OnUninstallClick"/>
-            <Button Content="{x:Static res:Strings.Close}" Padding="16,9" Click="OnCloseClick"/>
+        <WrapPanel Grid.Row="2" Margin="0,16,0,0">
+            <Button Content="{x:Static res:Strings.OpenGui}" Padding="16,9"
+                    Margin="0,0,8,8" Click="OnOpenGuiClick"/>
+            <StackPanel Orientation="Horizontal" Margin="0,0,8,8">
+                <TextBlock Text="{x:Static res:Strings.ModelLabel}" VerticalAlignment="Center"
+                           Margin="0,0,6,0"/>
+                <ComboBox ItemsSource="{Binding Backends}" SelectedItem="{Binding SelectedBackend}"
+                          Width="96" Margin="0,0,6,0"/>
+                <Button Content="{x:Static res:Strings.StartServerButton}" Padding="16,9"
+                        Click="OnStartServerClick"/>
+            </StackPanel>
+            <Button Content="{x:Static res:Strings.CheckForUpdatesButton}" Padding="16,9"
+                    Margin="0,0,8,8" Click="OnCheckUpdatesClick" IsEnabled="{Binding IsNotBusy}"/>
+            <Button Content="{x:Static res:Strings.RepairButton}" Padding="16,9"
+                    Margin="0,0,8,8" Click="OnRepairClick" IsEnabled="{Binding IsNotBusy}"/>
+            <Button Content="{x:Static res:Strings.UninstallButton}" Padding="16,9"
+                    Margin="0,0,8,8" Click="OnUninstallClick"/>
+            <Button Content="{x:Static res:Strings.ShowLogButton}" Padding="16,9"
+                    Margin="0,0,8,8" Click="OnShowLogClick"/>
         </WrapPanel>
+
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
+            <TextBlock Text="{Binding AboutText, Mode=OneWay}" VerticalAlignment="Center"
+                       Opacity="0.65" Margin="0,0,12,0"/>
+            <TextBlock VerticalAlignment="Center" Margin="0,0,14,0">
+                <Hyperlink Click="OnProjectLinkClick">
+                    <Run Text="{x:Static res:Strings.ProjectLinkText}"/>
+                </Hyperlink>
+            </TextBlock>
+            <Button Content="{x:Static res:Strings.Close}" Padding="16,8" Click="OnCloseClick"/>
+        </StackPanel>
     </Grid>
 </UserControl>

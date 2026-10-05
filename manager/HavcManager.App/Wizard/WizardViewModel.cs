@@ -4,13 +4,19 @@ using System.Globalization;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Windows;
+using HavcManager.App.Dialogs;
 using HavcManager.App.Resources;
 using HavcManager.App.Windows;
 using HavcManager.Core.Bootstrap;
+using HavcManager.Core.Download;
 using HavcManager.Core.Install;
+using HavcManager.Core.Log;
 using HavcManager.Core.Manifest;
 using HavcManager.Core.Preflight;
+using HavcManager.Core.Processes;
+using HavcManager.Core.Runtime;
 using HavcManager.Core.State;
+using HavcManager.Core.Update;
 
 namespace HavcManager.App.Wizard;
 
@@ -37,6 +43,7 @@ public sealed class WizardViewModel : INotifyPropertyChanged
     private readonly StateStore _stateStore = new();
 
     private ReleaseManifest? _manifest;
+    private ReleaseManifest? _updateManifest;
     private InstallFlow? _flow;
     private CancellationTokenSource? _cts;
     private PreflightReport? _preflightReport;
@@ -52,6 +59,8 @@ public sealed class WizardViewModel : INotifyPropertyChanged
     private bool _isBusy;
     private bool _preflightDone;
     private string? _suggestedBackend;
+    private string _selectedBackend = "fp4";
+    private bool _dirtyWarningVisible;
 
     public WizardViewModel(AppOptions options) => _options = options;
 
@@ -131,6 +140,24 @@ public sealed class WizardViewModel : INotifyPropertyChanged
 
     public ObservableCollection<string> SummaryLines { get; } = new();
 
+    public ObservableCollection<string> InstalledLines { get; } = new();
+
+    public string[] Backends { get; } = ["fp4", "int4", "q3", "q4", "longcat", "qwen21"];
+
+    public string SelectedBackend
+    {
+        get => _selectedBackend;
+        set => Set(ref _selectedBackend, value);
+    }
+
+    public bool DirtyWarningVisible
+    {
+        get => _dirtyWarningVisible;
+        private set => Set(ref _dirtyWarningVisible, value);
+    }
+
+    public string AboutText => string.Format(CultureInfo.InvariantCulture, Strings.AboutLine, ManagerVersion);
+
     public int ProgressMaximum => Math.Max(Steps.Count, 1);
 
     public int ProgressValue => Steps.Count(s => s.Status is "ok" or "skipped" or "error");
@@ -153,11 +180,9 @@ public sealed class WizardViewModel : INotifyPropertyChanged
         InstallDir = _options.InstallDir ?? InstallLocator.DefaultInstallDir;
         ModelsDir = SuggestModelsDir();
 
-        Existing = InstallLocator.FindExisting(_options.InstallDir);
+        ReloadExisting();
         if (Existing is not null)
         {
-            InstallDir = Existing.InstallDir;
-            ModelsDir = Existing.State.ModelsDir ?? ModelsDir;
             Navigate(WizardPage.Installed);
             if (_options.Uninstall)
                 UninstallRequestedFromArgs?.Invoke();
@@ -166,6 +191,70 @@ public sealed class WizardViewModel : INotifyPropertyChanged
         {
             Navigate(WizardPage.Welcome);
         }
+    }
+
+    /// <summary>Re-reads install.json and refreshes the Installed-page data.</summary>
+    public void ReloadExisting()
+    {
+        Existing = InstallLocator.FindExisting(_options.InstallDir);
+        if (Existing is not null)
+        {
+            InstallDir = Existing.InstallDir;
+            ModelsDir = Existing.State.ModelsDir ?? ModelsDir;
+            SelectedBackend = Existing.State.BackendDefault ?? "fp4";
+        }
+        RefreshInstalledLines();
+        Notify(nameof(Existing));
+    }
+
+    private void RefreshInstalledLines()
+    {
+        InstalledLines.Clear();
+        var state = Existing?.State;
+        if (state is null)
+        {
+            DirtyWarningVisible = false;
+            return;
+        }
+        InstalledLines.Add($"{Strings.SummaryVersionLabel}: {state.AppVersion}");
+        InstalledLines.Add($"{Strings.LabelInstallFolder}: {Existing!.InstallDir}");
+        InstalledLines.Add($"{Strings.LabelModelsFolder}: {state.ModelsDir ?? "—"}");
+        InstalledLines.Add(LastVerifyText(state));
+        InstalledLines.Add(string.Format(CultureInfo.InvariantCulture, Strings.FreeSpaceFormat, FreeSpace(state.ModelsDir)));
+        DirtyWarningVisible = state.Dirty;
+    }
+
+    private static string LastVerifyText(InstallState state)
+    {
+        var verify = state.LastVerify;
+        if (verify is null)
+            return Strings.LastVerifyNever;
+        string ts = DateTimeOffset.TryParse(verify.Ts, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed)
+            ? parsed.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)
+            : verify.Ts;
+        return string.Format(
+            CultureInfo.InvariantCulture,
+            verify.Ok ? Strings.LastVerifyOkFormat : Strings.LastVerifyFailedFormat,
+            ts);
+    }
+
+    private static string FreeSpace(string? path)
+    {
+        try
+        {
+            if (!string.IsNullOrEmpty(path))
+            {
+                var drive = new DriveInfo(Path.GetPathRoot(Path.GetFullPath(path))!);
+                return FormatBytes(drive.AvailableFreeSpace);
+            }
+        }
+        catch (ArgumentException)
+        {
+        }
+        catch (IOException)
+        {
+        }
+        return "—";
     }
 
     public void Navigate(WizardPage page)
@@ -245,10 +334,248 @@ public sealed class WizardViewModel : INotifyPropertyChanged
     {
         if (_manifest is null || IsRunning)
             return;
-        Steps.Clear();
-        LogLines.Clear();
-        _failureDetail = null;
-        _failureRemediation = null;
+        InstallOutcome outcome = await RunFlowOnProgressAsync(
+            reset: true,
+            (observe, ct) => _flow!.RunAsync(new InstallPlan(_manifest, InstallDir, ModelsDir, WithDinov2: true), observe, ct));
+        if (outcome.Ok)
+        {
+            StatusText = Strings.StatusFinishing;
+            FinalizeInstall();
+            StatusText = "";
+            Navigate(WizardPage.Finish);
+            return;
+        }
+        HandleFailedRun(outcome);
+    }
+
+    public async Task CheckForUpdatesAsync()
+    {
+        if (IsBusy || IsRunning)
+            return;
+        IsBusy = true;
+        StatusText = Strings.StatusCheckingUpdates;
+        ReleaseManifest? manifest = null;
+        string? error = null;
+        try
+        {
+            manifest = await new ManifestClient().FetchAsync(ResolveManifestSource());
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        IsBusy = false;
+        StatusText = "";
+        if (manifest is null)
+        {
+            MessageDialog.Show(Application.Current?.MainWindow, Strings.ErrorTitle, error ?? Strings.StatusFailed);
+            return;
+        }
+        ReloadExisting();
+        var state = Existing?.State;
+        if (state is null)
+        {
+            MessageDialog.Show(Application.Current?.MainWindow, Strings.ErrorTitle, Strings.NoInstallationMessage);
+            return;
+        }
+        var classification = UpdateEngine.Classify(manifest, state);
+        new ManagerLog(InstallDir).Info(
+            $"update check: manifest {manifest.AppVersion} vs installed {state.AppVersion} -> {classification}");
+        switch (classification)
+        {
+            case UpdateClassification.UpToDate:
+                MessageDialog.Show(
+                    Application.Current?.MainWindow, Strings.AppTitle,
+                    string.Format(CultureInfo.InvariantCulture, Strings.UpToDateMessage, manifest.AppVersion));
+                break;
+            case UpdateClassification.RebuildRequired:
+                MessageDialog.Show(
+                    Application.Current?.MainWindow, Strings.UpdateAvailableTitle, Strings.RebuildRequiredMessage);
+                break;
+            case UpdateClassification.UpdateAvailable:
+                bool update = MessageDialog.Show(
+                    Application.Current?.MainWindow, Strings.UpdateAvailableTitle,
+                    string.Format(CultureInfo.InvariantCulture, Strings.UpdateAvailableMessage, state.AppVersion, manifest.AppVersion),
+                    yesNo: true,
+                    linkText: Strings.OpenReleaseNotes,
+                    linkUrl: manifest.NotesUrl);
+                if (update)
+                {
+                    _updateManifest = manifest;
+                    await StartUpdateAsync();
+                }
+                break;
+        }
+    }
+
+    public async Task StartUpdateAsync()
+    {
+        if (_updateManifest is null || IsRunning)
+            return;
+        ReloadExisting();
+        var state = Existing?.State;
+        if (state is null)
+            return;
+        if (!EnsureInstancesClosed())
+            return;
+
+        string cacheDir = Path.Combine(InstallDir, "cache");
+        string? oldWheel = UpdateEngine.FindCachedWheel(cacheDir, state.AppVersion);
+        InstallOutcome outcome = await RunFlowOnProgressAsync(
+            reset: true,
+            (observe, ct) => _flow!.RunAsync(new InstallPlan(_updateManifest, InstallDir, ModelsDir, WithDinov2: true), observe, ct));
+
+        if (outcome.Ok)
+        {
+            string now = DateTimeOffset.UtcNow.ToString("o");
+            var snapshot = new PreviousState
+            {
+                AppVersion = state.AppVersion,
+                Wheel = oldWheel is null ? "" : Path.GetFileName(oldWheel),
+                Sha256 = oldWheel is null ? "" : await Downloader.Sha256Async(oldWheel),
+            };
+            _stateStore.Save(InstallDir, state with
+            {
+                AppVersion = _updateManifest.AppVersion,
+                UpdatedAt = now,
+                Previous = snapshot,
+                Dirty = false,
+                LastVerify = new LastVerifyState { Ts = now, Ok = true, AppVersion = _updateManifest.AppVersion },
+            });
+            ReloadExisting();
+            Navigate(WizardPage.Installed);
+            MessageDialog.Show(
+                Application.Current?.MainWindow, Strings.AppTitle,
+                string.Format(CultureInfo.InvariantCulture, Strings.UpdateCompleteMessage, _updateManifest.AppVersion));
+            return;
+        }
+
+        if (_stopStage > 0 || outcome.Error == "canceled")
+        {
+            StatusText = Strings.StatusStopped;
+            return;
+        }
+
+        // FAIL → rollback (spec §6.3 step 6): stage 1 + stage 2 on the previous wheel.
+        StatusText = Strings.StatusRollingBack;
+        bool rolledBack = false;
+        if (oldWheel is not null)
+        {
+            var repair = new RepairPlan(
+                InstallDir, ModelsDir, PythonRuntime.PythonExePath(InstallDir), oldWheel,
+                RuntimeArchive: RuntimeArchivePath(state, cacheDir),
+                WithDinov2: true);
+            InstallOutcome rollback = await RunFlowOnProgressAsync(
+                reset: false,
+                (observe, ct) => _flow!.RunRepairAsync(repair, observe, ct));
+            rolledBack = rollback.Ok;
+        }
+
+        string failure = _failureDetail ?? outcome.Error ?? "";
+        string share = string.IsNullOrEmpty(failure) ? "" : "\n\n" + failure;
+        string rollbackTs = DateTimeOffset.UtcNow.ToString("o");
+        if (rolledBack)
+        {
+            _stateStore.Save(InstallDir, state with
+            {
+                LastVerify = new LastVerifyState { Ts = rollbackTs, Ok = true, AppVersion = state.AppVersion },
+            });
+            ReloadExisting();
+            Navigate(WizardPage.Installed);
+            MessageDialog.Show(
+                Application.Current?.MainWindow, Strings.ErrorTitle, Strings.UpdateRolledBackMessage + share);
+        }
+        else
+        {
+            _stateStore.Save(InstallDir, state with { Dirty = true });
+            ReloadExisting();
+            Navigate(WizardPage.Installed);
+            MessageDialog.Show(
+                Application.Current?.MainWindow, Strings.ErrorTitle,
+                Strings.UpdateDirtyMessage + "\n" + Path.Combine(InstallDir, "logs") + share);
+        }
+    }
+
+    public async Task StartRepairAsync()
+    {
+        if (IsRunning)
+            return;
+        ReloadExisting();
+        var state = Existing?.State;
+        if (state is null)
+            return;
+        string cacheDir = Path.Combine(InstallDir, "cache");
+        string? wheel = UpdateEngine.FindCachedWheel(cacheDir, state.AppVersion);
+        if (wheel is null)
+        {
+            MessageDialog.Show(
+                Application.Current?.MainWindow, Strings.ErrorTitle,
+                string.Format(CultureInfo.InvariantCulture, Strings.RepairNoWheelMessage, state.AppVersion));
+            return;
+        }
+        if (!EnsureInstancesClosed())
+            return;
+
+        var plan = new RepairPlan(
+            InstallDir, ModelsDir, PythonRuntime.PythonExePath(InstallDir), wheel,
+            RuntimeArchive: RuntimeArchivePath(state, cacheDir),
+            WithDinov2: true);
+        InstallOutcome outcome = await RunFlowOnProgressAsync(
+            reset: true,
+            (observe, ct) => _flow!.RunRepairAsync(plan, observe, ct));
+        if (outcome.Ok)
+        {
+            string now = DateTimeOffset.UtcNow.ToString("o");
+            _stateStore.Save(InstallDir, state with
+            {
+                Dirty = false,
+                LastVerify = new LastVerifyState { Ts = now, Ok = true, AppVersion = state.AppVersion },
+            });
+            ReloadExisting();
+            Navigate(WizardPage.Installed);
+            MessageDialog.Show(Application.Current?.MainWindow, Strings.AppTitle, Strings.RepairCompleteMessage);
+            return;
+        }
+        HandleFailedRun(outcome);
+    }
+
+    private static string? RuntimeArchivePath(InstallState state, string cacheDir)
+        => state.Runtime is { Name.Length: > 0 } runtime ? Path.Combine(cacheDir, runtime.Name) : null;
+
+    /// <summary>Spec §6.6: no HAVC process may run from the install folder during a run.</summary>
+    private bool EnsureInstancesClosed()
+    {
+        var guard = new ProcessGuard();
+        while (true)
+        {
+            IReadOnlyList<ProcessInfo> running = guard.FindRunning(InstallDir);
+            if (running.Count == 0)
+                return true;
+            switch (ProcessLockWindow.Show(Application.Current?.MainWindow, running))
+            {
+                case LockChoice.Cancel:
+                    return false;
+                case LockChoice.Terminate:
+                    ProcessGuard.Terminate(running);
+                    Thread.Sleep(800);
+                    break;
+                case LockChoice.Retry:
+                    break;
+            }
+        }
+    }
+
+    private async Task<InstallOutcome> RunFlowOnProgressAsync(
+        bool reset,
+        Func<Action<FlowEvent>, CancellationToken, Task<InstallOutcome>> run)
+    {
+        if (reset)
+        {
+            Steps.Clear();
+            LogLines.Clear();
+            _failureDetail = null;
+            _failureRemediation = null;
+        }
         _stopStage = 0;
         Notify(nameof(CancelButtonText));
         Notify(nameof(ProgressMaximum));
@@ -260,28 +587,21 @@ public sealed class WizardViewModel : INotifyPropertyChanged
         IsRunning = true;
         Navigate(WizardPage.Progress);
         StatusText = Strings.StatusPreparing;
-
-        InstallOutcome outcome;
         try
         {
-            var plan = new InstallPlan(_manifest, InstallDir, ModelsDir, WithDinov2: true);
-            outcome = await _flow.RunAsync(plan, ev => OnUi(() => ApplyFlowEvent(ev)), _cts.Token);
+            return await run(ev => OnUi(() => ApplyFlowEvent(ev)), _cts.Token);
         }
         finally
         {
             _flow.Runner.EventReceived -= OnBootstrapEvent;
             IsRunning = false;
+            _cts.Dispose();
+            _cts = null;
         }
+    }
 
-        if (outcome.Ok)
-        {
-            StatusText = Strings.StatusFinishing;
-            FinalizeInstall();
-            StatusText = "";
-            Navigate(WizardPage.Finish);
-            return;
-        }
-
+    private void HandleFailedRun(InstallOutcome outcome)
+    {
         bool canceled = _stopStage > 0 || outcome.Error == "canceled";
         StatusText = canceled ? Strings.StatusStopped : Strings.StatusFailed;
         if (!canceled)
@@ -292,6 +612,9 @@ public sealed class WizardViewModel : INotifyPropertyChanged
             ShowError(Strings.ErrorTitle, message);
         }
     }
+
+    public void OpenProjectPage()
+        => ShellIntegration.OpenUrl("https://github.com/dan64/HAVCServerDiT/releases");
 
     /// <summary>Cancel: first press stops after the current step, second kills the process.</summary>
     public void RequestCancel()
@@ -462,7 +785,7 @@ public sealed class WizardViewModel : INotifyPropertyChanged
 
     public void OpenLogs() => ShellIntegration.OpenLogs(InstallDir);
 
-    public void StartServer() => ShellIntegration.StartServer(InstallDir, _suggestedBackend ?? "fp4");
+    public void StartServer() => ShellIntegration.StartServer(InstallDir, SelectedBackend);
 
     public void OpenReleaseNotes()
     {
@@ -524,9 +847,7 @@ public sealed class WizardViewModel : INotifyPropertyChanged
         {
             ShowError(Strings.ErrorTitle, $"{Strings.UninstallPartialMessage}\n{installDir}\n\n{ex.Message}");
         }
-        MessageBox.Show(
-            Application.Current.MainWindow, Strings.UninstallDoneMessage, Strings.AppTitle,
-            MessageBoxButton.OK, MessageBoxImage.Information);
+        MessageDialog.Show(Application.Current.MainWindow, Strings.AppTitle, Strings.UninstallDoneMessage);
         Application.Current.Shutdown();
     }
 
@@ -602,9 +923,7 @@ public sealed class WizardViewModel : INotifyPropertyChanged
     }
 
     private static void ShowError(string title, string message)
-        => MessageBox.Show(
-            Application.Current?.MainWindow, message, title,
-            MessageBoxButton.OK, MessageBoxImage.Error);
+        => MessageDialog.Show(Application.Current?.MainWindow, title, message);
 
     private static void OnUi(Action action)
     {

@@ -3,6 +3,7 @@ using System.Text;
 using HavcManager.Core.Bootstrap;
 using HavcManager.Core.Download;
 using HavcManager.Core.Manifest;
+using HavcManager.Core.Processes;
 using HavcManager.Core.Runtime;
 
 namespace HavcManager.Core.Tests;
@@ -99,6 +100,46 @@ public class IntegrationTests
         finally
         {
             TestPaths.Delete(cache);
+        }
+    }
+
+    [Fact]
+    public async Task ProcessGuard_finds_and_terminates_processes_under_the_install()
+    {
+        if (!Enabled)
+            return;
+        string python = Path.Combine(TestInstall, "runtime", "python", "python.exe");
+        if (!File.Exists(python))
+            return;
+
+        var psi = new ProcessStartInfo(python)
+        {
+            CreateNoWindow = true,
+            UseShellExecute = false,
+        };
+        psi.ArgumentList.Add("-c");
+        psi.ArgumentList.Add("import time;time.sleep(60)");
+        using var sleeper = Process.Start(psi)!;
+        try
+        {
+            await Task.Delay(1500);
+            var guard = new ProcessGuard();
+            var running = guard.FindRunning(TestInstall);
+            Assert.Contains(running, p => p.Pid == sleeper.Id);
+
+            ProcessGuard.Terminate(running.Where(p => p.Pid == sleeper.Id));
+            Assert.True(sleeper.WaitForExit(8000));
+        }
+        finally
+        {
+            try
+            {
+                if (!sleeper.HasExited)
+                    sleeper.Kill();
+            }
+            catch (InvalidOperationException)
+            {
+            }
         }
     }
 

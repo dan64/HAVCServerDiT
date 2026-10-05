@@ -211,4 +211,88 @@
   <data name="WelcomeTitle" xml:space="preserve">
     <value>HAVC Manager</value>
   </data>
+  <data name="AboutLine" xml:space="preserve">
+    <value>HAVC Manager {0} — HAVC Server + GUI installer</value>
+  </data>
+  <data name="CheckForUpdatesButton" xml:space="preserve">
+    <value>Check for updates</value>
+  </data>
+  <data name="DirtyWarning" xml:space="preserve">
+    <value>The last update did not complete — run Repair.</value>
+  </data>
+  <data name="FreeSpaceFormat" xml:space="preserve">
+    <value>Free space: {0}</value>
+  </data>
+  <data name="LastVerifyFailedFormat" xml:space="preserve">
+    <value>Last verification: FAILED ({0})</value>
+  </data>
+  <data name="LastVerifyNever" xml:space="preserve">
+    <value>Last verification: never run</value>
+  </data>
+  <data name="LastVerifyOkFormat" xml:space="preserve">
+    <value>Last verification: OK ({0})</value>
+  </data>
+  <data name="LockDialogText" xml:space="preserve">
+    <value>HAVC is running from this installation. Close it and retry, or terminate the processes below.</value>
+  </data>
+  <data name="LockDialogTitle" xml:space="preserve">
+    <value>Close the GUI/server to continue</value>
+  </data>
+  <data name="ModelLabel" xml:space="preserve">
+    <value>Model</value>
+  </data>
+  <data name="NoButton" xml:space="preserve">
+    <value>No</value>
+  </data>
+  <data name="NoInstallationMessage" xml:space="preserve">
+    <value>No installation found.</value>
+  </data>
+  <data name="ProjectLinkText" xml:space="preserve">
+    <value>Project releases on GitHub</value>
+  </data>
+  <data name="RebuildRequiredMessage" xml:space="preserve">
+    <value>This update needs a new environment (Python or lockfile change). Install HAVC in a new folder, then uninstall the old installation.</value>
+  </data>
+  <data name="RepairButton" xml:space="preserve">
+    <value>Repair</value>
+  </data>
+  <data name="RepairCompleteMessage" xml:space="preserve">
+    <value>Repair complete.</value>
+  </data>
+  <data name="RepairNoWheelMessage" xml:space="preserve">
+    <value>The wheel for the installed version ({0}) is not in the cache. Run an update or reinstall.</value>
+  </data>
+  <data name="RetryButton" xml:space="preserve">
+    <value>Retry</value>
+  </data>
+  <data name="StatusCheckingUpdates" xml:space="preserve">
+    <value>Checking for updates…</value>
+  </data>
+  <data name="StatusRollingBack" xml:space="preserve">
+    <value>Rolling back to the previous version…</value>
+  </data>
+  <data name="TerminateButton" xml:space="preserve">
+    <value>Terminate now</value>
+  </data>
+  <data name="UpToDateMessage" xml:space="preserve">
+    <value>You already have the latest version ({0}).</value>
+  </data>
+  <data name="UpdateAvailableMessage" xml:space="preserve">
+    <value>Version {0} is installed; version {1} is available. Update now?</value>
+  </data>
+  <data name="UpdateAvailableTitle" xml:space="preserve">
+    <value>Update available</value>
+  </data>
+  <data name="UpdateCompleteMessage" xml:space="preserve">
+    <value>Update complete (havc {0}).</value>
+  </data>
+  <data name="UpdateDirtyMessage" xml:space="preserve">
+    <value>The update failed and the rollback did not complete. Check the log folder:</value>
+  </data>
+  <data name="UpdateRolledBackMessage" xml:space="preserve">
+    <value>The update failed and the previous version was restored.</value>
+  </data>
+  <data name="YesButton" xml:space="preserve">
+    <value>Yes</value>
+  </data>
 </root>

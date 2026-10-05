@@ -112,6 +112,62 @@ public static class Strings
 
     public static string UnexpectedErrorTitle => ResourceManager.GetString("UnexpectedErrorTitle")!;
 
+    public static string AboutLine => ResourceManager.GetString("AboutLine")!;
+
+    public static string CheckForUpdatesButton => ResourceManager.GetString("CheckForUpdatesButton")!;
+
+    public static string DirtyWarning => ResourceManager.GetString("DirtyWarning")!;
+
+    public static string FreeSpaceFormat => ResourceManager.GetString("FreeSpaceFormat")!;
+
+    public static string LastVerifyFailedFormat => ResourceManager.GetString("LastVerifyFailedFormat")!;
+
+    public static string LastVerifyNever => ResourceManager.GetString("LastVerifyNever")!;
+
+    public static string LastVerifyOkFormat => ResourceManager.GetString("LastVerifyOkFormat")!;
+
+    public static string LockDialogText => ResourceManager.GetString("LockDialogText")!;
+
+    public static string LockDialogTitle => ResourceManager.GetString("LockDialogTitle")!;
+
+    public static string ModelLabel => ResourceManager.GetString("ModelLabel")!;
+
+    public static string NoButton => ResourceManager.GetString("NoButton")!;
+
+    public static string NoInstallationMessage => ResourceManager.GetString("NoInstallationMessage")!;
+
+    public static string ProjectLinkText => ResourceManager.GetString("ProjectLinkText")!;
+
+    public static string RebuildRequiredMessage => ResourceManager.GetString("RebuildRequiredMessage")!;
+
+    public static string RepairButton => ResourceManager.GetString("RepairButton")!;
+
+    public static string RepairCompleteMessage => ResourceManager.GetString("RepairCompleteMessage")!;
+
+    public static string RepairNoWheelMessage => ResourceManager.GetString("RepairNoWheelMessage")!;
+
+    public static string RetryButton => ResourceManager.GetString("RetryButton")!;
+
+    public static string StatusCheckingUpdates => ResourceManager.GetString("StatusCheckingUpdates")!;
+
+    public static string StatusRollingBack => ResourceManager.GetString("StatusRollingBack")!;
+
+    public static string TerminateButton => ResourceManager.GetString("TerminateButton")!;
+
+    public static string UpToDateMessage => ResourceManager.GetString("UpToDateMessage")!;
+
+    public static string UpdateAvailableMessage => ResourceManager.GetString("UpdateAvailableMessage")!;
+
+    public static string UpdateAvailableTitle => ResourceManager.GetString("UpdateAvailableTitle")!;
+
+    public static string UpdateCompleteMessage => ResourceManager.GetString("UpdateCompleteMessage")!;
+
+    public static string UpdateDirtyMessage => ResourceManager.GetString("UpdateDirtyMessage")!;
+
+    public static string UpdateRolledBackMessage => ResourceManager.GetString("UpdateRolledBackMessage")!;
+
+    public static string YesButton => ResourceManager.GetString("YesButton")!;
+
     public static string WelcomeSubtitle => ResourceManager.GetString("WelcomeSubtitle")!;
 
     public static string WelcomeTitle => ResourceManager.GetString("WelcomeTitle")!;

@@ -20,6 +20,7 @@ public sealed record InstallState
     [JsonPropertyName("components")] public IReadOnlyList<string> Components { get; init; } = ["server", "gui"];
     [JsonPropertyName("dinov2")] public bool Dinov2 { get; init; }
     [JsonPropertyName("backend_default")] public string? BackendDefault { get; init; }
+    [JsonPropertyName("dirty")] public bool Dirty { get; init; }
     [JsonPropertyName("last_verify")] public LastVerifyState? LastVerify { get; init; }
     [JsonPropertyName("previous")] public PreviousState? Previous { get; init; }
 }

@@ -571,3 +571,10 @@ storico.*
   warning (CLI + VS 2026); unit 19/19; integrazione 2/2 (runtime reale
   estratto + pip + `--plan` in scratch con la wheel nuova; download reale con
   sha256); smoke del wizard ok. Prossimo: M3 (update/ripara).
+- **2026-10-05 (25)** — **Prep test/e2e: havc 0.1.2 + staging.** Bump
+  versione a **0.1.2** (wheel con `--models-dir`/cancel: la 0.1.1 "vecchia" e
+  la nuova sarebbero state indistinguibili — `wheel_check` confronta la
+  versione). Creata `dist/staging-v0.1.2` (wheel + asset + `release.json`
+  generato e verificato) pronta da pubblicare come release **`v0.1.2`**;
+  creato `dist/test-manifest-local.json` (wheel/asset in `file://`, runtime
+  dal mirror) per provare il wizard end-to-end senza pubblicare.

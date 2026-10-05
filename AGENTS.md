@@ -42,11 +42,10 @@ riuscita il 05-10 (`D:\HAVC_Manager_Test` — log (28)); update/ripara/rollback/
 lock verificati sul campo (log (29)); **modello di default qwen21-viggle**
 (nessuna scelta modello nel manager — log (30); sotto 32 GB RAM → longcat-gguf
 Q3, log (34)); **disinstallo verificato sul campo** (log (35)); fallback
-manifest accanto all'exe (log (36)); **fix layout server/GUI** (log (38)).
-Restano: pubblicare la **pre-release** `v0.1.6` (D13 — il default URL resta
-su `v1.0.0` fino alla 1.1.0), il run in VM, **README snello + `docs/`**
-(log (37)); reinstallare l'install di test (disinstallata, log (35)) e
-riprovare *Run Server* dalla GUI (run autore).
+manifest accanto all'exe (log (36)); **fix layout server/GUI** (log (38));
+**pre-release `v0.1.6` pubblicata** (log (39)). Restano: il run in VM,
+**README snello + `docs/`** (log (37)); reinstallare l'install di test
+(disinstallata, log (35)) e riprovare *Run Server* dalla GUI (run autore).
 **Decisione SDK chiusa (05-10)**: target **.NET 10** — SDK **10.0.401**
 installato machine-wide (standalone) e **VS 2026** (Community v18.10)
 installato lo stesso giorno: l'MSBuild 18.10 compila `net10` (smoke WPF verde)
@@ -73,6 +72,8 @@ a havc **0.1.5**; **disinstallata** il 05-10 nel test di uninstall riuscito
 - `v1.0.0` — `tools.zip` + `NVEncC_9.17_x64.zip`
 - `v0.1.0-alpha` — release di prova dell'installer (wheel `havc`, asset,
   `release.json`)
+- `v0.1.6` — **pre-release** dell'installer (wheel `havc` 0.1.6 + asset +
+  `release.json`; mai "Latest" — D13)
 
 **Comandi pronti** (dev Python = `.venv-dev` nel worktree; CWD **neutrale**,
 mai il checkout — bug del 04-10):
@@ -758,6 +759,15 @@ storico.*
   dit_rpc_server.py --module-dir <root>`, senza pipeline): "listening on
   127.0.0.1:8799" + RPC `ping → pong`; PATH → risolve al venv. Da riprovare
   dall'autore: *Run Server* dalla GUI nel suo install.
+- **2026-10-05 (39)** — **Pre-release `v0.1.6` pubblicata** (autorizzazione
+  autore; solo pre-release — D13). Asset: `havc-0.1.6-py3-none-any.whl`,
+  `vscmnet2-1.2.1`, `spatial_correlation_sampler-0.5.0`,
+  `diffusers-0.37.0.dev0`, `release.json`. Verifiche post-pubblicazione:
+  digest GitHub == sha256 del manifest su **5/5** gli asset, manifest remoto
+  **byte-identico** al locale (`d2e19c68…`), HEAD della wheel 200
+  (10.689.473 byte), **Latest resta `v1.0.0`** (pre-release esclusa);
+  `gh release list` → v0.1.6 *Pre-release*. URL:
+  https://github.com/dan64/HAVCServerDiT/releases/tag/v0.1.6
 - **2026-10-05 (36)** — **Fallback del manifest accanto all'app (richiesta
   autore).** Se il fetch del manifest di rete fallisce e `--manifest` non è
   stato passato, il manager ripiega su `<exe folder>\release.json`

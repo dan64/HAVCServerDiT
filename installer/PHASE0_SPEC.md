@@ -161,7 +161,10 @@ Passi, nell'ordine:
     (`hf_cache`, `model_name`/`model_precision`), senza mai sovrascrivere;
 21. `launchers` — scrive i launcher in `<install>`: `HAVC.cmd`/`HAVC.vbs`
     (**front-end di default = GUI**), `HAVC-Server.cmd` (server con scelta
-    modello), `HAVC-Doctor.cmd`; riscritti se il contenuto differisce;
+    modello), `HAVC-Doctor.cmd`, `start_server.cmd`/`run_server_qwen21.cmd`
+    (avvio in console per la modalità *External console* della GUI e uso
+    manuale; stessi nomi argomento dello storico `start_server.cmd`);
+    riscritti se il contenuto differisce;
 22. `verify` — esegue `havc doctor --json` **nel venv di destinazione**;
     un FAIL qui è un errore del bootstrap.
 

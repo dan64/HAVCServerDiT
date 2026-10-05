@@ -193,6 +193,72 @@ echo Server exited.
 pause
 endlocal
 """,
+    "start_server.cmd": r"""@echo off
+setlocal
+set "HERE=%~dp0"
+set "PY=%HERE%venv\Scripts\python.exe"
+if not exist "%PY%" (
+    echo [ERROR] HAVC environment not found under "%HERE%".
+    echo         Run the installer first, or check that the folder is complete.
+    pause
+    exit /b 1
+)
+rem HAVC DiT Server launcher for the GUI "External console" mode and manual use
+rem (same argument names as the historical start_server.cmd).
+set "WHICH=%~1"
+if "%WHICH%"=="" set "WHICH=q4"
+set "CFG="
+if /i "%WHICH%"=="fp4"        set "CFG=qwen_nunchaku_fp4.json"
+if /i "%WHICH%"=="int4"       set "CFG=qwen_nunchaku_int4.json"
+if /i "%WHICH%"=="q3"         set "CFG=qwen_gguf_q3.json"
+if /i "%WHICH%"=="q4"         set "CFG=qwen_gguf_q4.json"
+if /i "%WHICH%"=="q5"         set "CFG=qwen_gguf_q5.json"
+if /i "%WHICH%"=="q6"         set "CFG=qwen_gguf_q6.json"
+if /i "%WHICH%"=="q8"         set "CFG=qwen_gguf_q8.json"
+if /i "%WHICH%"=="longcat"    set "CFG=longcat_gguf_q4.json"
+if /i "%WHICH%"=="longcat-q3" set "CFG=longcat_gguf_q3.json"
+if /i "%WHICH%"=="longcat-q4" set "CFG=longcat_gguf_q4.json"
+if /i "%WHICH%"=="longcat-q5" set "CFG=longcat_gguf_q5.json"
+if /i "%WHICH%"=="longcat-q6" set "CFG=longcat_gguf_q6.json"
+if /i "%WHICH%"=="longcat-q8" set "CFG=longcat_gguf_q8.json"
+if "%CFG%"=="" (
+    echo [ERROR] Unknown model "%WHICH%". Available: fp4 int4 q3 q4 q5 q6 q8 longcat longcat-q3 longcat-q4 longcat-q5 longcat-q6 longcat-q8
+    pause
+    exit /b 1
+)
+echo Starting HAVC DiT Server (%WHICH%) ...
+rem strip the trailing backslash: a quoted path ending in \ would swallow the
+rem closing quote and merge the rest of the command line into the argument.
+"%PY%" -u "%HERE%dit_rpc_server.py" --host 127.0.0.1 --port 8765 --module-dir "%HERE:~0,-1%" --load-pipeline --pipeline-config "%HERE%config\%CFG%" --logfile "%HERE%dit_server.log"
+if %errorlevel% neq 0 (
+    echo.
+    echo [ERROR] Server exited with code %errorlevel%.
+    pause
+)
+endlocal
+""",
+    "run_server_qwen21.cmd": r"""@echo off
+setlocal
+set "HERE=%~dp0"
+set "PY=%HERE%venv\Scripts\python.exe"
+if not exist "%PY%" (
+    echo [ERROR] HAVC environment not found under "%HERE%".
+    echo         Run the installer first, or check that the folder is complete.
+    pause
+    exit /b 1
+)
+rem HAVC DiT Server launcher for qwen21-viggle (single config, no argument).
+echo Starting HAVC DiT Server (qwen21-viggle) ...
+rem strip the trailing backslash: a quoted path ending in \ would swallow the
+rem closing quote and merge the rest of the command line into the argument.
+"%PY%" -u "%HERE%dit_rpc_server.py" --host 127.0.0.1 --port 8765 --module-dir "%HERE:~0,-1%" --load-pipeline --pipeline-config "%HERE%config\qwen21_viggle.json" --logfile "%HERE%dit_server.log"
+if %errorlevel% neq 0 (
+    echo.
+    echo [ERROR] Server exited with code %errorlevel%.
+    pause
+)
+endlocal
+""",
     "HAVC-Doctor.cmd": r"""@echo off
 setlocal
 set "HERE=%~dp0"
@@ -1122,7 +1188,7 @@ def build_steps() -> list[Step]:
              "gui_cmnet2_settings.json: model_name/precision + hf_cache only if empty",
              gui_settings_check, gui_settings_run),
         Step("launchers", "Launcher in <install>",
-             "HAVC.cmd/.vbs (GUI), HAVC-Server.cmd, HAVC-Doctor.cmd (rewritten if different)",
+             "HAVC.cmd/.vbs (GUI), HAVC-Server.cmd, HAVC-Doctor.cmd, start_server.cmd/run_server_qwen21.cmd (rewritten if different)",
              launchers_check, launchers_run),
         Step("verify", "Final verification (havc doctor)", "python -m havc.doctor",
              lambda c: None, verify_run),

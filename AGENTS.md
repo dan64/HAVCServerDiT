@@ -42,10 +42,11 @@ riuscita il 05-10 (`D:\HAVC_Manager_Test` — log (28)); update/ripara/rollback/
 lock verificati sul campo (log (29)); **modello di default qwen21-viggle**
 (nessuna scelta modello nel manager — log (30); sotto 32 GB RAM → longcat-gguf
 Q3, log (34)); **disinstallo verificato sul campo** (log (35)); fallback
-manifest accanto all'exe (log (36)). Restano: pubblicare la **pre-release**
-`v0.1.5` (D13 — il default URL resta su `v1.0.0` fino alla 1.1.0), il run in
-VM, **README snello + `docs/`** (log (37)); da reinstallare l'install di test
-(disinstallata nel test, log (35)).
+manifest accanto all'exe (log (36)); **fix layout server/GUI** (log (38)).
+Restano: pubblicare la **pre-release** `v0.1.6` (D13 — il default URL resta
+su `v1.0.0` fino alla 1.1.0), il run in VM, **README snello + `docs/`**
+(log (37)); reinstallare l'install di test (disinstallata, log (35)) e
+riprovare *Run Server* dalla GUI (run autore).
 **Decisione SDK chiusa (05-10)**: target **.NET 10** — SDK **10.0.401**
 installato machine-wide (standalone) e **VS 2026** (Community v18.10)
 installato lo stesso giorno: l'MSBuild 18.10 compila `net10` (smoke WPF verde)
@@ -98,7 +99,7 @@ Set-Location D:\PProjects\HAVCServerDiT_installer
 *EOL*: i file del repo sono **LF** (`.gitattributes`); chi riscrive file
 (l'agente o uno script) usi i bytes — niente traduzione newline.
 
-**Mappa del codice nuovo (Fase 0)**: `havc/install.py` = bootstrap 21 passi
+**Mappa del codice nuovo (Fase 0)**: `havc/install.py` = bootstrap 22 passi
 (`havc-install`); `havc/doctor.py` = check ambiente (`havc-doctor`);
 `havc/runtime.py` = runtime pinnato (download/estrazione); `havc/lockfile.py`
 = parsing dei pin; `havc/progress.py` = eventi `--json-progress`;
@@ -738,6 +739,25 @@ storico.*
   manifest) → per i run locali passare
   `--manifest dist\test-manifest-local.json`; la pubblicazione di `v0.1.5`
   sblocca anche il default. L'install di test è quindi **da reinstallare**.
+- **2026-10-05 (38)** — **Fix layout installato: il server dalla GUI non
+  partiva.** Segnalazione autore (install in `%LOCALAPPDATA%\HAVCServerDiT`):
+  la GUI avvia il server per file path (`<install>\dit_rpc_server.py`,
+  `--module-dir <install>`) ma la root non aveva i moduli (solo in
+  site-packages) e la GUI cerca il python in `.venv\` (layout dev) →
+  fallback sul `python` di sistema. Fix (bootstrap): nuovo step **12
+  `server`** copia `dit_rpc_server.py` + `dit_colorize_main.py` dalla wheel
+  alla root (content-compare, riscritti se diversi; il server richiede
+  `dit_colorize_main.py` nella `--module-dir`); `HAVC.cmd` mette
+  `venv\Scripts` in testa al PATH (il `python` nudo della GUI risolve al
+  venv). Step **21 → 22** (PHASE0 §5, PHASE1 §6.2/§8, AGENTS §0).
+  havc **0.1.6** (wheel + staging `v0.1.6` + `test-manifest-local.json`;
+  `staging-v0.1.5` rimossa — la pre-release da pubblicare è la 0.1.6).
+  Verifiche: install parziale su scratch (runtime+venv+wheel+`server`+…) →
+  moduli alla root con hash identico al venv, launcher con riga PATH, rerun
+  → skip; **spawn reale come la GUI** (`venv\python -u <root>\
+  dit_rpc_server.py --module-dir <root>`, senza pipeline): "listening on
+  127.0.0.1:8799" + RPC `ping → pong`; PATH → risolve al venv. Da riprovare
+  dall'autore: *Run Server* dalla GUI nel suo install.
 - **2026-10-05 (36)** — **Fallback del manifest accanto all'app (richiesta
   autore).** Se il fetch del manifest di rete fallisce e `--manifest` non è
   stato passato, il manager ripiega su `<exe folder>\release.json`

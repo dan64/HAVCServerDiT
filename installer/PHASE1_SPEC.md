@@ -121,6 +121,8 @@ Path: `<install>\install.json`. Campi:
 - `last_verify`: `{ts, ok, app_version}` — esito dell'ultima verifica
   `havc doctor`;
 - `previous`: `{app_version, wheel, sha256}` — snapshot per il rollback.
+- `dirty`: `true` quando un update è fallito **e** il rollback non è
+  riuscito (§6.3); si azzera con un ripara/update riuscito.
 
 Regole: schema **additivo** (campi nuovi non rompono manager vecchi);
 `lock_hash`/`env_version` rimandati (il manifest non li espone ancora: campi
@@ -378,7 +380,7 @@ folder*); in caso di rollback, messaggio dedicato + log.
   stadi, progresso, chiusura, disinstallazione). **Completata il 05-10**
   (log (24) in `AGENTS.md`).
 - **M3** — update incrementale + rollback + ripara (sul test install) + lock
-  istanze.
+  istanze. **Completata il 05-10** (log (29) in `AGENTS.md`).
 - **M4** — rifinitura UI, log, scorciatoie/registrazione, tag di test; poi run
   in VM.
 

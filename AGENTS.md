@@ -36,10 +36,11 @@ del manager scritta** (`installer/PHASE1_SPEC.md`); mirror nunchaku pubblicato
 (release `nunchaku-1.2.1`); codice, commenti, UI e spec allineati
 all'inglese (log (16), (19)).
 
-**Prossimo passo — M3**: update incrementale + rollback + ripara + lock
-istanze (spec §13). M1–M2 completate; **prima installazione reale via wizard
-riuscita il 05-10** (`D:\HAVC_Manager_Test`, 21/21 passi — log (28)). Restano:
-pubblicare la release (staging `v0.1.3` pronta in `dist/`) e il run in VM.
+**Prossimo passo — M4**: rifinitura UI/log, scorciatoie/registrazione, tag di
+test, poi run in VM (spec §13). M1–M3 completate; prima installazione reale
+riuscita il 05-10 (`D:\HAVC_Manager_Test` — log (28)); update/ripara/rollback/
+lock verificati sul campo (log (29)). Restano: pubblicare la release (staging
+`v0.1.3` in `dist/`) e il run in VM.
 **Decisione SDK chiusa (05-10)**: target **.NET 10** — SDK **10.0.401**
 installato machine-wide (standalone) e **VS 2026** (Community v18.10)
 installato lo stesso giorno: l'MSBuild 18.10 compila `net10` (smoke WPF verde)
@@ -615,3 +616,16 @@ storico.*
   avanzamento**, cancel cooperativo ok, nessun crash. Nota: l'install di test
   è stato aggiornato a 0.1.3 (runtime+venv) via bootstrap; `install.json`
   riporterà 0.1.3 al prossimo run del manager (M3).
+- **2026-10-05 (29)** — **M3 completata: update con rollback, ripara, lock.**
+  Core: `ProcessGuard` (processi sotto l'install), `UpdateEngine` (classifica
+  up-to-date/update/rebuild + wheel in cache), campo additivo `dirty` nello
+  stato, `InstallFlow.RunRepairAsync` (stadio 1+2 sul wheel in cache, zero
+  download). UI: pagina Installed completa (stato, ultima verifica, spazio,
+  scelta modello, Check for updates, Repair, About), dialoghi inglesi dedicati
+  (`MessageDialog`, `ProcessLockWindow`), lock istanze prima dei run. Verifiche
+  sul campo (test install): **update reale 0.1.2→0.1.3 riuscito** (previous
+  salvato); **ripara** riuscito; **rollback reale** (update 0.1.9 con wheel
+  corrotta → "previous version was restored", stato intatto); **lock**
+  (sleeper → dialog → Terminate now → repair ok). 24 test verdi. Fix: `Icon`
+  dei dialoghi in sottocartella → URI root-relative; log di check
+  aggiornamenti nel manager log. Prossimo: M4 + release/VM.

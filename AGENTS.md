@@ -877,5 +877,7 @@ storico.*
   created"*, `wheel` → **0.1.9**, `verify` doctor 9/9; sonda GUI
   `isfile(.venv\Scripts\python.exe)` = True; **spawn del server via `.venv`
   col comando identico alla GUI** → "HAVC DiT Server listening on
-  127.0.0.1:8898" (kill pulito). Da fare: test autore *Run Server* dalla
-  GUI; pubblicare la pre-release `v0.1.9`.
+  127.0.0.1:8898" (kill pulito); **riproduzione fedele dello spawn GUI**
+  (stesso Popen della GUI: probe `.venv`, porta 8799, `--load-pipeline`)
+  → pipeline caricata + "listening on 127.0.0.1:8799". Da fare: test autore
+  *Run Server* dalla GUI; pubblicare la pre-release `v0.1.9`.

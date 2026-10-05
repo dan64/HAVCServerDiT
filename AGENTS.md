@@ -46,10 +46,10 @@ manifest accanto all'exe (log (36)); **fix layout server/GUI** (log (38));
 **pre-release `v0.1.6` pubblicata** (log (39)); **External console** (log
 (40)); **comfy self-contained + niente cartella modelli** (D14, log (41);
 staging `v0.1.8`); **fix junction `.venv` → `venv`** (la GUI trova sempre il
-python del venv, log (42); havc **0.1.9**, staging `v0.1.9`). *Run Server*
-sull'install `D:\HAVCServerDiT` **verificato dall'autore** (tab #4/#5 OK;
-server in ascolto — log (42)). Restano: il run in VM, **README snello +
-`docs/`** (log (37)); pubblicare la pre-release `v0.1.9`; eventuale test
+python del venv, log (42); havc **0.1.9**, **pre-release `v0.1.9`
+pubblicata** — log (43)). *Run Server* sull'install `D:\HAVCServerDiT`
+**verificato dall'autore** (tab #4/#5 OK; server in ascolto — log (42)).
+Restano: il run in VM, **README snello + `docs/`** (log (37)); eventuale test
 *External console* post-0.1.9.
 **Decisione SDK chiusa (05-10)**: target **.NET 10** — SDK **10.0.401**
 installato machine-wide (standalone) e **VS 2026** (Community v18.10)
@@ -82,9 +82,9 @@ volta scaricati) stanno in `<install>\comfy_bridge\models`, preservati.
   `release.json`)
 - `v0.1.6` — **pre-release** dell'installer (wheel `havc` 0.1.6 + asset +
   `release.json`; mai "Latest" — D13)
-- `v0.1.9` — **da pubblicare** (staging pronta: wheel `havc` 0.1.9 + asset +
-  `comfy_bridge_v0.30.zip` + `release.json`, manifest verificato;
-  `dist\staging-v0.1.9`)
+- `v0.1.9` — **pre-release** pubblicata il 05-10 (wheel `havc` 0.1.9 + asset +
+  `comfy_bridge_v0.30.zip` + `release.json`; digest GitHub 6/6 verificati;
+  mai "Latest" — D13)
 
 **Comandi pronti** (dev Python = `.venv-dev` nel worktree; CWD **neutrale**,
 mai il checkout — bug del 04-10):
@@ -904,7 +904,10 @@ storico.*
   l'autore vede la catena giusta nei processi e i **tab #4/#5 funzionano**.
   Commit locali della sessione: `fbb15ef` (fix+test), `9a69acd`/
   `523dbf5`/`a16578c` (docs; più questo di chiusura). Stato: `D:\HAVCServerDiT`
-  = havc **0.1.9** funzionante; staging `v0.1.9` pronta e verificata;
-  **nulla pubblicato** (pre-release solo su ok esplicito). Prossimo:
-  pubblicare `v0.1.9`; M4 (rifinitura UI/log) + run in VM; **README snello +
-  `docs/`** (richiesta dell'autore, log (37)).
+  = havc **0.1.9** funzionante. **Pre-release `v0.1.9` pubblicata** a fine
+  sessione (su autorizzazione dell'autore): 6 asset (wheel havc + 3 asset +
+  `comfy_bridge_v0.30.zip` + `release.json`), digest GitHub 6/6 = manifest,
+  manifest remoto byte-identico (`c34d4ea8…`), HEAD wheel 200 (114.910 byte),
+  **Latest resta `v1.0.0`**; note in `dist\release-notes-v0.1.9.md`.
+  Prossimo: M4 (rifinitura UI/log) + run in VM; **README snello + `docs/`**
+  (richiesta dell'autore, log (37)).

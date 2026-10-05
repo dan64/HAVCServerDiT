@@ -197,8 +197,10 @@ esterni. Obiettivo di questo filone di lavoro:
   (05-10). Il manager non offre scelta modello: *Start server* avvia col
   default registrato (`backend_default` = `"qwen21"` → `qwen21_viggle.json`),
   il seed dei settings GUI installa `model_name = qwen21-viggle` (solo se
-  assente); preflight con check VRAM vs requisito del default (≥ 12 GB,
-  avviso non bloccante). Gli altri modelli si scelgono dalla GUI di HAVC.
+  assente); il preflight verifica i requisiti del default (≥ 12 GB VRAM e
+  ≥ 32 GB RAM; avvisi non bloccanti; sotto soglia RAM il messaggio suggerisce
+  longcat-gguf con Q3 — con 16 GB di RAM è l'unico modello che gira).
+  Gli altri modelli si scelgono dalla GUI di HAVC.
 
 ---
 
@@ -675,3 +677,12 @@ storico.*
   funzione sulla cartella di test → l'exe installato parte (finestra "HAVC
   Setup", Installed senza combo, Start server; versione 0.1.4). Da provare
   al primo disinstallo reale: il percorso uninstall end-to-end.
+- **2026-10-05 (32)** — **Requisito RAM del modello di default (32 GB).**
+  Correzione dell'autore: qwen21-viggle richiede ≥ 12 GB VRAM **e ≥ 32 GB
+  RAM** (non 32 GB VRAM). Preflight: nuova riga **System memory (default
+  model)** (RAM fisica via `GlobalMemoryStatusEx`; sotto 32 GiB: warning non
+  bloccante con suggerimento di un modello più leggero, longcat-gguf Q3 —
+  indicato dall'autore: con 16 GB di RAM è l'unico che gira). Spec §6.2/§8
+  aggiornate (VRAM + RAM). Verifiche: build 0 warning; unit 24/24; UI (UIA):
+  riga presente con "111.8 GB … ≥ 32.0 GB"; copia installata del manager
+  riaggiornata.

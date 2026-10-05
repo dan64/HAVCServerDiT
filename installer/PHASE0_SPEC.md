@@ -152,7 +152,9 @@ Passi, nell'ordine:
     sia `NVEncC_9.17_x64.zip` (NVEncC 9.17, pacchetto flat); entrambi pinnati
     (Release v1.0.0, sha256 verificato), o `--tools-zip` per la parte tools.zip;
 19. `gui-settings` — pre-seeda `gui_cmnet2_settings.json` (solo se assente):
-    percorsi di `scripts/`, `vspipe`, tool e cartella di lavoro;
+    percorsi di `scripts/`, `vspipe`, tool, cartella di lavoro e `model_name`
+    di default (`qwen21-viggle`); su file esistente riempie solo i valori
+    vuoti (`hf_cache`, `model_name`), senza mai sovrascrivere;
 20. `launchers` — scrive i launcher in `<install>`: `HAVC.cmd`/`HAVC.vbs`
     (**front-end di default = GUI**), `HAVC-Server.cmd` (server con scelta
     modello), `HAVC-Doctor.cmd`; riscritti se il contenuto differisce;

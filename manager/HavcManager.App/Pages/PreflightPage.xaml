@@ -42,8 +42,6 @@
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
-                <TextBlock Text="{Binding SuggestedBackendText}" Margin="0,14,0,0"
-                           Opacity="0.75" FontStyle="Italic"/>
             </StackPanel>
         </ScrollViewer>
 

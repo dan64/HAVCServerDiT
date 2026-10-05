@@ -115,6 +115,11 @@ CMNET2_DINOV2 = (
     },
 )
 
+# Default model seeded into the GUI settings when the value is missing: the
+# user-facing name from the GUI model list (the launcher argument mapping the
+# same model in HAVC-Server.cmd is `qwen21`).
+DEFAULT_MODEL_NAME = "qwen21-viggle"
+
 # Launchers written into the install folder (default front-end = GUI).
 # ASCII content; lines are rewritten with CRLF on save (.cmd files with
 # LF-only line endings can be misparsed by cmd.exe).
@@ -447,16 +452,23 @@ def cached_download(ctx: Ctx, asset: dict, local: Optional[Path] = None) -> Path
 # ---------------------------------------------------------------------------
 
 def wire_gui_settings(ctx: Ctx, settings_path: Path) -> int:
-    """Set `hf_cache` in gui_cmnet2_settings.json when empty. Returns 1 if changed."""
-    if ctx.models_dir is None or not settings_path.is_file():
+    """Fill empty/absent managed values in gui_cmnet2_settings.json
+    (`hf_cache` from --models-dir; `model_name` default). Returns 1 if changed."""
+    if not settings_path.is_file():
         return 0
     try:
         data = json.loads(settings_path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return 0
-    if data.get("hf_cache"):
+    changed = False
+    if ctx.models_dir is not None and not data.get("hf_cache"):
+        data["hf_cache"] = str(ctx.models_dir / "hf-cache")
+        changed = True
+    if not data.get("model_name"):
+        data["model_name"] = DEFAULT_MODEL_NAME
+        changed = True
+    if not changed:
         return 0
-    data["hf_cache"] = str(ctx.models_dir / "hf-cache")
     with settings_path.open("w", encoding="utf-8", newline="\n") as fh:
         fh.write(json.dumps(data, indent=4) + "\n")
     return 1
@@ -909,12 +921,14 @@ def build_steps() -> list[Step]:
         settings = c.install_dir / "gui" / "gui_cmnet2_settings.json"
         if not settings.is_file():
             return None
-        if c.models_dir is not None:
-            try:
-                if not json.loads(settings.read_text(encoding="utf-8")).get("hf_cache"):
-                    return None
-            except (OSError, ValueError):
-                pass
+        try:
+            data = json.loads(settings.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return "settings already present"
+        if c.models_dir is not None and not data.get("hf_cache"):
+            return None
+        if not data.get("model_name"):
+            return None
         return "settings already present"
 
     def gui_settings_run(c: Ctx) -> str:
@@ -928,7 +942,7 @@ def build_steps() -> list[Step]:
         path = gui_dir / "gui_cmnet2_settings.json"
         if path.is_file():
             wired = wire_gui_settings(c, path)
-            return ("hf_cache wired in gui_cmnet2_settings.json" if wired
+            return ("managed values wired in gui_cmnet2_settings.json" if wired
                     else "settings already present")
         settings = {
             "script_dir": str(gui_dir / "scripts"),
@@ -937,6 +951,7 @@ def build_steps() -> list[Step]:
             "mkv_path": str(c.install_dir / "tools" / "MKVToolNix" / "mkvmerge.exe"),
             "base_dir": str(c.install_dir / "work"),
             "fixv_base_dir": str(c.install_dir / "work"),
+            "model_name": DEFAULT_MODEL_NAME,
             "hf_cache": str(c.models_dir / "hf-cache") if c.models_dir else "",
         }
         with path.open("w", encoding="utf-8", newline="\n") as fh:
@@ -1045,8 +1060,8 @@ def build_steps() -> list[Step]:
         Step("tools", "External tools in <install>/tools",
              "tools.zip + NVEncC_9.17_x64.zip (Release v1.0.0) or --tools-zip",
              tools_check, tools_run),
-        Step("gui-settings", "GUI settings (only if missing)",
-             "pre-seeded gui_cmnet2_settings.json",
+        Step("gui-settings", "GUI settings (seeded/wired when missing)",
+             "gui_cmnet2_settings.json: model_name + hf_cache only if empty",
              gui_settings_check, gui_settings_run),
         Step("launchers", "Launcher in <install>",
              "HAVC.cmd/.vbs (GUI), HAVC-Server.cmd, HAVC-Doctor.cmd (rewritten if different)",

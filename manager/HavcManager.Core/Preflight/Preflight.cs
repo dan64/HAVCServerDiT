@@ -14,21 +14,24 @@ public enum PreflightStatus
 /// <summary>One check outcome.</summary>
 public sealed record PreflightCheck(string Name, PreflightStatus Status, string? Detail);
 
-/// <summary>Full outcome, with the suggested default backend (e.g. "fp4").</summary>
-public sealed record PreflightReport(IReadOnlyList<PreflightCheck> Checks, string? SuggestedBackend)
+/// <summary>Full outcome of the preflight checks.</summary>
+public sealed record PreflightReport(IReadOnlyList<PreflightCheck> Checks)
 {
     public bool HasErrors => Checks.Any(c => c.Status == PreflightStatus.Error);
 }
 
 /// <summary>
 /// First-run environment checks (PHASE1_SPEC §6.2 step 1): OS, nvidia-smi
-/// (name/driver/VRAM — missing GPU is a non-blocking warning), disk space
-/// (indicative thresholds), manifest reachability.
+/// (name/driver/VRAM — missing GPU is a non-blocking warning), VRAM vs the
+/// fixed default model requirement (qwen21-viggle: at least 12 GB), disk
+/// space (indicative thresholds), manifest reachability.
 /// </summary>
 public sealed class Preflight
 {
     private const long MinInstallBytes = 15L * 1024 * 1024 * 1024;  // ~15 GB (indicative)
     private const long MinModelsBytes = 50L * 1024 * 1024 * 1024;   // ~50 GB (indicative)
+    private const string DefaultModelName = "qwen21-viggle";        // name in the GUI model list
+    private const long MinDefaultModelVramMiB = 12 * 1024;          // 12 GiB
 
     public async Task<PreflightReport> RunAsync(
         string installDir,
@@ -37,7 +40,6 @@ public sealed class Preflight
         CancellationToken cancellationToken = default)
     {
         var checks = new List<PreflightCheck>();
-        string? suggestedBackend = null;
 
         // OS: Windows 10 1809+ / Windows 11.
         var version = Environment.OSVersion.Version;
@@ -52,9 +54,20 @@ public sealed class Preflight
         if (gpuOk && gpu is not null)
         {
             checks.Add(new PreflightCheck("NVIDIA GPU", PreflightStatus.Ok, gpu));
-            // Indicative default (PHASE1_SPEC §6.2): mirrors the GUI default;
-            // refine when the real backend/VRAM requirements are documented.
-            suggestedBackend = "fp4";
+            // The wizard no longer offers a model choice: check the fixed
+            // default model's VRAM requirement (non-blocking warning below).
+            if (ParseVramMiB(gpu) is { } vramMiB)
+            {
+                bool enough = vramMiB >= MinDefaultModelVramMiB;
+                string requirement = FormatBytes(MinDefaultModelVramMiB * 1024 * 1024);
+                checks.Add(new PreflightCheck(
+                    "VRAM (default model)",
+                    enough ? PreflightStatus.Ok : PreflightStatus.Warning,
+                    $"{FormatBytes(vramMiB * 1024 * 1024)} in total — "
+                    + (enough
+                        ? $"meets the default model ({DefaultModelName}) requirement of at least {requirement}"
+                        : $"the default model ({DefaultModelName}) requires at least {requirement}; you can install anyway and pick another model in the HAVC GUI")));
+            }
         }
         else
         {
@@ -75,7 +88,7 @@ public sealed class Preflight
             online ? PreflightStatus.Ok : PreflightStatus.Warning,
             online ? manifestUrl : $"cannot reach {manifestUrl} — you can use a local manifest"));
 
-        return new PreflightReport(checks, suggestedBackend);
+        return new PreflightReport(checks);
     }
 
     private static PreflightCheck SpaceCheck(string name, string path, long minimumBytes)
@@ -142,6 +155,19 @@ public sealed class Preflight
             // nvidia-smi missing/unusable: non-blocking warning
             return (null, false);
         }
+    }
+
+    /// <summary>Reads `memory.total` (last nvidia-smi CSV field, e.g. `16384 MiB`).</summary>
+    private static long? ParseVramMiB(string nvidiaSmiLine)
+    {
+        string[] fields = nvidiaSmiLine.Split(',', StringSplitOptions.TrimEntries);
+        if (fields.Length < 3)
+            return null;
+        string[] tokens = fields[^1].Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return tokens.Length > 0
+               && long.TryParse(tokens[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out long mib)
+            ? mib
+            : null;
     }
 
     private static async Task<bool> CheckManifestReachabilityAsync(string manifestUrl, CancellationToken cancellationToken)

@@ -32,14 +32,8 @@
         <WrapPanel Grid.Row="2" Margin="0,16,0,0">
             <Button Content="{x:Static res:Strings.OpenGui}" Padding="16,9"
                     Margin="0,0,8,8" Click="OnOpenGuiClick"/>
-            <StackPanel Orientation="Horizontal" Margin="0,0,8,8">
-                <TextBlock Text="{x:Static res:Strings.ModelLabel}" VerticalAlignment="Center"
-                           Margin="0,0,6,0"/>
-                <ComboBox ItemsSource="{Binding Backends}" SelectedItem="{Binding SelectedBackend}"
-                          Width="96" Margin="0,0,6,0"/>
-                <Button Content="{x:Static res:Strings.StartServerButton}" Padding="16,9"
-                        Click="OnStartServerClick"/>
-            </StackPanel>
+            <Button Content="{x:Static res:Strings.StartServerButton}" Padding="16,9"
+                    Margin="0,0,8,8" Click="OnStartServerClick"/>
             <Button Content="{x:Static res:Strings.CheckForUpdatesButton}" Padding="16,9"
                     Margin="0,0,8,8" Click="OnCheckUpdatesClick" IsEnabled="{Binding IsNotBusy}"/>
             <Button Content="{x:Static res:Strings.RepairButton}" Padding="16,9"

@@ -117,7 +117,9 @@ Path: `<install>\install.json`. Campi:
 - `runtime`: `{name, sha256, python}` — runtime provisionato (dal manifest);
 - `components`: `["server", "gui"]` (fissa in v0);
 - `dinov2`: true (D10);
-- `backend_default`: suggerimento del preflight (es. `"fp4"`), modificabile;
+- `backend_default`: modello di default per *Start server* (v0: `"qwen21"`,
+  cioè qwen21-viggle; modificabile a mano). Il manager non offre scelta
+  modello: gli altri modelli si selezionano dalla GUI di HAVC;
 - `last_verify`: `{ts, ok, app_version}` — esito dell'ultima verifica
   `havc doctor`;
 - `previous`: `{app_version, wheel, sha256}` — snapshot per il rollback.
@@ -166,7 +168,9 @@ Invocazione standard dal manager:
     della cartella modelli (§7) — seed `hf_cache`
     in `gui_cmnet2_settings.json` **solo se assente**; `cache_dir` nei config
     `qwen_nunchaku_*` **solo se vuoto**; variabile `HAVC_MODELS_DIR` nei
-    launcher generati;
+    launcher generati. Il seed/wiring dei settings GUI include anche
+    `model_name` = `qwen21-viggle` (modello di default, 05-10) **solo se
+    assente**;
   - `--with-dinov2` già esiste: il manager lo passa **sempre** (D10).
 - `--runtime-zip`/`--tools-zip` non usati dal manager (download diretti da URL
   pinnati, con cache nella cartella di installazione).
@@ -191,9 +195,10 @@ prima installazione.
 ### 6.2 Prima installazione (flusso a due stadi)
 
 1. **Preflight**: OS; `nvidia-smi` (nome, driver, VRAM — assente: avviso non
-   bloccante); spazio: install ≥ ~15 GB (indicativo), models con avviso sotto
-   ~50 GB (D10); connettività al manifest (se offline: opzione manifest
-   locale).
+   bloccante); **VRAM vs requisito del modello di default** (qwen21-viggle:
+   ≥ 12 GB; sotto soglia: avviso non bloccante); spazio: install ≥ ~15 GB
+   (indicativo), models con avviso sotto ~50 GB (D10); connettività al
+   manifest (se offline: opzione manifest locale).
 2. **Folders**: install dir (default `%LOCALAPPDATA%\HAVCServerDiT`); **models
    dir** con proposta automatica (§7); opzioni scorciatoie (Start Menu ON,
    desktop opzionale).
@@ -266,7 +271,8 @@ rimozione) è Fase 2.
   `clip/ unet/ loras/ …` di oggi). I pesi cmnet2 (~1 GB) restano nel pacchetto
   `vscmnet2` (rivisitabile in Fase 2).
 - Wiring (implementato nel bootstrap via `--models-dir`, §5): seed `hf_cache`
-  nei settings GUI se assente; `cache_dir` nei config `qwen_nunchaku_*` se
+  nei settings GUI se assente; `model_name` di default (`qwen21-viggle`) nei
+  settings GUI se assente; `cache_dir` nei config `qwen_nunchaku_*` se
   vuoto; `HAVC_MODELS_DIR` nei launcher; `comfy_bridge/_bootstrap.py` usa
   `HAVC_MODELS_DIR` se presente (fallback: comportamento attuale).
 - Persistenza: `install.json.models_dir`; gli **update la riusano senza
@@ -286,8 +292,8 @@ Schermate v0 (wizard):
 
 1. **Start** — installazione esistente: *Update / Repair / Uninstall /
    Open*; altrimenti **Welcome** (*Start installation*).
-2. **Preflight** — esiti dei check + suggerimento backend
-   (`backend_default`; euristica su VRAM, indicativa).
+2. **Preflight** — esiti dei check (inclusa la VRAM rispetto al requisito
+   del modello di default, qwen21-viggle: ≥ 12 GB).
 3. **Folders** — install dir, models dir (proposta + avviso spazio),
    scorciatoie.
 4. **Components** — *Server+GUI* (fisso in v0); riga informativa: *DINOv2
@@ -299,8 +305,9 @@ Schermate v0 (wizard):
 7. **Finish** — *Open GUI* · *Start server* · *Open work folder* · *Show log*.
 
 Finestra principale (installato): stato (versione app, esito ultima verifica,
-cartella modelli, spazio), pulsanti **Open GUI**, **Start server** (scelta
-modello, default `backend_default`), **Check for updates**, **Repair**,
+cartella modelli, spazio), pulsanti **Open GUI**, **Start server** (avvia col
+modello di default `backend_default`; gli altri modelli si scelgono dalla GUI
+di HAVC), **Check for updates**, **Repair**,
 **Uninstall**, **Log**; sezione *About* con link al download del manager
 aggiornato (v0: link, niente auto-update).
 

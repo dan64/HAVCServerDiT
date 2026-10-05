@@ -130,8 +130,6 @@ public static class Strings
 
     public static string LockDialogTitle => ResourceManager.GetString("LockDialogTitle")!;
 
-    public static string ModelLabel => ResourceManager.GetString("ModelLabel")!;
-
     public static string NoButton => ResourceManager.GetString("NoButton")!;
 
     public static string NoInstallationMessage => ResourceManager.GetString("NoInstallationMessage")!;

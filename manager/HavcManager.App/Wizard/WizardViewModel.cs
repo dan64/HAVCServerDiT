@@ -58,8 +58,6 @@ public sealed class WizardViewModel : INotifyPropertyChanged
     private bool _isRunning;
     private bool _isBusy;
     private bool _preflightDone;
-    private string? _suggestedBackend;
-    private string _selectedBackend = "fp4";
     private bool _dirtyWarningVisible;
 
     public WizardViewModel(AppOptions options) => _options = options;
@@ -128,10 +126,6 @@ public sealed class WizardViewModel : INotifyPropertyChanged
 
     public bool CanContinueFromPreflight => _preflightDone && _preflightReport is { HasErrors: false };
 
-    public string SuggestedBackendText => _suggestedBackend is null
-        ? ""
-        : $"Suggested backend: {_suggestedBackend} (indicative)";
-
     public ObservableCollection<PreflightCheck> PreflightChecks { get; } = new();
 
     public ObservableCollection<StepItem> Steps { get; } = new();
@@ -142,13 +136,11 @@ public sealed class WizardViewModel : INotifyPropertyChanged
 
     public ObservableCollection<string> InstalledLines { get; } = new();
 
-    public string[] Backends { get; } = ["fp4", "int4", "q3", "q4", "longcat", "qwen21"];
-
-    public string SelectedBackend
-    {
-        get => _selectedBackend;
-        set => Set(ref _selectedBackend, value);
-    }
+    /// <summary>
+    /// Fixed default model for "Start server" (launcher argument; `qwen21`
+    /// maps to qwen21_viggle.json). Other models are chosen in the HAVC GUI.
+    /// </summary>
+    public const string DefaultBackend = "qwen21";
 
     public bool DirtyWarningVisible
     {
@@ -201,7 +193,6 @@ public sealed class WizardViewModel : INotifyPropertyChanged
         {
             InstallDir = Existing.InstallDir;
             ModelsDir = Existing.State.ModelsDir ?? ModelsDir;
-            SelectedBackend = Existing.State.BackendDefault ?? "fp4";
         }
         RefreshInstalledLines();
         Notify(nameof(Existing));
@@ -277,7 +268,6 @@ public sealed class WizardViewModel : INotifyPropertyChanged
             var report = await new Preflight()
                 .RunAsync(InstallDir, ModelsDir, ResolveManifestSource());
             _preflightReport = report;
-            _suggestedBackend = report.SuggestedBackend;
             foreach (PreflightCheck check in report.Checks)
                 PreflightChecks.Add(check);
         }
@@ -290,7 +280,6 @@ public sealed class WizardViewModel : INotifyPropertyChanged
         StatusText = "";
         Notify(nameof(PreflightDone));
         Notify(nameof(CanContinueFromPreflight));
-        Notify(nameof(SuggestedBackendText));
     }
 
     public async Task ContinueFromFoldersAsync()
@@ -664,7 +653,7 @@ public sealed class WizardViewModel : INotifyPropertyChanged
                 ? new RuntimeState { Name = runtime.Name, Sha256 = runtime.Sha256, Python = runtime.Python }
                 : null,
             Dinov2 = true,
-            BackendDefault = _suggestedBackend ?? "fp4",
+            BackendDefault = DefaultBackend,
             LastVerify = new LastVerifyState
             {
                 Ts = DateTimeOffset.UtcNow.ToString("o"),
@@ -785,7 +774,10 @@ public sealed class WizardViewModel : INotifyPropertyChanged
 
     public void OpenLogs() => ShellIntegration.OpenLogs(InstallDir);
 
-    public void StartServer() => ShellIntegration.StartServer(InstallDir, SelectedBackend);
+    public void StartServer()
+        => ShellIntegration.StartServer(
+            InstallDir,
+            Existing?.State.BackendDefault is { Length: > 0 } backend ? backend : DefaultBackend);
 
     public void OpenReleaseNotes()
     {

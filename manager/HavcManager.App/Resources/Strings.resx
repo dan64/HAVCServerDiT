@@ -238,9 +238,6 @@
   <data name="LockDialogTitle" xml:space="preserve">
     <value>Close the GUI/server to continue</value>
   </data>
-  <data name="ModelLabel" xml:space="preserve">
-    <value>Model</value>
-  </data>
   <data name="NoButton" xml:space="preserve">
     <value>No</value>
   </data>

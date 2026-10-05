@@ -338,6 +338,56 @@ class Ctx:
     def venv_exists(self) -> bool:
         return (self.env_dir / "pyvenv.cfg").is_file() and self.venv_python.is_file()
 
+    @property
+    def gui_venv_dir(self) -> Path:
+        """The `.venv` alias the HAVC GUI probes before starting its server.
+
+        The GUI looks for `<server_dir>\\.venv\\Scripts\\python.exe` and
+        falls back to a bare `python` when missing (dev layout), which can
+        resolve to an interpreter without the venv packages. The bootstrap
+        keeps this junction in place so the GUI always finds the venv
+        (issue found on 2026-10-05: the managed server crashed with
+        ModuleNotFoundError after a non-standard launch context).
+        """
+        return self.install_dir / ".venv"
+
+    def gui_venv_link_ok(self) -> bool:
+        """True when the GUI venv probe resolves (or the alias is not needed)."""
+        if os.name != "nt":
+            return True
+        return (self.gui_venv_dir / "Scripts" / "python.exe").is_file()
+
+    def ensure_gui_venv_link(self) -> str:
+        """Create `<install>\\.venv` as a junction to the real venv.
+
+        Junctions need no admin rights; where the filesystem has no reparse
+        support (FAT/exFAT) creation fails and the HAVC launchers' PATH line
+        remains the fallback. Returns a short outcome string for the step.
+        """
+        if os.name != "nt":
+            return "not needed on this platform"
+        if self.gui_venv_link_ok():
+            return "already present"
+        if self.dry_run:
+            self.progress.event(
+                "log", level="dry-run",
+                message=f"[dry-run] mklink /J {self.gui_venv_dir} -> {self.env_dir}",
+            )
+            return "dry-run"
+        proc = self.run(["cmd", "/c", "mklink", "/J",
+                         str(self.gui_venv_dir), str(self.env_dir)],
+                        check=False)
+        if proc.returncode == 0 and self.gui_venv_link_ok():
+            return "created"
+        note = " (path exists but is not a usable venv)" if self.gui_venv_dir.exists() else ""
+        self.progress.event(
+            "log", level="err",
+            message=(f"could not create the GUI alias {self.gui_venv_dir}{note}: the HAVC "
+                     "GUI will fall back to a bare `python`; use the HAVC launchers, "
+                     "which put the venv first on PATH"),
+        )
+        return "not created"
+
     def child_cwd(self) -> str:
         """Neutral CWD for child processes.
 
@@ -666,17 +716,27 @@ def build_steps() -> list[Step]:
 
     # -- 3. venv -----------------------------------------------------------
     def venv_check(c: Ctx) -> Optional[str]:
-        return "venv already present" if c.venv_exists() else None
+        if not c.venv_exists():
+            return None
+        if os.name == "nt" and not c.gui_venv_link_ok():
+            return None  # venv present, but the GUI `.venv` alias is missing
+        return "venv already present"
 
     def venv_run(c: Ctx) -> str:
-        base = c.env_python()
-        if base is None:
-            raise BootstrapError(
-                "no usable Python to create the venv",
-                "enable the provisioned runtime (default) or pass --python <3.12>",
-            )
-        c.run([base, "-m", "venv", str(c.env_dir)])
-        return f"{c.env_dir} (from {base})"
+        if not c.venv_exists():
+            base = c.env_python()
+            if base is None:
+                raise BootstrapError(
+                    "no usable Python to create the venv",
+                    "enable the provisioned runtime (default) or pass --python <3.12>",
+                )
+            c.run([base, "-m", "venv", str(c.env_dir)])
+            detail = f"{c.env_dir} (from {base})"
+        else:
+            detail = f"{c.env_dir} (existing)"
+        if c.ensure_gui_venv_link() == "created":
+            detail += "; GUI `.venv` alias created"
+        return detail
 
     # -- 4. pip ------------------------------------------------------------
     def pip_check(c: Ctx) -> Optional[str]:
@@ -1140,7 +1200,8 @@ def build_steps() -> list[Step]:
         Step("runtime", "Runtime Python 3.12 (python-build-standalone)",
              "download/verify/extract the pinned archive",
              runtime_check, runtime_run),
-        Step("venv", "Target virtualenv", "python -m venv from the runtime",
+        Step("venv", "Target virtualenv + GUI alias",
+             "python -m venv from the runtime; junction `.venv` -> `venv` for the GUI",
              venv_check, venv_run),
         Step("pip", "pip upgrade", "pip install --upgrade pip",
              pip_check, pip_run),

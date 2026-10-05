@@ -7,4 +7,4 @@ modules (`dit_rpc_server`, `dit_colorize_main`) for compatibility with the
 repo layout. Specification: installer/PHASE0_SPEC.md.
 """
 
-__version__ = "0.1.8"
+__version__ = "0.1.9"

@@ -686,3 +686,13 @@ storico.*
   aggiornate (VRAM + RAM). Verifiche: build 0 warning; unit 24/24; UI (UIA):
   riga presente con "111.8 GB … ≥ 32.0 GB"; copia installata del manager
   riaggiornata.
+- **2026-10-05 (33)** — **Dimensioni dei pesi per config (check richiesto
+  dall'autore).** Totali dei file caricati (misurati su disco in
+  `_dev\comfy_bridge\models`, cache HF, HF API per i quant non scaricati):
+  qwen21-viggle **≈ 13.9 GB** (unet 6.9 + clip 4.9 + mmproj 1.1 + vae 0.6 +
+  lora 0.6); longcat-gguf q3→q8 **8.8 / 9.4 / 10.1 / 10.6 / 12.0 GB**
+  (clip Qwen2.5-VL Q4_K_M 4.4 GB fisso + mmproj 1.3 + lct_vae 0.2);
+  qwen-gguf q3→q8 **14.0 / 17.9 / 21.3 / 23.8 / 30.1 GB**; nunchaku-qwen fp4
+  r32 **≈ 26.8 GB** (svdq 11.1 + text encoder bf16 15.4 + vae 0.2). Conferma
+  D12: qwen21 (13.9 GB) non entra in 16 GB di RAM → soglia 32 GB; longcat q3
+  (8.8 GB) è l'unico che gira con 16 GB.

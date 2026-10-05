@@ -19,7 +19,7 @@
 
 ---
 
-## 0. Come riprendere (handoff — aggiornato al 2026-10-05; SDK 10, VS 2026, M1–M2 — log (21)–(24))
+## 0. Come riprendere (handoff — aggiornato al 2026-10-05 (sera); M1–M3 + fix `.venv` — log (21)–(43))
 
 **Dove sta il lavoro**: branch `feature/installer` nel worktree
 `D:\PProjects\HAVCServerDiT_installer`; la cartella principale
@@ -27,8 +27,8 @@
 `AGENTS.md` è stata rimossa: finché il branch non arriva su `main`, la memoria
 è solo qui). Ultimo commit **pushato**: `7dc346a`; da lì tutto procede a
 **commit locali** — push rimandati finché non c'è "qualcosa di stabile"
-(regola in §9). Ultimo commit locale della sessione 2: `b8df5c2` (più questo
-commit di chiusura).
+(regola in §9). Ultimo commit locale: `a16578c` (più questo commit di
+chiusura).
 
 **Stato a fine sessione 2**: Fase 0 chiusa e verificata (update incrementale
 0.1.0→0.1.1 testato, log (14)); decisioni Fase 1 prese (D8–D11, §2); **spec
@@ -46,10 +46,11 @@ manifest accanto all'exe (log (36)); **fix layout server/GUI** (log (38));
 **pre-release `v0.1.6` pubblicata** (log (39)); **External console** (log
 (40)); **comfy self-contained + niente cartella modelli** (D14, log (41);
 staging `v0.1.8`); **fix junction `.venv` → `venv`** (la GUI trova sempre il
-python del venv, log (42); havc **0.1.9**, staging `v0.1.9`). Restano: il run
-in VM, **README snello + `docs/`** (log (37)); pubblicare la pre-release
-`v0.1.9`; ritestare *Run Server* / *External console* sull'install fresco
-`D:\HAVCServerDiT` (autore).
+python del venv, log (42); havc **0.1.9**, staging `v0.1.9`). *Run Server*
+sull'install `D:\HAVCServerDiT` **verificato dall'autore** (tab #4/#5 OK;
+server in ascolto — log (42)). Restano: il run in VM, **README snello +
+`docs/`** (log (37)); pubblicare la pre-release `v0.1.9`; eventuale test
+*External console* post-0.1.9.
 **Decisione SDK chiusa (05-10)**: target **.NET 10** — SDK **10.0.401**
 installato machine-wide (standalone) e **VS 2026** (Community v18.10)
 installato lo stesso giorno: l'MSBuild 18.10 compila `net10` (smoke WPF verde)
@@ -67,7 +68,8 @@ doppio click su `HAVC.vbs`.
 05-10 dal bootstrap con la staging `v0.1.8` (23/23 step, doctor verde;
 `install.json` scritto a mano per farla riconoscere dal manager — le
 scorciatoie/registro le scrive il wizard al prossimo giro), aggiornata a
-havc **0.1.9** (alias `.venv` → `venv` per la GUI, log (42)). La precedente
+havc **0.1.9** (alias `.venv` → `venv` per la GUI; **Run Server + tab
+#4/#5 verificati dall'autore**, log (42)). La precedente
 `D:\HAVC_Manager_Test` è stata disinstallata (log (35)). I modelli (una
 volta scaricati) stanno in `<install>\comfy_bridge\models`, preservati.
 
@@ -80,6 +82,9 @@ volta scaricati) stanno in `<install>\comfy_bridge\models`, preservati.
   `release.json`)
 - `v0.1.6` — **pre-release** dell'installer (wheel `havc` 0.1.6 + asset +
   `release.json`; mai "Latest" — D13)
+- `v0.1.9` — **da pubblicare** (staging pronta: wheel `havc` 0.1.9 + asset +
+  `comfy_bridge_v0.30.zip` + `release.json`, manifest verificato;
+  `dist\staging-v0.1.9`)
 
 **Comandi pronti** (dev Python = `.venv-dev` nel worktree; CWD **neutrale**,
 mai il checkout — bug del 04-10):
@@ -892,3 +897,14 @@ storico.*
   (coppia launcher/interprete, `LISTENING` su 8765, pipeline qwen21 carica
   ≈14,5 GB VRAM) e **tab #4/#5 (Fix Image / Fix Colors) testati OK**. Da
   fare: pubblicare la pre-release `v0.1.9`.
+- **2026-10-05 (43)** — **Sessione chiusa (sera).** Bilancio: **fix
+  `.venv`** risolto e verificato sul campo (junction; log (42)); chiarito il
+  **meccanismo launcher del venv** (coppia launcher→interprete: il crash
+  pre-fix spiegato — `python` nudo → *app-dir search* → runtime spoglio);
+  l'autore vede la catena giusta nei processi e i **tab #4/#5 funzionano**.
+  Commit locali della sessione: `fbb15ef` (fix+test), `9a69acd`/
+  `523dbf5`/`a16578c` (docs; più questo di chiusura). Stato: `D:\HAVCServerDiT`
+  = havc **0.1.9** funzionante; staging `v0.1.9` pronta e verificata;
+  **nulla pubblicato** (pre-release solo su ok esplicito). Prossimo:
+  pubblicare `v0.1.9`; M4 (rifinitura UI/log) + run in VM; **README snello +
+  `docs/`** (richiesta dell'autore, log (37)).

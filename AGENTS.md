@@ -5,7 +5,7 @@
 > come wheel pip, procedura di update. Va aggiornato a ogni avanzamento —
 > vedi §9 per le regole di manutenzione.
 >
-> **Ultimo aggiornamento:** 2026-10-04
+> **Ultimo aggiornamento:** 2026-10-05
 >
 > Contesto cartelle: questa è la cartella **pubblica** del progetto
 > (`D:\PProjects\HAVCServerDiT`, remote `github.com/dan64/HAVCServerDiT`).
@@ -19,7 +19,7 @@
 
 ---
 
-## 0. Come riprendere (handoff — stato al 2026-10-04, sessione 2, chiusura)
+## 0. Come riprendere (handoff — aggiornato al 2026-10-05; decisione SDK chiusa, vedi log (21))
 
 **Dove sta il lavoro**: branch `feature/installer` nel worktree
 `D:\PProjects\HAVCServerDiT_installer`; la cartella principale
@@ -39,11 +39,12 @@ all'inglese (log (16), (19)).
 **Prossimo passo — M1**: skeleton del manager in `manager/` (`HavcManager.sln`:
 `HavcManager.Core` + `HavcManager.App` WPF, UI minima *Start installation*),
 come da `installer/PHASE1_SPEC.md` §13.
-**Decisione da chiudere all'avvio di M1**: SDK .NET — sul PC ci sono SDK 5.0 e
-9.0 e il *runtime* .NET 10.0.12 (WindowsDesktop incluso); per il target
-`net10` serve l'SDK 10 (`winget Microsoft.DotNet.SDK.10` → 10.0.401, oppure
-installazione per-utente senza admin); altrimenti si sviluppa su SDK 9 e si
-retargetta prima della release.
+**Decisione SDK chiusa (05-10)**: target **.NET 10** — SDK **10.0.401**
+installato machine-wide (standalone). Vincolo verificato: **VS 2022 non
+compila `net10`** (l'SDK 10.0.4xx richiede MSBuild ≥ 18.0 = linea **VS 2026
+(v18)**; con VS 17.14 il resolver ripiega su SDK 9 → NETSDK1045). Build e
+sviluppo via `dotnet` CLI (MSBuild 18 interno); un eventuale VS 2026 per
+l'IDE è un passo a parte, senza impatto sul codice.
 
 **Installazione di test**: `D:\HAVCServerDiT_Test` — stack completo,
 aggiornata a havc 0.1.1 (smoke/update/idempotenza: `install-run8/9/10.log`
@@ -521,3 +522,14 @@ storico.*
   mappa del codice nuovo, policy push). Nella sessione: update test (log 14),
   decisioni Fase 1 (D8–D11), spec `installer/PHASE1_SPEC.md`, mirror
   `nunchaku-1.2.1`, conversione inglese (commenti, stringhe, spec).
+- **2026-10-05 (21)** — **Decisione SDK chiusa: .NET 10 (10.0.401).** SDK
+  installato machine-wide (installer ufficiale standalone; il tentativo winget
+  falliva sul bootstrapper burn con `0x800700A1` "Failed to find local
+  per-machine appdata directory"). Verificato che il VS Installer della linea
+  VS 2022 17.14 non offre componenti .NET 10 (max 9.0, dal manifest ufficiale).
+  Smoke WPF `net10.0-windows` **verde via CLI** (`dotnet new`/build, exe
+  prodotto); **MSBuild di VS 2022 rifiuta net10** (risolve SDK 9.0.318 →
+  NETSDK1045): l'SDK 10.0.4xx richiede MSBuild ≥ 18.0
+  (`minimumMSBuildVersion`), cioè la linea VS 2026 (tabella ufficiale: SDK
+  10.0.4xx ↔ VS 18.9, minimo VS 18.0). Sviluppo via CLI; VS 2026 per l'IDE
+  valutabile a parte. Prossimo: M1 (skeleton manager).

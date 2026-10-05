@@ -730,3 +730,16 @@ storico.*
   manifest) → per i run locali passare
   `--manifest dist\test-manifest-local.json`; la pubblicazione di `v0.1.5`
   sblocca anche il default. L'install di test è quindi **da reinstallare**.
+- **2026-10-05 (36)** — **Fallback del manifest accanto all'app (richiesta
+  autore).** Se il fetch del manifest di rete fallisce e `--manifest` non è
+  stato passato, il manager ripiega su `<exe folder>\release.json`
+  (`WizardViewModel.FetchManifestAsync` + `LocalFallbackManifestPath` —
+  `AppContext.BaseDirectory`, vale anche per la copia installata); il
+  preflight lo segnala ("…the local manifest next to the app will be
+  used"). Con `--manifest` esplicito nessun fallback (fallimento = errore,
+  come prima). Spec §6.2/§11. Verifiche: build 0 warning; unit 27/27; UI
+  (UIA): **A)** wizard senza `--manifest` con `release.json` accanto all'exe
+  → preflight col messaggio di fallback + Summary "Version: 0.1.5"; **B)**
+  `--manifest` inesistente (col file presente) → dialog d'errore "Could not
+  find file", resta su Folders (nessun fallback). Utile finché la release
+  non è pubblicata e per usi "portable".

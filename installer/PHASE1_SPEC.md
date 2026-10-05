@@ -205,12 +205,15 @@ prima installazione.
    VRAM e ≥ 32 GB RAM; sotto 32 GB di RAM il default passa a **longcat-gguf
    Q3** — seed GUI + `backend_default`; avvisi non bloccanti); spazio:
    install ≥ ~15 GB (indicativo), models con avviso sotto ~50 GB (D10);
-   connettività al manifest (se offline: opzione manifest locale).
+   connettività al manifest (se offline: **fallback al `release.json` accanto
+   all'exe** — se presente e `--manifest` non è stato passato — altrimenti
+   avviso con l'opzione manifest locale).
 2. **Folders**: install dir (default `%LOCALAPPDATA%\HAVCServerDiT`); **models
    dir** con proposta automatica (§7); opzioni scorciatoie (Start Menu ON,
    desktop opzionale).
 3. **Manifest**: fetch `release.json` (override `--manifest`/`--release-tag`
-   per i test); mostra versione e note.
+   per i test; **fallback a `<exe folder>\release.json`** se il fetch di rete
+   fallisce e `--manifest` non è stato passato); mostra versione e note.
 4. **Download**: archivio runtime + wheel `havc` + asset wheels →
    `<install>\cache\` (nomi originali), ognuno verificato sha256; riuso dei
    file in cache se il digest combacia.
@@ -357,7 +360,9 @@ folder*); in caso di rollback, messaggio dedicato + log.
   avvertenza SmartScreen (D1: *Windows protected your PC* → *More info* → *Run anyway*) e sha256 pubblicati.
 - URL manifest di default:
   `https://github.com/dan64/HAVCServerDiT/releases/latest/download/release.json`;
-  per i test: `--release-tag <tag>` oppure `--manifest <file|url>`.
+  per i test: `--release-tag <tag>` oppure `--manifest <file|url>`. Se il
+  fetch fallisce e `--manifest` non è stato passato, il manager ripiega sul
+  **`release.json` nella cartella dell'exe** (uso "portable"/offline).
 - Cutover: la prima release "ufficiale" del flusso installer diventa "Latest"
   (oggi lo è `v1.0.0`, legacy); fino ad allora i test usano tag espliciti.
 - Canali `stable`/`beta` (campo `channel` del manifest): v0 = stable; il

@@ -268,7 +268,7 @@ public sealed class WizardViewModel : INotifyPropertyChanged
         try
         {
             var report = await new Preflight()
-                .RunAsync(InstallDir, ModelsDir, ResolveManifestSource());
+                .RunAsync(InstallDir, ModelsDir, ResolveManifestSource(), LocalFallbackManifestPath());
             _preflightReport = report;
             _defaultModelName = report.DefaultModelName;
             foreach (PreflightCheck check in report.Checks)
@@ -298,7 +298,7 @@ public sealed class WizardViewModel : INotifyPropertyChanged
         StatusText = Strings.StatusFetchingManifest;
         try
         {
-            _manifest = await new ManifestClient().FetchAsync(ResolveManifestSource());
+            _manifest = await FetchManifestAsync();
             SummaryLines.Clear();
             foreach (PlannedDownload item in DownloadPlan.FromManifest(_manifest))
             {
@@ -354,7 +354,7 @@ public sealed class WizardViewModel : INotifyPropertyChanged
         string? error = null;
         try
         {
-            manifest = await new ManifestClient().FetchAsync(ResolveManifestSource());
+            manifest = await FetchManifestAsync();
         }
         catch (Exception ex)
         {
@@ -898,6 +898,36 @@ public sealed class WizardViewModel : INotifyPropertyChanged
         if (_options.ReleaseTag is { } tag)
             return $"https://github.com/dan64/HAVCServerDiT/releases/download/{tag}/release.json";
         return ManifestClient.DefaultUrl;
+    }
+
+    /// <summary>
+    /// Local fallback manifest (release.json next to the app), used when the
+    /// network manifest cannot be fetched and no --manifest was passed
+    /// (user request, 05-10). Works for the dev exe and for the installed
+    /// copy alike (AppContext.BaseDirectory).
+    /// </summary>
+    private string? LocalFallbackManifestPath()
+        => _options.ManifestSource is null
+            ? Path.Combine(AppContext.BaseDirectory, "release.json")
+            : null;
+
+    private async Task<ReleaseManifest> FetchManifestAsync()
+    {
+        string source = ResolveManifestSource();
+        try
+        {
+            return await new ManifestClient().FetchAsync(source);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            if (LocalFallbackManifestPath() is { } fallback && File.Exists(fallback))
+            {
+                new ManagerLog(InstallDir).Info(
+                    $"manifest: cannot fetch {source} — falling back to {fallback}");
+                return await new ManifestClient().FetchAsync(fallback);
+            }
+            throw;
+        }
     }
 
     private static string SuggestModelsDir()

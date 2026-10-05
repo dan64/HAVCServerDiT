@@ -30,7 +30,7 @@ public sealed record PreflightReport(IReadOnlyList<PreflightCheck> Checks, strin
 /// system RAM vs the default model requirements (qwen21-viggle: at least
 /// 12 GB VRAM and 32 GB RAM; below the RAM threshold the default switches to
 /// the lighter longcat-gguf, Q3), disk space (indicative thresholds),
-/// manifest reachability.
+/// manifest reachability (with a fallback to a `release.json` next to the app).
 /// </summary>
 public sealed class Preflight
 {
@@ -45,6 +45,7 @@ public sealed class Preflight
         string installDir,
         string modelsDir,
         string manifestUrl,
+        string? fallbackManifestPath = null,
         CancellationToken cancellationToken = default)
     {
         var checks = new List<PreflightCheck>();
@@ -108,10 +109,22 @@ public sealed class Preflight
                         && (manifestUri.Scheme == Uri.UriSchemeHttp || manifestUri.Scheme == Uri.UriSchemeHttps);
         bool online = !isRemote
                       || await CheckManifestReachabilityAsync(manifestUrl, cancellationToken).ConfigureAwait(false);
-        checks.Add(new PreflightCheck(
-            "Release manifest",
-            online ? PreflightStatus.Ok : PreflightStatus.Warning,
-            online ? manifestUrl : $"cannot reach {manifestUrl} — you can use a local manifest"));
+        if (online)
+        {
+            checks.Add(new PreflightCheck("Release manifest", PreflightStatus.Ok, manifestUrl));
+        }
+        else if (fallbackManifestPath is not null && File.Exists(fallbackManifestPath))
+        {
+            checks.Add(new PreflightCheck(
+                "Release manifest", PreflightStatus.Warning,
+                $"cannot reach {manifestUrl} — the local manifest next to the app will be used: {fallbackManifestPath}"));
+        }
+        else
+        {
+            checks.Add(new PreflightCheck(
+                "Release manifest", PreflightStatus.Warning,
+                $"cannot reach {manifestUrl} — you can use a local manifest"));
+        }
 
         return new PreflightReport(checks, defaultModel);
     }

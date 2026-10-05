@@ -45,9 +45,11 @@ Q3, log (34)); **disinstallo verificato sul campo** (log (35)); fallback
 manifest accanto all'exe (log (36)); **fix layout server/GUI** (log (38));
 **pre-release `v0.1.6` pubblicata** (log (39)); **External console** (log
 (40)); **comfy self-contained + niente cartella modelli** (D14, log (41);
-staging `v0.1.8`). Restano: il run in VM, **README snello + `docs/`** (log
-(37)); pubblicare la pre-release `v0.1.8`; ritestare *Run Server* /
-*External console* sull'install fresco `D:\HAVCServerDiT` (autore).
+staging `v0.1.8`); **fix junction `.venv` → `venv`** (la GUI trova sempre il
+python del venv, log (42); havc **0.1.9**, staging `v0.1.9`). Restano: il run
+in VM, **README snello + `docs/`** (log (37)); pubblicare la pre-release
+`v0.1.9`; ritestare *Run Server* / *External console* sull'install fresco
+`D:\HAVCServerDiT` (autore).
 **Decisione SDK chiusa (05-10)**: target **.NET 10** — SDK **10.0.401**
 installato machine-wide (standalone) e **VS 2026** (Community v18.10)
 installato lo stesso giorno: l'MSBuild 18.10 compila `net10` (smoke WPF verde)
@@ -64,7 +66,8 @@ doppio click su `HAVC.vbs`.
 **Installazione test del manager (wizard)**: `D:\HAVCServerDiT` — creata il
 05-10 dal bootstrap con la staging `v0.1.8` (23/23 step, doctor verde;
 `install.json` scritto a mano per farla riconoscere dal manager — le
-scorciatoie/registro le scrive il wizard al prossimo giro). La precedente
+scorciatoie/registro le scrive il wizard al prossimo giro), aggiornata a
+havc **0.1.9** (alias `.venv` → `venv` per la GUI, log (42)). La precedente
 `D:\HAVC_Manager_Test` è stata disinstallata (log (35)). I modelli (una
 volta scaricati) stanno in `<install>\comfy_bridge\models`, preservati.
 
@@ -849,3 +852,30 @@ storico.*
   `ping → pong`; UI (UIA): preflight/Folders/Components senza voce modelli,
   Installed 0.1.8. Da fare: pubblicare `v0.1.8`; test autore *Run Server*
   (i pesi finiranno nel posto giusto).
+- **2026-10-05 (42)** — **Fix: la GUI trova sempre il python del venv
+  (junction `.venv`).** Segnalazione autore (*Run Server* dall'install in
+  `%LOCALAPPDATA%`): il server moriva con `ModuleNotFoundError` a riga 44 di
+  `dit_rpc_server.py` (`from PIL import Image…`); **riprodotto** lanciando il
+  server col **runtime python spoglio** (`runtime\python\python.exe` → PIL
+  assente; nel venv PIL 12.2.0). Causa: la GUI prova
+  `<install>\.venv\Scripts\python.exe` (riga 3047 di
+  `CMNET2_colorize_client_GUI.py`) e se manca ripiega su `python` nudo — in
+  un contesto di lancio non standard quello risolve a un interprete senza
+  pacchetti (il launcher `HAVC.cmd` era già a posto: riga PATH dalla 0.1.6).
+  Fix (bootstrap, passo `venv`): crea e mantiene l'alias **`.venv` → `venv`**
+  (junction `mklink /J`, senza admin; check/run idempotente → converge anche
+  sulle install esistenti; su FS senza reparse → warning, resta il PATH dei
+  launcher). Test nuovo
+  `InstallTreeCleanupTests.Delete_handles_the_venv_junction`
+  (keep-models + full) → su .NET 10 la disinstallazione gestisce il junction
+  (nota: la delete ricorsiva di PowerShell 5.1/.NET Framework sui junction è
+  inaffidabile — usare `cmd /c rmdir` negli scratch). havc **0.1.9** (wheel +
+  staging `v0.1.9` + `test-manifest-local.json`; `staging-v0.1.8` rimossa,
+  superata). Verifiche: build 0 warning; **32/32 unit**; mklink via
+  subprocess (forma-lista, path con spazi) ok; bootstrap su
+  `D:\HAVCServerDiT` (23 passi, 19 skip) → `venv` *"GUI `.venv` alias
+  created"*, `wheel` → **0.1.9**, `verify` doctor 9/9; sonda GUI
+  `isfile(.venv\Scripts\python.exe)` = True; **spawn del server via `.venv`
+  col comando identico alla GUI** → "HAVC DiT Server listening on
+  127.0.0.1:8898" (kill pulito). Da fare: test autore *Run Server* dalla
+  GUI; pubblicare la pre-release `v0.1.9`.

@@ -127,7 +127,10 @@ Passi, nell'ordine:
    copia in `<install-dir>\cache\` (se lo sha256 corrisponde) o scarica
    l'archivio pinnato; verifica sha256; estrae in `<install-dir>\runtime\python`;
    controlla la versione finale;
-3. `venv` — crea il venv di destinazione dal runtime (se manca);
+3. `venv` — crea il venv di destinazione dal runtime (se manca) e mantiene
+   l'alias `<install>\.venv` (junction → `venv`): la GUI cerca il python del
+   server in `.venv\Scripts\python.exe` (layout dev) — fix del 05-10, log
+   (42) di AGENTS.md;
 4. `pip` — aggiorna pip solo se sotto la soglia minima;
 5. `torch` — `pip install -r requirements/torch.txt --index-url <CUDA 13.0>`;
 6. `nunchaku` — `pip install -r requirements/nunchaku.txt`;

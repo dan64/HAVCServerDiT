@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Runtime.InteropServices;
 using HavcManager.Core.Manifest;
 
 namespace HavcManager.Core.Preflight;
@@ -22,9 +23,10 @@ public sealed record PreflightReport(IReadOnlyList<PreflightCheck> Checks)
 
 /// <summary>
 /// First-run environment checks (PHASE1_SPEC §6.2 step 1): OS, nvidia-smi
-/// (name/driver/VRAM — missing GPU is a non-blocking warning), VRAM vs the
-/// fixed default model requirement (qwen21-viggle: at least 12 GB), disk
-/// space (indicative thresholds), manifest reachability.
+/// (name/driver/VRAM — missing GPU is a non-blocking warning), VRAM and
+/// system RAM vs the fixed default model requirements (qwen21-viggle: at
+/// least 12 GB VRAM and 32 GB RAM), disk space (indicative thresholds),
+/// manifest reachability.
 /// </summary>
 public sealed class Preflight
 {
@@ -32,6 +34,7 @@ public sealed class Preflight
     private const long MinModelsBytes = 50L * 1024 * 1024 * 1024;   // ~50 GB (indicative)
     private const string DefaultModelName = "qwen21-viggle";        // name in the GUI model list
     private const long MinDefaultModelVramMiB = 12 * 1024;          // 12 GiB
+    private const long MinDefaultModelRamBytes = 32L * 1024 * 1024 * 1024;  // 32 GiB
 
     public async Task<PreflightReport> RunAsync(
         string installDir,
@@ -74,6 +77,20 @@ public sealed class Preflight
             checks.Add(new PreflightCheck(
                 "NVIDIA GPU", PreflightStatus.Warning,
                 "nvidia-smi not available — install or update the NVIDIA driver"));
+        }
+
+        // System RAM: the fixed default model needs >= 32 GB (non-blocking).
+        if (TotalPhysicalMemoryBytes() is { } ramBytes)
+        {
+            bool enoughRam = ramBytes >= (ulong)MinDefaultModelRamBytes;
+            string ramRequirement = FormatBytes(MinDefaultModelRamBytes);
+            checks.Add(new PreflightCheck(
+                "System memory (default model)",
+                enoughRam ? PreflightStatus.Ok : PreflightStatus.Warning,
+                $"{FormatBytes((long)ramBytes)} in total — "
+                + (enoughRam
+                    ? $"meets the default model ({DefaultModelName}) requirement of at least {ramRequirement}"
+                    : $"the default model ({DefaultModelName}) requires at least {ramRequirement}; you can install anyway and pick a lighter model (e.g. longcat-gguf with Q3 precision) in the HAVC GUI")));
         }
 
         checks.Add(SpaceCheck("Disk space (install)", installDir, MinInstallBytes));
@@ -169,6 +186,38 @@ public sealed class Preflight
             ? mib
             : null;
     }
+
+    /// <summary>Total physical memory in bytes (via GlobalMemoryStatusEx).</summary>
+    private static ulong? TotalPhysicalMemoryBytes()
+    {
+        try
+        {
+            var status = new MemoryStatusEx { Length = (uint)Marshal.SizeOf<MemoryStatusEx>() };
+            return GlobalMemoryStatusEx(ref status) ? status.TotalPhys : null;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MemoryStatusEx
+    {
+        public uint Length;
+        public uint MemoryLoad;
+        public ulong TotalPhys;
+        public ulong AvailPhys;
+        public ulong TotalPageFile;
+        public ulong AvailPageFile;
+        public ulong TotalVirtual;
+        public ulong AvailVirtual;
+        public ulong AvailExtendedVirtual;
+    }
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GlobalMemoryStatusEx(ref MemoryStatusEx lpBuffer);
 
     private static async Task<bool> CheckManifestReachabilityAsync(string manifestUrl, CancellationToken cancellationToken)
     {

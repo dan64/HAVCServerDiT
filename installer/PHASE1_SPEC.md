@@ -195,10 +195,10 @@ prima installazione.
 ### 6.2 Prima installazione (flusso a due stadi)
 
 1. **Preflight**: OS; `nvidia-smi` (nome, driver, VRAM — assente: avviso non
-   bloccante); **VRAM vs requisito del modello di default** (qwen21-viggle:
-   ≥ 12 GB; sotto soglia: avviso non bloccante); spazio: install ≥ ~15 GB
-   (indicativo), models con avviso sotto ~50 GB (D10); connettività al
-   manifest (se offline: opzione manifest locale).
+   bloccante); **requisiti del modello di default** (qwen21-viggle: ≥ 12 GB
+   VRAM e ≥ 32 GB RAM; sotto soglia: avviso non bloccante); spazio: install
+   ≥ ~15 GB (indicativo), models con avviso sotto ~50 GB (D10); connettività
+   al manifest (se offline: opzione manifest locale).
 2. **Folders**: install dir (default `%LOCALAPPDATA%\HAVCServerDiT`); **models
    dir** con proposta automatica (§7); opzioni scorciatoie (Start Menu ON,
    desktop opzionale).
@@ -292,8 +292,8 @@ Schermate v0 (wizard):
 
 1. **Start** — installazione esistente: *Update / Repair / Uninstall /
    Open*; altrimenti **Welcome** (*Start installation*).
-2. **Preflight** — esiti dei check (inclusa la VRAM rispetto al requisito
-   del modello di default, qwen21-viggle: ≥ 12 GB).
+2. **Preflight** — esiti dei check (inclusi VRAM e RAM rispetto ai requisiti
+   del modello di default, qwen21-viggle: ≥ 12 GB VRAM, ≥ 32 GB RAM).
 3. **Folders** — install dir, models dir (proposta + avviso spazio),
    scorciatoie.
 4. **Components** — *Server+GUI* (fisso in v0); riga informativa: *DINOv2

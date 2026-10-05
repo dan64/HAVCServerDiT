@@ -45,7 +45,8 @@ Q3, log (34)); **disinstallo verificato sul campo** (log (35)); fallback
 manifest accanto all'exe (log (36)); **fix layout server/GUI** (log (38));
 **pre-release `v0.1.6` pubblicata** (log (39)). Restano: il run in VM,
 **README snello + `docs/`** (log (37)); reinstallare l'install di test
-(disinstallata, log (35)) e riprovare *Run Server* dalla GUI (run autore).
+(disinstallata, log (35)) e riprovare *Run Server* + *External console* dalla
+GUI (≥0.1.7, log (40)).
 **Decisione SDK chiusa (05-10)**: target **.NET 10** — SDK **10.0.401**
 installato machine-wide (standalone) e **VS 2026** (Community v18.10)
 installato lo stesso giorno: l'MSBuild 18.10 compila `net10` (smoke WPF verde)
@@ -768,6 +769,26 @@ storico.*
   (10.689.473 byte), **Latest resta `v1.0.0`** (pre-release esclusa);
   `gh release list` → v0.1.6 *Pre-release*. URL:
   https://github.com/dan64/HAVCServerDiT/releases/tag/v0.1.6
+- **2026-10-05 (40)** — **Modalità *External console* supportata
+  nell'install (richiesta autore: tenere l'opzione GUI e aggiungere gli
+  script).** La `launchers` step scrive ora anche `start_server.cmd`
+  (argomenti GUI: fp4/int4/q3/q4/q5/q6/q8/longcat/longcat-q3..q8; vuoto →
+  q4) e `run_server_qwen21.cmd` (config fissa), versioni "installate" degli
+  storici script (venv `%HERE%venv`, file + `--module-dir` alla root,
+  `--logfile dit_server.log`; pausa solo su errore come gli originali).
+  Trovato e corretto in test live un bug di quoting mio: `--module-dir
+  "%HERE%"` col trailing backslash dentro le virgolette mangiava la
+  chiusura (il resto della riga finiva nell'argomento, `--load-pipeline`
+  incluso) → `%HERE:~0,-1%` come negli script originali. havc **0.1.7**
+  (wheel + staging `v0.1.7` + `test-manifest-local.json`; `staging-v0.1.6`
+  conservata = record della pre-release pubblicata). Spec PHASE0 §5 (step
+  21). Verifiche: launchers scritti e idempotenti; run live nello scratch:
+  `start_server.cmd longcat-q3` → module_dir pulito, `dit_colorize_main.py:
+  found`, `Loading pipeline from config: …longcat_gguf_q3.json` (stop
+  atteso: torch assente nello scratch); `bogus` → "Unknown model";
+  `run_server_qwen21.cmd` → `…qwen21_viggle.json`. Da fare: update
+  dell'install a ≥0.1.7 per provare *External console*; eventuale
+  pubblicazione della pre-release v0.1.7.
 - **2026-10-05 (36)** — **Fallback del manifest accanto all'app (richiesta
   autore).** Se il fetch del manifest di rete fallisce e `--manifest` non è
   stato passato, il manager ripiega su `<exe folder>\release.json`

@@ -40,8 +40,9 @@ all'inglese (log (16), (19)).
 test, poi run in VM (spec §13). M1–M3 completate; prima installazione reale
 riuscita il 05-10 (`D:\HAVC_Manager_Test` — log (28)); update/ripara/rollback/
 lock verificati sul campo (log (29)); **modello di default qwen21-viggle**
-(nessuna scelta modello nel manager — log (30)). Restano: pubblicare la
-release (staging `v0.1.4` in `dist/`) e il run in VM.
+(nessuna scelta modello nel manager — log (30); sotto 32 GB RAM → longcat-gguf
+Q3, log (34)). Restano: pubblicare la release (staging `v0.1.5` in `dist/`)
+e il run in VM.
 **Decisione SDK chiusa (05-10)**: target **.NET 10** — SDK **10.0.401**
 installato machine-wide (standalone) e **VS 2026** (Community v18.10)
 installato lo stesso giorno: l'MSBuild 18.10 compila `net10` (smoke WPF verde)
@@ -195,11 +196,12 @@ esterni. Obiettivo di questo filone di lavoro:
 
 - **D12 — Modello di default: qwen21-viggle, nessuna scelta nel manager**
   (05-10). Il manager non offre scelta modello: *Start server* avvia col
-  default registrato (`backend_default` = `"qwen21"` → `qwen21_viggle.json`),
-  il seed dei settings GUI installa `model_name = qwen21-viggle` (solo se
-  assente); il preflight verifica i requisiti del default (≥ 12 GB VRAM e
-  ≥ 32 GB RAM; avvisi non bloccanti; sotto soglia RAM il messaggio suggerisce
-  longcat-gguf con Q3 — con 16 GB di RAM è l'unico modello che gira).
+  default registrato (`backend_default` = `"qwen21"` → `qwen21_viggle.json`);
+  il seed dei settings GUI installa `model_name`/`model_precision` (solo se
+  assenti); il preflight verifica i requisiti del default (≥ 12 GB VRAM e
+  ≥ 32 GB RAM, avvisi non bloccanti) e **sotto i 32 GB di RAM il default
+  diventa longcat-gguf Q3** (`backend_default` = `"longcat3"`, seed
+  `longcat-gguf` + precision `q3`; con 16 GB è l'unico modello che gira).
   Gli altri modelli si scelgono dalla GUI di HAVC.
 
 ---
@@ -696,3 +698,19 @@ storico.*
   r32 **≈ 26.8 GB** (svdq 11.1 + text encoder bf16 15.4 + vae 0.2). Conferma
   D12: qwen21 (13.9 GB) non entra in 16 GB di RAM → soglia 32 GB; longcat q3
   (8.8 GB) è l'unico che gira con 16 GB.
+- **2026-10-05 (34)** — **RAM < 32 GB → default longcat-gguf Q3.** Manager:
+  `PreflightReport.DefaultModelName` con `DecideDefaultModel` (< 32 GiB →
+  longcat-gguf; ≥ o RAM ignota → qwen21-viggle; +3 unit test → 27/27); riga
+  "System memory" sotto soglia → "the installer will use longcat-gguf (Q3)
+  as the default model instead"; `--default-model` passato a
+  install/update/ripara; `backend_default` = `longcat3` se longcat (nuovo
+  arg launcher `longcat3` → `longcat_gguf_q3.json`). Bootstrap: opzione
+  `--default-model` (seed/wiring `model_name` + `model_precision` q3 per
+  longcat, solo se assenti). havc **0.1.5** (wheel + staging `v0.1.5` +
+  `test-manifest-local.json`; `staging-v0.1.4` rimossa). Spec PHASE1
+  §4/§5/§6.2/§8, PHASE0 §5/step 19. Verifiche: build 0 warning; unit 27/27;
+  bootstrap su scratch (wiring longcat+q3, qwen21 senza precision, template
+  nuovo file, launcher con `longcat3`; rerun → skip); run reale sul test
+  install → wheel 0.1.5, launchers riscritti, doctor 9/9; UI (UIA): Installed
+  0.1.5 senza combo, preflight con riga RAM OK (111.8 GB; il ramo longcat è
+  coperto dai unit test).

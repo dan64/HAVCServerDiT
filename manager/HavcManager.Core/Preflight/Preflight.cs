@@ -15,8 +15,11 @@ public enum PreflightStatus
 /// <summary>One check outcome.</summary>
 public sealed record PreflightCheck(string Name, PreflightStatus Status, string? Detail);
 
-/// <summary>Full outcome of the preflight checks.</summary>
-public sealed record PreflightReport(IReadOnlyList<PreflightCheck> Checks)
+/// <summary>
+/// Full outcome of the preflight checks, plus the default model picked for
+/// this machine (longcat-gguf below the RAM threshold, else qwen21-viggle).
+/// </summary>
+public sealed record PreflightReport(IReadOnlyList<PreflightCheck> Checks, string DefaultModelName)
 {
     public bool HasErrors => Checks.Any(c => c.Status == PreflightStatus.Error);
 }
@@ -24,8 +27,9 @@ public sealed record PreflightReport(IReadOnlyList<PreflightCheck> Checks)
 /// <summary>
 /// First-run environment checks (PHASE1_SPEC §6.2 step 1): OS, nvidia-smi
 /// (name/driver/VRAM — missing GPU is a non-blocking warning), VRAM and
-/// system RAM vs the fixed default model requirements (qwen21-viggle: at
-/// least 12 GB VRAM and 32 GB RAM), disk space (indicative thresholds),
+/// system RAM vs the default model requirements (qwen21-viggle: at least
+/// 12 GB VRAM and 32 GB RAM; below the RAM threshold the default switches to
+/// the lighter longcat-gguf, Q3), disk space (indicative thresholds),
 /// manifest reachability.
 /// </summary>
 public sealed class Preflight
@@ -33,6 +37,7 @@ public sealed class Preflight
     private const long MinInstallBytes = 15L * 1024 * 1024 * 1024;  // ~15 GB (indicative)
     private const long MinModelsBytes = 50L * 1024 * 1024 * 1024;   // ~50 GB (indicative)
     private const string DefaultModelName = "qwen21-viggle";        // name in the GUI model list
+    private const string LighterModelName = "longcat-gguf";         // below the RAM threshold
     private const long MinDefaultModelVramMiB = 12 * 1024;          // 12 GiB
     private const long MinDefaultModelRamBytes = 32L * 1024 * 1024 * 1024;  // 32 GiB
 
@@ -79,18 +84,21 @@ public sealed class Preflight
                 "nvidia-smi not available — install or update the NVIDIA driver"));
         }
 
-        // System RAM: the fixed default model needs >= 32 GB (non-blocking).
-        if (TotalPhysicalMemoryBytes() is { } ramBytes)
+        // System RAM: the nominal default model needs >= 32 GB; below the
+        // threshold the default switches to the lighter longcat-gguf (Q3).
+        ulong? ramBytes = TotalPhysicalMemoryBytes();
+        string defaultModel = DecideDefaultModel(ramBytes is { } ram ? (long)ram : null);
+        if (ramBytes is { } bytes)
         {
-            bool enoughRam = ramBytes >= (ulong)MinDefaultModelRamBytes;
+            bool enoughRam = bytes >= (ulong)MinDefaultModelRamBytes;
             string ramRequirement = FormatBytes(MinDefaultModelRamBytes);
             checks.Add(new PreflightCheck(
                 "System memory (default model)",
                 enoughRam ? PreflightStatus.Ok : PreflightStatus.Warning,
-                $"{FormatBytes((long)ramBytes)} in total — "
+                $"{FormatBytes((long)bytes)} in total — "
                 + (enoughRam
                     ? $"meets the default model ({DefaultModelName}) requirement of at least {ramRequirement}"
-                    : $"the default model ({DefaultModelName}) requires at least {ramRequirement}; you can install anyway and pick a lighter model (e.g. longcat-gguf with Q3 precision) in the HAVC GUI")));
+                    : $"below the {ramRequirement} required by {DefaultModelName}; the installer will use {LighterModelName} (Q3) as the default model instead")));
         }
 
         checks.Add(SpaceCheck("Disk space (install)", installDir, MinInstallBytes));
@@ -105,8 +113,24 @@ public sealed class Preflight
             online ? PreflightStatus.Ok : PreflightStatus.Warning,
             online ? manifestUrl : $"cannot reach {manifestUrl} — you can use a local manifest"));
 
-        return new PreflightReport(checks);
+        return new PreflightReport(checks, defaultModel);
     }
+
+    /// <summary>
+    /// Default model for this machine: longcat-gguf (Q3) when the system RAM
+    /// is below the requirement, else qwen21-viggle (also when the RAM cannot
+    /// be measured). Used by the wizard at preflight and by update/repair runs
+    /// so the GUI settings seed stays consistent.
+    /// </summary>
+    public static string DefaultModelForThisMachine()
+    {
+        ulong? bytes = TotalPhysicalMemoryBytes();
+        return DecideDefaultModel(bytes is { } b ? (long)b : null);
+    }
+
+    /// <summary>Machine-readable decision (see <see cref="DefaultModelForThisMachine"/>).</summary>
+    public static string DecideDefaultModel(long? totalRamBytes)
+        => totalRamBytes is { } ram && ram < MinDefaultModelRamBytes ? LighterModelName : DefaultModelName;
 
     private static PreflightCheck SpaceCheck(string name, string path, long minimumBytes)
     {

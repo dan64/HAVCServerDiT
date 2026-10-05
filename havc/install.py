@@ -117,8 +117,14 @@ CMNET2_DINOV2 = (
 
 # Default model seeded into the GUI settings when the value is missing: the
 # user-facing name from the GUI model list (the launcher argument mapping the
-# same model in HAVC-Server.cmd is `qwen21`).
+# same model in HAVC-Server.cmd is `qwen21`; `longcat3` maps longcat-gguf).
+# The manager passes --default-model: below the RAM threshold of the nominal
+# default (qwen21-viggle) it seeds the lighter longcat-gguf (Q3).
 DEFAULT_MODEL_NAME = "qwen21-viggle"
+
+# GUI precision paired with a non-viggle default model (seeded/wired only
+# when absent; qwen21-viggle ignores the precision).
+DEFAULT_MODEL_PRECISION = {"longcat-gguf": "q3"}
 
 # Launchers written into the install folder (default front-end = GUI).
 # ASCII content; lines are rewritten with CRLF on save (.cmd files with
@@ -170,10 +176,11 @@ if /i "%WHICH%"=="int4"    set "CFG=qwen_nunchaku_int4.json"
 if /i "%WHICH%"=="fp4"     set "CFG=qwen_nunchaku_fp4.json"
 if /i "%WHICH%"=="q3"      set "CFG=qwen_gguf_q3.json"
 if /i "%WHICH%"=="q4"      set "CFG=qwen_gguf_q4.json"
-if /i "%WHICH%"=="longcat" set "CFG=longcat_gguf_q4.json"
-if /i "%WHICH%"=="qwen21"  set "CFG=qwen21_viggle.json"
+if /i "%WHICH%"=="longcat"  set "CFG=longcat_gguf_q4.json"
+if /i "%WHICH%"=="longcat3" set "CFG=longcat_gguf_q3.json"
+if /i "%WHICH%"=="qwen21"   set "CFG=qwen21_viggle.json"
 if "%CFG%"=="" (
-    echo [ERROR] Unknown model "%WHICH%". Available: int4 fp4 q3 q4 longcat qwen21
+    echo [ERROR] Unknown model "%WHICH%". Available: int4 fp4 q3 q4 longcat longcat3 qwen21
     pause
     exit /b 1
 )
@@ -218,6 +225,7 @@ class Ctx:
     runtime_zip: Optional[Path] = None
     tools_zip: Optional[Path] = None
     models_dir: Optional[Path] = None
+    default_model: str = DEFAULT_MODEL_NAME
     with_dinov2: bool = False
     use_system_python: bool = False
 
@@ -453,7 +461,8 @@ def cached_download(ctx: Ctx, asset: dict, local: Optional[Path] = None) -> Path
 
 def wire_gui_settings(ctx: Ctx, settings_path: Path) -> int:
     """Fill empty/absent managed values in gui_cmnet2_settings.json
-    (`hf_cache` from --models-dir; `model_name` default). Returns 1 if changed."""
+    (`hf_cache` from --models-dir; default `model_name`/`model_precision`).
+    Returns 1 if changed."""
     if not settings_path.is_file():
         return 0
     try:
@@ -465,7 +474,10 @@ def wire_gui_settings(ctx: Ctx, settings_path: Path) -> int:
         data["hf_cache"] = str(ctx.models_dir / "hf-cache")
         changed = True
     if not data.get("model_name"):
-        data["model_name"] = DEFAULT_MODEL_NAME
+        data["model_name"] = ctx.default_model
+        precision = DEFAULT_MODEL_PRECISION.get(ctx.default_model)
+        if precision and not data.get("model_precision"):
+            data["model_precision"] = precision
         changed = True
     if not changed:
         return 0
@@ -951,9 +963,12 @@ def build_steps() -> list[Step]:
             "mkv_path": str(c.install_dir / "tools" / "MKVToolNix" / "mkvmerge.exe"),
             "base_dir": str(c.install_dir / "work"),
             "fixv_base_dir": str(c.install_dir / "work"),
-            "model_name": DEFAULT_MODEL_NAME,
+            "model_name": c.default_model,
             "hf_cache": str(c.models_dir / "hf-cache") if c.models_dir else "",
         }
+        precision = DEFAULT_MODEL_PRECISION.get(c.default_model)
+        if precision:
+            settings["model_precision"] = precision
         with path.open("w", encoding="utf-8", newline="\n") as fh:
             fh.write(json.dumps(settings, indent=4) + "\n")
         return "gui_cmnet2_settings.json created"
@@ -1061,7 +1076,7 @@ def build_steps() -> list[Step]:
              "tools.zip + NVEncC_9.17_x64.zip (Release v1.0.0) or --tools-zip",
              tools_check, tools_run),
         Step("gui-settings", "GUI settings (seeded/wired when missing)",
-             "gui_cmnet2_settings.json: model_name + hf_cache only if empty",
+             "gui_cmnet2_settings.json: model_name/precision + hf_cache only if empty",
              gui_settings_check, gui_settings_run),
         Step("launchers", "Launcher in <install>",
              "HAVC.cmd/.vbs (GUI), HAVC-Server.cmd, HAVC-Doctor.cmd (rewritten if different)",
@@ -1150,6 +1165,10 @@ def main(argv=None) -> int:
     parser.add_argument("--models-dir", type=Path, default=None,
                         help="unified models folder: HF cache + comfy models "
                              "(wired into configs, GUI settings and launchers)")
+    parser.add_argument("--default-model", default=DEFAULT_MODEL_NAME,
+                        help="GUI default model seeded/wired in the GUI settings "
+                             f"when empty (default: {DEFAULT_MODEL_NAME}; "
+                             "e.g. longcat-gguf seeds precision q3)")
     parser.add_argument("--only", default="",
                         help="run only these steps (comma-separated ids)")
     parser.add_argument("--plan", action="store_true",
@@ -1189,6 +1208,7 @@ def main(argv=None) -> int:
         runtime_zip=args.runtime_zip.resolve() if args.runtime_zip else None,
         tools_zip=args.tools_zip.resolve() if args.tools_zip else None,
         models_dir=args.models_dir.resolve() if args.models_dir else None,
+        default_model=args.default_model,
         with_dinov2=args.with_dinov2,
         use_system_python=args.use_system_python,
     )

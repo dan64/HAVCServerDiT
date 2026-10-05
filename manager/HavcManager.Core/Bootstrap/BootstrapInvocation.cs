@@ -20,6 +20,12 @@ public sealed record BootstrapInvocation
     /// <summary>Unified models folder (D10); passed through --models-dir.</summary>
     public string? ModelsDir { get; init; }
 
+    /// <summary>
+    /// GUI default model (--default-model): "longcat-gguf" below the RAM
+    /// threshold, else "qwen21-viggle"; seeds gui_cmnet2_settings.json when empty.
+    /// </summary>
+    public string? DefaultModel { get; init; }
+
     /// <summary>Always true for the manager (D10).</summary>
     public bool WithDinov2 { get; init; }
 

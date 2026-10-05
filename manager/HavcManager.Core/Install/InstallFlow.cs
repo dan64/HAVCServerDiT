@@ -17,7 +17,8 @@ public sealed record InstallPlan(
     ReleaseManifest Manifest,
     string InstallDir,
     string ModelsDir,
-    bool WithDinov2 = true);
+    bool WithDinov2 = true,
+    string? DefaultModel = null);
 
 /// <summary>Parameters of a repair run (§6.4): cached wheel, no downloads.</summary>
 public sealed record RepairPlan(
@@ -26,7 +27,8 @@ public sealed record RepairPlan(
     string PythonExe,
     string WheelPath,
     string? RuntimeArchive = null,
-    bool WithDinov2 = true);
+    bool WithDinov2 = true,
+    string? DefaultModel = null);
 
 public sealed record InstallOutcome(bool Ok, int BootstrapExitCode, string? Error);
 
@@ -121,7 +123,7 @@ public sealed class InstallFlow
             cancellationToken.ThrowIfCancellationRequested();
 
             return await RunStage2Async(
-                plan.InstallDir, pythonExe, wheelPath, plan.ModelsDir, plan.WithDinov2,
+                plan.InstallDir, pythonExe, wheelPath, plan.ModelsDir, plan.WithDinov2, plan.DefaultModel,
                 observe, log, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
@@ -166,7 +168,7 @@ public sealed class InstallFlow
             cancellationToken.ThrowIfCancellationRequested();
 
             return await RunStage2Async(
-                plan.InstallDir, plan.PythonExe, plan.WheelPath, plan.ModelsDir, plan.WithDinov2,
+                plan.InstallDir, plan.PythonExe, plan.WheelPath, plan.ModelsDir, plan.WithDinov2, plan.DefaultModel,
                 observe, log, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
@@ -187,6 +189,7 @@ public sealed class InstallFlow
         string wheelPath,
         string modelsDir,
         bool withDinov2,
+        string? defaultModel,
         Action<FlowEvent>? observe,
         ManagerLog log,
         CancellationToken cancellationToken)
@@ -200,6 +203,7 @@ public sealed class InstallFlow
             AssetsDir = Path.Combine(installDir, "cache", "assets"),
             ModelsDir = modelsDir,
             WithDinov2 = withDinov2,
+            DefaultModel = defaultModel,
         };
         BootstrapResult result = await Runner.RunAsync(invocation, cancellationToken).ConfigureAwait(false);
         log.Info($"bootstrap exit {result.ExitCode}, ok={result.Ok}");

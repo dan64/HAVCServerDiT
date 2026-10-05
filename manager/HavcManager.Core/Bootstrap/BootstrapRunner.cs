@@ -141,6 +141,11 @@ public sealed class BootstrapRunner
             yield return "--models-dir";
             yield return invocation.ModelsDir;
         }
+        if (invocation.DefaultModel is not null)
+        {
+            yield return "--default-model";
+            yield return invocation.DefaultModel;
+        }
         foreach (string extra in invocation.ExtraArgs)
             yield return extra;
         yield return "--json-progress";

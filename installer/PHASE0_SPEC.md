@@ -153,8 +153,9 @@ Passi, nell'ordine:
     (Release v1.0.0, sha256 verificato), o `--tools-zip` per la parte tools.zip;
 19. `gui-settings` — pre-seeda `gui_cmnet2_settings.json` (solo se assente):
     percorsi di `scripts/`, `vspipe`, tool, cartella di lavoro e `model_name`
-    di default (`qwen21-viggle`); su file esistente riempie solo i valori
-    vuoti (`hf_cache`, `model_name`), senza mai sovrascrivere;
+    di default (`qwen21-viggle`, o `longcat-gguf` con precision `q3` via
+    `--default-model`); su file esistente riempie solo i valori vuoti
+    (`hf_cache`, `model_name`/`model_precision`), senza mai sovrascrivere;
 20. `launchers` — scrive i launcher in `<install>`: `HAVC.cmd`/`HAVC.vbs`
     (**front-end di default = GUI**), `HAVC-Server.cmd` (server con scelta
     modello), `HAVC-Doctor.cmd`; riscritti se il contenuto differisce;
@@ -164,6 +165,7 @@ Passi, nell'ordine:
 Flag: `--install-dir` (obbligatorio), `--python`, `--runtime-zip`,
 `--tools-zip`, `--with-dinov2`, `--use-system-python`, `--assets-dir`,
 `--wheel`, `--models-dir <dir>` (wiring cartella modelli, Fase 1),
+`--default-model <nome>` (modello GUI di default nel seed settings),
 `--only a,b`, `--plan`, `--dry-run`, `--json-progress`.
 
 Exit code: `0` = ok (anche se tutto era già a posto), `1` = passo fallito,

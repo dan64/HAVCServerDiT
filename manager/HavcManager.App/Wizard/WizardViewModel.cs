@@ -58,6 +58,7 @@ public sealed class WizardViewModel : INotifyPropertyChanged
     private bool _isRunning;
     private bool _isBusy;
     private bool _preflightDone;
+    private string? _defaultModelName;
     private bool _dirtyWarningVisible;
 
     public WizardViewModel(AppOptions options) => _options = options;
@@ -137,8 +138,9 @@ public sealed class WizardViewModel : INotifyPropertyChanged
     public ObservableCollection<string> InstalledLines { get; } = new();
 
     /// <summary>
-    /// Fixed default model for "Start server" (launcher argument; `qwen21`
-    /// maps to qwen21_viggle.json). Other models are chosen in the HAVC GUI.
+    /// Nominal default model for "Start server" (launcher argument; `qwen21`
+    /// maps to qwen21_viggle.json; `longcat3` → longcat_gguf_q3.json when the
+    /// preflight switches the default). Other models via the HAVC GUI.
     /// </summary>
     public const string DefaultBackend = "qwen21";
 
@@ -268,6 +270,7 @@ public sealed class WizardViewModel : INotifyPropertyChanged
             var report = await new Preflight()
                 .RunAsync(InstallDir, ModelsDir, ResolveManifestSource());
             _preflightReport = report;
+            _defaultModelName = report.DefaultModelName;
             foreach (PreflightCheck check in report.Checks)
                 PreflightChecks.Add(check);
         }
@@ -325,7 +328,11 @@ public sealed class WizardViewModel : INotifyPropertyChanged
             return;
         InstallOutcome outcome = await RunFlowOnProgressAsync(
             reset: true,
-            (observe, ct) => _flow!.RunAsync(new InstallPlan(_manifest, InstallDir, ModelsDir, WithDinov2: true), observe, ct));
+            (observe, ct) => _flow!.RunAsync(
+                new InstallPlan(
+                    _manifest, InstallDir, ModelsDir, WithDinov2: true,
+                    DefaultModel: _defaultModelName ?? Preflight.DefaultModelForThisMachine()),
+                observe, ct));
         if (outcome.Ok)
         {
             StatusText = Strings.StatusFinishing;
@@ -412,7 +419,11 @@ public sealed class WizardViewModel : INotifyPropertyChanged
         string? oldWheel = UpdateEngine.FindCachedWheel(cacheDir, state.AppVersion);
         InstallOutcome outcome = await RunFlowOnProgressAsync(
             reset: true,
-            (observe, ct) => _flow!.RunAsync(new InstallPlan(_updateManifest, InstallDir, ModelsDir, WithDinov2: true), observe, ct));
+            (observe, ct) => _flow!.RunAsync(
+                new InstallPlan(
+                    _updateManifest, InstallDir, ModelsDir, WithDinov2: true,
+                    DefaultModel: Preflight.DefaultModelForThisMachine()),
+                observe, ct));
 
         if (outcome.Ok)
         {
@@ -453,7 +464,8 @@ public sealed class WizardViewModel : INotifyPropertyChanged
             var repair = new RepairPlan(
                 InstallDir, ModelsDir, PythonRuntime.PythonExePath(InstallDir), oldWheel,
                 RuntimeArchive: RuntimeArchivePath(state, cacheDir),
-                WithDinov2: true);
+                WithDinov2: true,
+                DefaultModel: Preflight.DefaultModelForThisMachine());
             InstallOutcome rollback = await RunFlowOnProgressAsync(
                 reset: false,
                 (observe, ct) => _flow!.RunRepairAsync(repair, observe, ct));
@@ -508,7 +520,8 @@ public sealed class WizardViewModel : INotifyPropertyChanged
         var plan = new RepairPlan(
             InstallDir, ModelsDir, PythonRuntime.PythonExePath(InstallDir), wheel,
             RuntimeArchive: RuntimeArchivePath(state, cacheDir),
-            WithDinov2: true);
+            WithDinov2: true,
+            DefaultModel: Preflight.DefaultModelForThisMachine());
         InstallOutcome outcome = await RunFlowOnProgressAsync(
             reset: true,
             (observe, ct) => _flow!.RunRepairAsync(plan, observe, ct));
@@ -653,7 +666,7 @@ public sealed class WizardViewModel : INotifyPropertyChanged
                 ? new RuntimeState { Name = runtime.Name, Sha256 = runtime.Sha256, Python = runtime.Python }
                 : null,
             Dinov2 = true,
-            BackendDefault = DefaultBackend,
+            BackendDefault = BackendArgFor(_defaultModelName ?? "qwen21-viggle"),
             LastVerify = new LastVerifyState
             {
                 Ts = DateTimeOffset.UtcNow.ToString("o"),
@@ -778,6 +791,13 @@ public sealed class WizardViewModel : INotifyPropertyChanged
         => ShellIntegration.StartServer(
             InstallDir,
             Existing?.State.BackendDefault is { Length: > 0 } backend ? backend : DefaultBackend);
+
+    /// <summary>HAVC-Server.cmd argument for a GUI model name (launcher mapping).</summary>
+    private static string BackendArgFor(string guiModelName) => guiModelName switch
+    {
+        "longcat-gguf" => "longcat3",
+        _ => DefaultBackend,
+    };
 
     public void OpenReleaseNotes()
     {

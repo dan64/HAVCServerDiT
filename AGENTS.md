@@ -662,3 +662,16 @@ storico.*
   backend". Sul test install: settings GUI con `model_name`, `install.json`
   allineato (backend `qwen21`, app/last_verify 0.1.4, wheel 0.1.4 in
   `cache/`).
+- **2026-10-05 (31)** — **Fix: l'exe copiato in `<install>` non partiva
+  (build multi-file).** Trovato per strada verificando la pagina Installed:
+  `CopyManagerTo` copiava solo l'exe framework-dependent → host error
+  `0x8000809A` all'avvio (mancano `HavcManager.App.dll` e i file host).
+  Ora `ShellIntegration.CopyApplicationFiles` copia accanto all'apphost
+  l'exe + `HavcManager.App.dll` + `HavcManager.Core.dll` + `*.deps.json`/
+  `*.runtimeconfig.json` (no-op su single-file publish: `Assembly.Location`
+  vuoto); usata da `CopyManagerTo` e dalla copia temp dell'uninstall (ora in
+  cartella dedicata `%TEMP%\HAVCManager-uninstall-*`, rimossa interamente
+  dal worker). Verifiche: build 0 warning; unit 24/24; deploy reale della
+  funzione sulla cartella di test → l'exe installato parte (finestra "HAVC
+  Setup", Installed senza combo, Start server; versione 0.1.4). Da provare
+  al primo disinstallo reale: il percorso uninstall end-to-end.

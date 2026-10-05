@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace HavcManager.Core.Bootstrap;
@@ -6,6 +7,10 @@ namespace HavcManager.Core.Bootstrap;
 /// One event line emitted by the bootstrap in --json-progress mode
 /// (protocol: PHASE0_SPEC §5, emitted by havc/progress.py).
 /// Known kinds: plan, step_begin, step_ok, step_skip, step_error, log, result.
+///
+/// Note: the `steps` field carries different shapes depending on the event —
+/// an array of step objects for `plan`, a step count (number) for `result`;
+/// use <see cref="PlanSteps"/> and <see cref="StepCount"/> to read it.
 /// </summary>
 public sealed record BootstrapEvent
 {
@@ -19,7 +24,29 @@ public sealed record BootstrapEvent
     [JsonPropertyName("remediation")] public string? Remediation { get; init; }
     [JsonPropertyName("message")] public string? Message { get; init; }
     [JsonPropertyName("ok")] public bool? Ok { get; init; }
-    [JsonPropertyName("steps")] public IReadOnlyList<PlanStep>? Steps { get; init; }
+    [JsonPropertyName("steps")] public JsonElement? Steps { get; init; }
+
+    /// <summary>Steps of a `plan` event; null for every other kind.</summary>
+    public IReadOnlyList<PlanStep>? PlanSteps
+    {
+        get
+        {
+            if (Steps is not { } element || element.ValueKind != JsonValueKind.Array)
+                return null;
+            return element.Deserialize<List<PlanStep>>();
+        }
+    }
+
+    /// <summary>Step count of a `result` event; null for every other kind.</summary>
+    public int? StepCount
+    {
+        get
+        {
+            if (Steps is not { } element || element.ValueKind != JsonValueKind.Number)
+                return null;
+            return element.GetInt32();
+        }
+    }
 }
 
 /// <summary>One entry of the plan event (id, title and optional skip reason).</summary>

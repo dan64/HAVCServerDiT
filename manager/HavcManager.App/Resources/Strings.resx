@@ -61,16 +61,151 @@
   <data name="AppTitle" xml:space="preserve">
     <value>HAVC Setup</value>
   </data>
-  <data name="WelcomeTitle" xml:space="preserve">
-    <value>HAVC Manager</value>
+  <data name="Back" xml:space="preserve">
+    <value>Back</value>
   </data>
-  <data name="WelcomeSubtitle" xml:space="preserve">
-    <value>Installer and updater for HAVC Server + GUI. This build is the M1 skeleton: the installation flow arrives in the next milestone.</value>
+  <data name="Browse" xml:space="preserve">
+    <value>Browse…</value>
+  </data>
+  <data name="Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="Close" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="ComponentsDinov2" xml:space="preserve">
+    <value>DINOv2 weights included</value>
+  </data>
+  <data name="ComponentsServerGui" xml:space="preserve">
+    <value>Server + GUI (fixed in this version)</value>
+  </data>
+  <data name="ComponentsTitle" xml:space="preserve">
+    <value>Components</value>
+  </data>
+  <data name="Continue" xml:space="preserve">
+    <value>Continue</value>
+  </data>
+  <data name="DesktopShortcutCheck" xml:space="preserve">
+    <value>Also create a desktop shortcut</value>
+  </data>
+  <data name="ErrorTitle" xml:space="preserve">
+    <value>Error</value>
+  </data>
+  <data name="FinishTitle" xml:space="preserve">
+    <value>Installation complete</value>
+  </data>
+  <data name="FinishVersionLabel" xml:space="preserve">
+    <value>HAVC installed:</value>
+  </data>
+  <data name="FoldersTitle" xml:space="preserve">
+    <value>Folders</value>
+  </data>
+  <data name="ForceStop" xml:space="preserve">
+    <value>Force stop</value>
+  </data>
+  <data name="Install" xml:space="preserve">
+    <value>Install</value>
+  </data>
+  <data name="InstalledTitle" xml:space="preserve">
+    <value>HAVC is already installed</value>
+  </data>
+  <data name="LabelInstallFolder" xml:space="preserve">
+    <value>Install folder</value>
+  </data>
+  <data name="LabelModelsFolder" xml:space="preserve">
+    <value>Models folder</value>
+  </data>
+  <data name="LogLabel" xml:space="preserve">
+    <value>Log</value>
+  </data>
+  <data name="ModelsHint" xml:space="preserve">
+    <value>Shared Hugging Face cache and ComfyUI models. Updates reuse this folder; uninstalling keeps it.</value>
+  </data>
+  <data name="OpenFolderButton" xml:space="preserve">
+    <value>Open folder</value>
+  </data>
+  <data name="OpenGui" xml:space="preserve">
+    <value>Open HAVC GUI</value>
+  </data>
+  <data name="OpenReleaseNotes" xml:space="preserve">
+    <value>Open release notes</value>
+  </data>
+  <data name="OpenWorkFolderButton" xml:space="preserve">
+    <value>Open work folder</value>
+  </data>
+  <data name="PreflightRunning" xml:space="preserve">
+    <value>Running checks…</value>
+  </data>
+  <data name="PreflightTitle" xml:space="preserve">
+    <value>Preflight checks</value>
+  </data>
+  <data name="ProgressTitle" xml:space="preserve">
+    <value>Installing…</value>
+  </data>
+  <data name="SetupVersionLabel" xml:space="preserve">
+    <value>Setup version</value>
+  </data>
+  <data name="ShowLogButton" xml:space="preserve">
+    <value>Show log</value>
   </data>
   <data name="StartInstallation" xml:space="preserve">
     <value>Start installation</value>
   </data>
-  <data name="NotImplementedYet" xml:space="preserve">
-    <value>Not implemented yet: the installation flow arrives in a later milestone (M2).</value>
+  <data name="StartServerButton" xml:space="preserve">
+    <value>Start server</value>
+  </data>
+  <data name="StatusFailed" xml:space="preserve">
+    <value>Installation failed.</value>
+  </data>
+  <data name="StatusFetchingManifest" xml:space="preserve">
+    <value>Fetching the release manifest…</value>
+  </data>
+  <data name="StatusFinishing" xml:space="preserve">
+    <value>Finishing…</value>
+  </data>
+  <data name="StatusPreparing" xml:space="preserve">
+    <value>Preparing…</value>
+  </data>
+  <data name="StatusStopped" xml:space="preserve">
+    <value>Stopped. Run the installer again to resume (it continues from where it left off).</value>
+  </data>
+  <data name="StatusStopping" xml:space="preserve">
+    <value>Stopping after the current step…</value>
+  </data>
+  <data name="SummaryFilesLabel" xml:space="preserve">
+    <value>Will be downloaded:</value>
+  </data>
+  <data name="SummaryTitle" xml:space="preserve">
+    <value>Summary</value>
+  </data>
+  <data name="SummaryVersionLabel" xml:space="preserve">
+    <value>Version</value>
+  </data>
+  <data name="UninstallButton" xml:space="preserve">
+    <value>Uninstall</value>
+  </data>
+  <data name="UninstallConfirmButton" xml:space="preserve">
+    <value>Remove</value>
+  </data>
+  <data name="UninstallDeleteModelsCheck" xml:space="preserve">
+    <value>Also delete the models folder (models will need to be downloaded again).</value>
+  </data>
+  <data name="UninstallDialogText" xml:space="preserve">
+    <value>Remove HAVC from this PC? Shortcuts and registry entries will be removed.</value>
+  </data>
+  <data name="UninstallDialogTitle" xml:space="preserve">
+    <value>Uninstall HAVC</value>
+  </data>
+  <data name="UninstallDoneMessage" xml:space="preserve">
+    <value>HAVC was removed.</value>
+  </data>
+  <data name="UninstallPartialMessage" xml:space="preserve">
+    <value>Some files could not be removed — see the details below:</value>
+  </data>
+  <data name="WelcomeSubtitle" xml:space="preserve">
+    <value>Install HAVC Server + GUI on this PC.</value>
+  </data>
+  <data name="WelcomeTitle" xml:space="preserve">
+    <value>HAVC Manager</value>
   </data>
 </root>

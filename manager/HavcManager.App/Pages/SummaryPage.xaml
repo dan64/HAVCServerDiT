@@ -1,0 +1,43 @@
+<UserControl x:Class="HavcManager.App.Pages.SummaryPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:res="clr-namespace:HavcManager.App.Resources">
+    <Grid Margin="32">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Text="{x:Static res:Strings.SummaryTitle}"
+                   FontSize="22" FontWeight="SemiBold"/>
+        <StackPanel Grid.Row="1" Margin="0,16,0,0">
+            <TextBlock Text="{Binding ManifestVersionText}" FontWeight="SemiBold"/>
+            <TextBlock Margin="0,6,0,0">
+                <Hyperlink Click="OnNotesClick">
+                    <Run Text="{x:Static res:Strings.OpenReleaseNotes}"/>
+                </Hyperlink>
+            </TextBlock>
+
+            <TextBlock Text="{x:Static res:Strings.SummaryFilesLabel}"
+                       FontWeight="SemiBold" Margin="0,18,0,6"/>
+            <ScrollViewer Height="220" VerticalScrollBarVisibility="Auto">
+                <ItemsControl ItemsSource="{Binding SummaryLines}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding}" FontFamily="Consolas" FontSize="12"
+                                       TextWrapping="Wrap" Margin="0,1"/>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </StackPanel>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+            <Button Content="{x:Static res:Strings.Back}" Padding="16,8" Margin="0,0,8,0"
+                    Click="OnBackClick"/>
+            <Button Content="{x:Static res:Strings.Install}" Padding="18,9"
+                    Click="OnInstallClick"/>
+        </StackPanel>
+    </Grid>
+</UserControl>

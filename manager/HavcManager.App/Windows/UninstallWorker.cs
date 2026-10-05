@@ -1,0 +1,53 @@
+using System.Diagnostics;
+using System.IO;
+
+namespace HavcManager.App.Windows;
+
+/// <summary>
+/// Self-removal worker (PHASE1_SPEC §6.5): the manager copies itself to %TEMP%
+/// and re-launches with --uninstall-run &lt;dir&gt;; this worker waits for the
+/// original process to release the files, deletes the install folder and
+/// removes its own temporary copy.
+/// </summary>
+internal static class UninstallWorker
+{
+    public static void Run(string installDir)
+    {
+        for (int attempt = 0; attempt < 120; attempt++)
+        {
+            try
+            {
+                if (!Directory.Exists(installDir))
+                    break;
+                Directory.Delete(installDir, recursive: true);
+                break;
+            }
+            catch (IOException)
+            {
+                Thread.Sleep(500);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                Thread.Sleep(500);
+            }
+        }
+
+        string? self = Environment.ProcessPath;
+        if (self is not null)
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo(
+                    "cmd.exe",
+                    $"/c ping -n 2 127.0.0.1 >nul & del /f /q \"{self}\"")
+                {
+                    CreateNoWindow = true,
+                    UseShellExecute = false,
+                });
+            }
+            catch (System.ComponentModel.Win32Exception)
+            {
+            }
+        }
+    }
+}

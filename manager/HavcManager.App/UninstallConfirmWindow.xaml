@@ -1,0 +1,20 @@
+<Window x:Class="HavcManager.App.UninstallConfirmWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:res="clr-namespace:HavcManager.App.Resources"
+        Title="{x:Static res:Strings.UninstallDialogTitle}"
+        Width="460" SizeToContent="Height" ResizeMode="NoResize"
+        ShowInTaskbar="False" WindowStartupLocation="CenterOwner">
+    <StackPanel Margin="20">
+        <TextBlock Text="{x:Static res:Strings.UninstallDialogText}" TextWrapping="Wrap"/>
+        <CheckBox x:Name="DeleteModelsCheck" Margin="0,14,0,0">
+            <TextBlock Text="{x:Static res:Strings.UninstallDeleteModelsCheck}" TextWrapping="Wrap"/>
+        </CheckBox>
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
+            <Button Content="{x:Static res:Strings.Cancel}" IsCancel="True"
+                    Padding="14,7" Margin="0,0,8,0"/>
+            <Button Content="{x:Static res:Strings.UninstallConfirmButton}" IsDefault="True"
+                    Padding="14,7" Click="OnRemoveClick"/>
+        </StackPanel>
+    </StackPanel>
+</Window>

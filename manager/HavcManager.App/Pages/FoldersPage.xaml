@@ -1,0 +1,55 @@
+<UserControl x:Class="HavcManager.App.Pages.FoldersPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:res="clr-namespace:HavcManager.App.Resources">
+    <Grid Margin="32">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Text="{x:Static res:Strings.FoldersTitle}"
+                   FontSize="22" FontWeight="SemiBold"/>
+
+        <StackPanel Grid.Row="1" Margin="0,16,0,0">
+            <TextBlock Text="{x:Static res:Strings.LabelInstallFolder}" FontWeight="SemiBold"/>
+            <Grid Margin="0,6,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBox Text="{Binding InstallDir, UpdateSourceTrigger=PropertyChanged}"
+                         Padding="6,5" VerticalContentAlignment="Center"/>
+                <Button Grid.Column="1" Content="{x:Static res:Strings.Browse}"
+                        Margin="8,0,0,0" Padding="12,6" Click="OnBrowseInstall"/>
+            </Grid>
+
+            <TextBlock Text="{x:Static res:Strings.LabelModelsFolder}" FontWeight="SemiBold"
+                       Margin="0,18,0,0"/>
+            <Grid Margin="0,6,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBox Text="{Binding ModelsDir, UpdateSourceTrigger=PropertyChanged}"
+                         Padding="6,5" VerticalContentAlignment="Center"/>
+                <Button Grid.Column="1" Content="{x:Static res:Strings.Browse}"
+                        Margin="8,0,0,0" Padding="12,6" Click="OnBrowseModels"/>
+            </Grid>
+            <TextBlock Text="{x:Static res:Strings.ModelsHint}" Opacity="0.7"
+                       FontSize="12" TextWrapping="Wrap" Margin="0,6,0,0"/>
+
+            <CheckBox Content="{x:Static res:Strings.DesktopShortcutCheck}"
+                      Margin="0,18,0,0" IsChecked="{Binding DesktopShortcut}"/>
+            <TextBlock Text="{Binding StatusText}" Margin="0,16,0,0" Opacity="0.8"/>
+        </StackPanel>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+            <Button Content="{x:Static res:Strings.Back}" Padding="16,8" Margin="0,0,8,0"
+                    Click="OnBackClick"/>
+            <Button Content="{x:Static res:Strings.Continue}" Padding="16,8"
+                    Click="OnContinueClick" IsEnabled="{Binding IsNotBusy}"/>
+        </StackPanel>
+    </Grid>
+</UserControl>

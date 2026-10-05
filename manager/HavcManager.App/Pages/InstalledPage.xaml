@@ -1,0 +1,39 @@
+<UserControl x:Class="HavcManager.App.Pages.InstalledPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:res="clr-namespace:HavcManager.App.Resources">
+    <Grid Margin="32">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Text="{x:Static res:Strings.InstalledTitle}"
+                   FontSize="22" FontWeight="SemiBold"/>
+        <StackPanel Grid.Row="1" Margin="0,16,0,0">
+            <TextBlock FontSize="14">
+                <Run Text="{x:Static res:Strings.SummaryVersionLabel}"/><Run Text=": "/><Run Text="{Binding Existing.State.AppVersion, Mode=OneWay}"/>
+            </TextBlock>
+            <TextBlock Margin="0,8,0,0" FontSize="13" TextWrapping="Wrap">
+                <Run Text="{x:Static res:Strings.LabelInstallFolder}"/><Run Text=": "/><Run Text="{Binding Existing.InstallDir, Mode=OneWay}"/>
+            </TextBlock>
+            <TextBlock Margin="0,8,0,0" FontSize="13" TextWrapping="Wrap">
+                <Run Text="{x:Static res:Strings.LabelModelsFolder}"/><Run Text=": "/><Run Text="{Binding Existing.State.ModelsDir, Mode=OneWay}"/>
+            </TextBlock>
+            <TextBlock Margin="0,18,0,0" Opacity="0.6" FontSize="12" TextWrapping="Wrap">
+                Updating and repairing arrive in a later milestone.
+            </TextBlock>
+        </StackPanel>
+
+        <WrapPanel Grid.Row="2" HorizontalAlignment="Right" Margin="0,16,0,0">
+            <Button Content="{x:Static res:Strings.OpenGui}" Padding="16,9" Margin="0,0,8,0"
+                    Click="OnOpenGuiClick"/>
+            <Button Content="{x:Static res:Strings.OpenFolderButton}" Padding="16,9" Margin="0,0,8,0"
+                    Click="OnOpenFolderClick"/>
+            <Button Content="{x:Static res:Strings.UninstallButton}" Padding="16,9" Margin="0,0,8,0"
+                    Click="OnUninstallClick"/>
+            <Button Content="{x:Static res:Strings.Close}" Padding="16,9" Click="OnCloseClick"/>
+        </WrapPanel>
+    </Grid>
+</UserControl>

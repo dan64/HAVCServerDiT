@@ -16,11 +16,101 @@ public static class Strings
 
     public static string AppTitle => ResourceManager.GetString("AppTitle")!;
 
-    public static string WelcomeTitle => ResourceManager.GetString("WelcomeTitle")!;
+    public static string Back => ResourceManager.GetString("Back")!;
 
-    public static string WelcomeSubtitle => ResourceManager.GetString("WelcomeSubtitle")!;
+    public static string Browse => ResourceManager.GetString("Browse")!;
+
+    public static string Cancel => ResourceManager.GetString("Cancel")!;
+
+    public static string Close => ResourceManager.GetString("Close")!;
+
+    public static string ComponentsDinov2 => ResourceManager.GetString("ComponentsDinov2")!;
+
+    public static string ComponentsServerGui => ResourceManager.GetString("ComponentsServerGui")!;
+
+    public static string ComponentsTitle => ResourceManager.GetString("ComponentsTitle")!;
+
+    public static string Continue => ResourceManager.GetString("Continue")!;
+
+    public static string DesktopShortcutCheck => ResourceManager.GetString("DesktopShortcutCheck")!;
+
+    public static string ErrorTitle => ResourceManager.GetString("ErrorTitle")!;
+
+    public static string FinishTitle => ResourceManager.GetString("FinishTitle")!;
+
+    public static string FinishVersionLabel => ResourceManager.GetString("FinishVersionLabel")!;
+
+    public static string FoldersTitle => ResourceManager.GetString("FoldersTitle")!;
+
+    public static string ForceStop => ResourceManager.GetString("ForceStop")!;
+
+    public static string Install => ResourceManager.GetString("Install")!;
+
+    public static string InstalledTitle => ResourceManager.GetString("InstalledTitle")!;
+
+    public static string LabelInstallFolder => ResourceManager.GetString("LabelInstallFolder")!;
+
+    public static string LabelModelsFolder => ResourceManager.GetString("LabelModelsFolder")!;
+
+    public static string LogLabel => ResourceManager.GetString("LogLabel")!;
+
+    public static string ModelsHint => ResourceManager.GetString("ModelsHint")!;
+
+    public static string OpenFolderButton => ResourceManager.GetString("OpenFolderButton")!;
+
+    public static string OpenGui => ResourceManager.GetString("OpenGui")!;
+
+    public static string OpenReleaseNotes => ResourceManager.GetString("OpenReleaseNotes")!;
+
+    public static string OpenWorkFolderButton => ResourceManager.GetString("OpenWorkFolderButton")!;
+
+    public static string PreflightRunning => ResourceManager.GetString("PreflightRunning")!;
+
+    public static string PreflightTitle => ResourceManager.GetString("PreflightTitle")!;
+
+    public static string ProgressTitle => ResourceManager.GetString("ProgressTitle")!;
+
+    public static string SetupVersionLabel => ResourceManager.GetString("SetupVersionLabel")!;
+
+    public static string ShowLogButton => ResourceManager.GetString("ShowLogButton")!;
 
     public static string StartInstallation => ResourceManager.GetString("StartInstallation")!;
 
-    public static string NotImplementedYet => ResourceManager.GetString("NotImplementedYet")!;
+    public static string StartServerButton => ResourceManager.GetString("StartServerButton")!;
+
+    public static string StatusFailed => ResourceManager.GetString("StatusFailed")!;
+
+    public static string StatusFetchingManifest => ResourceManager.GetString("StatusFetchingManifest")!;
+
+    public static string StatusFinishing => ResourceManager.GetString("StatusFinishing")!;
+
+    public static string StatusPreparing => ResourceManager.GetString("StatusPreparing")!;
+
+    public static string StatusStopped => ResourceManager.GetString("StatusStopped")!;
+
+    public static string StatusStopping => ResourceManager.GetString("StatusStopping")!;
+
+    public static string SummaryFilesLabel => ResourceManager.GetString("SummaryFilesLabel")!;
+
+    public static string SummaryTitle => ResourceManager.GetString("SummaryTitle")!;
+
+    public static string SummaryVersionLabel => ResourceManager.GetString("SummaryVersionLabel")!;
+
+    public static string UninstallButton => ResourceManager.GetString("UninstallButton")!;
+
+    public static string UninstallConfirmButton => ResourceManager.GetString("UninstallConfirmButton")!;
+
+    public static string UninstallDeleteModelsCheck => ResourceManager.GetString("UninstallDeleteModelsCheck")!;
+
+    public static string UninstallDialogText => ResourceManager.GetString("UninstallDialogText")!;
+
+    public static string UninstallDialogTitle => ResourceManager.GetString("UninstallDialogTitle")!;
+
+    public static string UninstallDoneMessage => ResourceManager.GetString("UninstallDoneMessage")!;
+
+    public static string UninstallPartialMessage => ResourceManager.GetString("UninstallPartialMessage")!;
+
+    public static string WelcomeSubtitle => ResourceManager.GetString("WelcomeSubtitle")!;
+
+    public static string WelcomeTitle => ResourceManager.GetString("WelcomeTitle")!;
 }

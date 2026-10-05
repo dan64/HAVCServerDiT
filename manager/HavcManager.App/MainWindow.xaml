@@ -3,32 +3,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:res="clr-namespace:HavcManager.App.Resources"
         Title="{x:Static res:Strings.AppTitle}"
-        Width="640" Height="420"
+        Width="780" Height="580"
+        MinWidth="680" MinHeight="480"
         WindowStartupLocation="CenterScreen">
-    <Grid Margin="32">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
-
-        <TextBlock Grid.Row="0"
-                   Text="{x:Static res:Strings.WelcomeTitle}"
-                   FontSize="26"
-                   FontWeight="SemiBold"/>
-        <TextBlock Grid.Row="1"
-                   Text="{x:Static res:Strings.WelcomeSubtitle}"
-                   FontSize="13"
-                   Opacity="0.7"
-                   TextWrapping="Wrap"
-                   Margin="0,10,0,0"/>
-
-        <Button Grid.Row="3"
-                x:Name="StartInstallationButton"
-                Content="{x:Static res:Strings.StartInstallation}"
-                Padding="18,9"
-                HorizontalAlignment="Left"
-                Click="OnStartInstallationClick"/>
-    </Grid>
+    <ContentControl x:Name="Root"/>
 </Window>

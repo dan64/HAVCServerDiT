@@ -43,10 +43,11 @@ lock verificati sul campo (log (29)); **modello di default qwen21-viggle**
 (nessuna scelta modello nel manager — log (30); sotto 32 GB RAM → longcat-gguf
 Q3, log (34)); **disinstallo verificato sul campo** (log (35)); fallback
 manifest accanto all'exe (log (36)); **fix layout server/GUI** (log (38));
-**pre-release `v0.1.6` pubblicata** (log (39)). Restano: il run in VM,
-**README snello + `docs/`** (log (37)); reinstallare l'install di test
-(disinstallata, log (35)) e riprovare *Run Server* + *External console* dalla
-GUI (≥0.1.7, log (40)).
+**pre-release `v0.1.6` pubblicata** (log (39)); **External console** (log
+(40)); **comfy self-contained + niente cartella modelli** (D14, log (41);
+staging `v0.1.8`). Restano: il run in VM, **README snello + `docs/`** (log
+(37)); pubblicare la pre-release `v0.1.8`; ritestare *Run Server* /
+*External console* sull'install fresco `D:\HAVCServerDiT` (autore).
 **Decisione SDK chiusa (05-10)**: target **.NET 10** — SDK **10.0.401**
 installato machine-wide (standalone) e **VS 2026** (Community v18.10)
 installato lo stesso giorno: l'MSBuild 18.10 compila `net10` (smoke WPF verde)
@@ -60,11 +61,12 @@ aggiornata a havc 0.1.1 (smoke/update/idempotenza: `install-run8/9/10.log`
 nella radice). Check rapido: `venv\Scripts\havc-doctor.exe` (9 verdi); avvio:
 doppio click su `HAVC.vbs`.
 
-**Installazione test del manager (wizard)**: `D:\HAVC_Manager_Test` (modelli
-`D:\HAVCModels`) — installata il 05-10 via wizard (log (28)), aggiornata fino
-a havc **0.1.5**; **disinstallata** il 05-10 nel test di uninstall riuscito
-(log (35)) → da reinstallare (con `--manifest` locale finché la release non
-è pubblicata). Log dei run in `<install>\logs\bootstrap-*.jsonl`.
+**Installazione test del manager (wizard)**: `D:\HAVCServerDiT` — creata il
+05-10 dal bootstrap con la staging `v0.1.8` (23/23 step, doctor verde;
+`install.json` scritto a mano per farla riconoscere dal manager — le
+scorciatoie/registro le scrive il wizard al prossimo giro). La precedente
+`D:\HAVC_Manager_Test` è stata disinstallata (log (35)). I modelli (una
+volta scaricati) stanno in `<install>\comfy_bridge\models`, preservati.
 
 **Release coinvolte** (repo `dan64/HAVCServerDiT`; `gh` autenticato come
 `dan64`):
@@ -101,7 +103,7 @@ Set-Location D:\PProjects\HAVCServerDiT_installer
 *EOL*: i file del repo sono **LF** (`.gitattributes`); chi riscrive file
 (l'agente o uno script) usi i bytes — niente traduzione newline.
 
-**Mappa del codice nuovo (Fase 0)**: `havc/install.py` = bootstrap 22 passi
+**Mappa del codice nuovo (Fase 0)**: `havc/install.py` = bootstrap 23 passi
 (`havc-install`); `havc/doctor.py` = check ambiente (`havc-doctor`);
 `havc/runtime.py` = runtime pinnato (download/estrazione); `havc/lockfile.py`
 = parsing dei pin; `havc/progress.py` = eventi `--json-progress`;
@@ -217,6 +219,17 @@ esterni. Obiettivo di questo filone di lavoro:
   release **ufficiale** partirà dalla **versione 1.1.0**. Conseguenza: l'URL
   manifest di default del manager resta non risolvibile fino ad allora (test
   con `--release-tag` o fallback locale, log (36)).
+
+- **D14 — comfy_bridge self-contained; modelli nell'install; ritiro della
+  cartella modelli** (05-10). Il runtime ComfyUI esce dalla wheel e si
+  distribuisce come zip pinnato (`comfy_bridge_v0.30.zip`) estratto in
+  `<install>\comfy_bridge` (nuovo passo `comfy-bridge`); i modelli vivono in
+  `<install>\comfy_bridge\models` e sono **preservati** a update/ripara e in
+  disinstallazione (salvo la spunta). Ritirati: la cartella modelli del
+  wizard, `--models-dir` e i suoi wiring (`hf_cache`/`cache_dir`/
+  `HAVC_MODELS_DIR`), il mapping in `_bootstrap.py`; cache HF alla posizione
+  di default. Fixa il bug del 2026-10-05 (download vs lookup con ancore
+  diverse tra `dit_colorize_main` e `folder_paths`).
 
 ---
 
@@ -741,6 +754,29 @@ storico.*
   manifest) → per i run locali passare
   `--manifest dist\test-manifest-local.json`; la pubblicazione di `v0.1.5`
   sblocca anche il default. L'install di test è quindi **da reinstallare**.
+- **2026-10-05 (36)** — **Fallback del manifest accanto all'app (richiesta
+  autore).** Se il fetch del manifest di rete fallisce e `--manifest` non è
+  stato passato, il manager ripiega su `<exe folder>\release.json`
+  (`WizardViewModel.FetchManifestAsync` + `LocalFallbackManifestPath` —
+  `AppContext.BaseDirectory`, vale anche per la copia installata); il
+  preflight lo segnala ("…the local manifest next to the app will be
+  used"). Con `--manifest` esplicito nessun fallback (fallimento = errore,
+  come prima). Spec §6.2/§11. Verifiche: build 0 warning; unit 27/27; UI
+  (UIA): **A)** wizard senza `--manifest` con `release.json` accanto all'exe
+  → preflight col messaggio di fallback + Summary "Version: 0.1.5"; **B)**
+  `--manifest` inesistente (col file presente) → dialog d'errore "Could not
+  find file", resta su Folders (nessun fallback). Utile finché la release
+  non è pubblicata e per usi "portable".
+- **2026-10-05 (37)** — **Politica release: pre-release fino alla 1.1.0;
+  inventario v0.1.5; prossimi lavori.** Decisione autore: le release del
+  flusso installer restano **pre-release** (`--prerelease`, mai Latest, D13);
+  la prima release ufficiale partirà dalla **1.1.0**; il manifest di default
+  resta quindi 404 fino ad allora (test con `--release-tag vX` o fallback
+  locale). Inventario di pubblicazione v0.1.5 definito (5 asset: wheel havc +
+  vscmnet2 + spatial_correlation_sampler + diffusers + `release.json`;
+  **niente exe del manager** — il publish single-file è lavoro futuro).
+  Prossimi lavori indicati dall'autore: **README più snello** (1048 righe) +
+  **cartella `docs/`** con sezioni comuni (install, what's new, …).
 - **2026-10-05 (38)** — **Fix layout installato: il server dalla GUI non
   partiva.** Segnalazione autore (install in `%LOCALAPPDATA%\HAVCServerDiT`):
   la GUI avvia il server per file path (`<install>\dit_rpc_server.py`,
@@ -789,26 +825,27 @@ storico.*
   `run_server_qwen21.cmd` → `…qwen21_viggle.json`. Da fare: update
   dell'install a ≥0.1.7 per provare *External console*; eventuale
   pubblicazione della pre-release v0.1.7.
-- **2026-10-05 (36)** — **Fallback del manifest accanto all'app (richiesta
-  autore).** Se il fetch del manifest di rete fallisce e `--manifest` non è
-  stato passato, il manager ripiega su `<exe folder>\release.json`
-  (`WizardViewModel.FetchManifestAsync` + `LocalFallbackManifestPath` —
-  `AppContext.BaseDirectory`, vale anche per la copia installata); il
-  preflight lo segnala ("…the local manifest next to the app will be
-  used"). Con `--manifest` esplicito nessun fallback (fallimento = errore,
-  come prima). Spec §6.2/§11. Verifiche: build 0 warning; unit 27/27; UI
-  (UIA): **A)** wizard senza `--manifest` con `release.json` accanto all'exe
-  → preflight col messaggio di fallback + Summary "Version: 0.1.5"; **B)**
-  `--manifest` inesistente (col file presente) → dialog d'errore "Could not
-  find file", resta su Folders (nessun fallback). Utile finché la release
-  non è pubblicata e per usi "portable".
-- **2026-10-05 (37)** — **Politica release: pre-release fino alla 1.1.0;
-  inventario v0.1.5; prossimi lavori.** Decisione autore: le release del
-  flusso installer restano **pre-release** (`--prerelease`, mai Latest, D13);
-  la prima release ufficiale partirà dalla **1.1.0**; il manifest di default
-  resta quindi 404 fino ad allora (test con `--release-tag vX` o fallback
-  locale). Inventario di pubblicazione v0.1.5 definito (5 asset: wheel havc +
-  vscmnet2 + spatial_correlation_sampler + diffusers + `release.json`;
-  **niente exe del manager** — il publish single-file è lavoro futuro).
-  Prossimi lavori indicati dall'autore: **README più snello** (1048 righe) +
-  **cartella `docs/`** con sezioni comuni (install, what's new, …).
+- **2026-10-05 (41)** — **comfy_bridge self-contained + fine della cartella
+  modelli (D14).** Bug segnalato dall'autore (*Run Server* falliva con
+  `FileNotFoundError: qwen_image_2.1_int8_convrot.safetensors`): download e
+  lookup usavano **ancore diverse** (`dirname(dit_colorize_main)\comfy_bridge\
+  models` vs `dirname(folder_paths)\models` = site-packages; in `_dev`
+  coincidono). Soluzione concordata: **`comfy_bridge` fuori dalla wheel →
+  `comfy_bridge_v0.30.zip`** (script `installer/build_comfy_zip.py`; asset
+  nel manifest con `kind: comfy-bridge`), estratto dal nuovo passo bootstrap
+  **`comfy-bridge`** in `<install>\comfy_bridge` **preservando `models/`**
+  (marker `.source`; `--comfy-zip`/assets-dir per staging/offline). Ritirati:
+  cartella modelli del wizard, `--models-dir`, wiring
+  `hf_cache`/`cache_dir`/`HAVC_MODELS_DIR`, mapping in `_bootstrap.py`;
+  cache HF alla posizione di default. Manager: preflight senza riga models
+  (soglia install ~30 GB), Folders senza campo (nota informativa),
+  `InstallState.models_dir` legacy, disinstallazione con
+  `InstallTreeCleanup` (tiene `comfy_bridge\models`; worker con
+  `--uninstall-delete-models`), +3 unit test. havc **0.1.8** (wheel ~10,7 →
+  ~0,11 MB; step 22 → **23**). Verifiche: build 0 warning; 30/30 unit;
+  zip/estrazione/preservazione/assets-dir su scratch; **install fresco su
+  `D:\HAVCServerDiT`** (23/23, doctor verde) → `comfy_bridge` importato
+  dalla root, `models_dir` = `<root>\comfy_bridge\models`, server su +
+  `ping → pong`; UI (UIA): preflight/Folders/Components senza voce modelli,
+  Installed 0.1.8. Da fare: pubblicare `v0.1.8`; test autore *Run Server*
+  (i pesi finiranno nel posto giusto).

@@ -4,7 +4,14 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
+    <!-- Installer icon (repository file: installer/Icona-havc-dit.ico). -->
+    <ApplicationIcon>..\..\installer\Icona-havc-dit.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Same icon as a WPF resource for Window.Icon (title bar). -->
+    <Resource Include="..\..\installer\Icona-havc-dit.ico" Link="Resources\havc.ico" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\HavcManager.Core\HavcManager.Core.csproj" />

@@ -591,3 +591,11 @@ storico.*
   `Force stop` → processo vivo; Event Log pulito dopo il fix. Resta: run
   completo col bootstrap pesante (utente/VM) e pagine Finish/Installed da
   esercitare davvero.
+- **2026-10-05 (27)** — **Icona dell'app.** Il manager usa
+  `installer/Icona-havc-dit.ico` (già versionata, multi-size 16–256):
+  `<ApplicationIcon>` sull'exe + risorsa WPF per `Window.Icon` (finestra
+  principale e dialog di disinstallazione); le scorciatoie Start Menu/desktop
+  puntano all'exe del manager come sorgente icona (`IconLocation`), così anche
+  "HAVC" (target `.vbs`) mostra l'icona. La voce di disinstallazione
+  (`DisplayIcon`) già puntava a `HAVCManager.exe`. Verifiche: build 0 warning;
+  frame dell'ico trovati dentro l'exe (256×256 e 32×32); smoke finestra ok.

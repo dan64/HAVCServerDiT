@@ -23,21 +23,25 @@ public static class ShellIntegration
     // ------------------------------------------------------------ shortcuts --
     public static void CreateStartMenuShortcuts(string installDir)
     {
+        string icon = Path.Combine(installDir, "HAVCManager.exe");
         CreateShortcut(
             Path.Combine(StartMenuFolder, ShortcutName),
             Path.Combine(installDir, "HAVC.vbs"),
-            installDir);
+            installDir,
+            icon);
         CreateShortcut(
             Path.Combine(StartMenuFolder, ManagerShortcutName),
             Path.Combine(installDir, "HAVCManager.exe"),
-            installDir);
+            installDir,
+            icon);
     }
 
     public static void CreateDesktopShortcut(string installDir)
         => CreateShortcut(
             Path.Combine(DesktopFolder, ShortcutName),
             Path.Combine(installDir, "HAVC.vbs"),
-            installDir);
+            installDir,
+            Path.Combine(installDir, "HAVCManager.exe"));
 
     public static void RemoveShortcuts()
     {
@@ -139,7 +143,7 @@ public static class ShellIntegration
             WorkingDirectory = workingDirectory,
         });
 
-    private static void CreateShortcut(string linkPath, string targetPath, string workingDirectory)
+    private static void CreateShortcut(string linkPath, string targetPath, string workingDirectory, string iconPath)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(linkPath)!);
         Type? shellType = Type.GetTypeFromProgID("WScript.Shell")
@@ -148,6 +152,7 @@ public static class ShellIntegration
         dynamic link = shell.CreateShortcut(linkPath);
         link.TargetPath = targetPath;
         link.WorkingDirectory = workingDirectory;
+        link.IconLocation = iconPath;
         link.Save();
     }
 }

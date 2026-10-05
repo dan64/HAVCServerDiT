@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:res="clr-namespace:HavcManager.App.Resources"
         Title="{x:Static res:Strings.AppTitle}"
+        Icon="Resources/havc.ico"
         Width="780" Height="580"
         MinWidth="680" MinHeight="480"
         WindowStartupLocation="CenterScreen">

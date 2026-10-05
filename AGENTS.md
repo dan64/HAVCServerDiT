@@ -41,8 +41,10 @@ test, poi run in VM (spec §13). M1–M3 completate; prima installazione reale
 riuscita il 05-10 (`D:\HAVC_Manager_Test` — log (28)); update/ripara/rollback/
 lock verificati sul campo (log (29)); **modello di default qwen21-viggle**
 (nessuna scelta modello nel manager — log (30); sotto 32 GB RAM → longcat-gguf
-Q3, log (34)). Restano: pubblicare la release (staging `v0.1.5` in `dist/`)
-e il run in VM.
+Q3, log (34)); **disinstallo verificato sul campo** (log (35)). Restano:
+pubblicare la release (staging `v0.1.5` in `dist/` — sblocca anche l'URL
+manifest di default) e il run in VM; da reinstallare l'install di test
+(disinstallata nel test, log (35)).
 **Decisione SDK chiusa (05-10)**: target **.NET 10** — SDK **10.0.401**
 installato machine-wide (standalone) e **VS 2026** (Community v18.10)
 installato lo stesso giorno: l'MSBuild 18.10 compila `net10` (smoke WPF verde)
@@ -57,9 +59,10 @@ nella radice). Check rapido: `venv\Scripts\havc-doctor.exe` (9 verdi); avvio:
 doppio click su `HAVC.vbs`.
 
 **Installazione test del manager (wizard)**: `D:\HAVC_Manager_Test` (modelli
-`D:\HAVCModels`) — installata il 05-10 via wizard (log (28)), havc **0.1.4**,
-`install.json` con `backend_default` `"qwen21"` (log (30)); log dei run in
-`<install>\logs\bootstrap-*.jsonl`.
+`D:\HAVCModels`) — installata il 05-10 via wizard (log (28)), aggiornata fino
+a havc **0.1.5**; **disinstallata** il 05-10 nel test di uninstall riuscito
+(log (35)) → da reinstallare (con `--manifest` locale finché la release non
+è pubblicata). Log dei run in `<install>\logs\bootstrap-*.jsonl`.
 
 **Release coinvolte** (repo `dan64/HAVCServerDiT`; `gh` autenticato come
 `dan64`):
@@ -714,3 +717,16 @@ storico.*
   install → wheel 0.1.5, launchers riscritti, doctor 9/9; UI (UIA): Installed
   0.1.5 senza combo, preflight con riga RAM OK (111.8 GB; il ramo longcat è
   coperto dai unit test).
+- **2026-10-05 (35)** — **Disinstallo reale riuscito (test dell'autore) +
+  nota manifest.** Il test di uninstall dell'autore ha cancellato tutto
+  correttamente (cartella install, registro HKCU, scorciatoie, temp-copy —
+  nessun residuo in `%TEMP%`): **conferma sul campo del fix (31)** (copia
+  completa dell'app + rmdir della cartella temp). `D:\HAVCModels` è stata
+  rimossa con la spunta *Also delete the models folder* (gate corretto in
+  codice: `deleteModels && modelsDir`; era comunque vuota). Nota per i test:
+  **il manifest di default del manager
+  (`/releases/latest/download/release.json`) dà 404** finché non si pubblica
+  una release con `release.json` (latest attuale = `v1.0.0`, senza asset
+  manifest) → per i run locali passare
+  `--manifest dist\test-manifest-local.json`; la pubblicazione di `v0.1.5`
+  sblocca anche il default. L'install di test è quindi **da reinstallare**.

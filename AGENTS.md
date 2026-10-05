@@ -39,8 +39,9 @@ all'inglese (log (16), (19)).
 **Prossimo passo — M4**: rifinitura UI/log, scorciatoie/registrazione, tag di
 test, poi run in VM (spec §13). M1–M3 completate; prima installazione reale
 riuscita il 05-10 (`D:\HAVC_Manager_Test` — log (28)); update/ripara/rollback/
-lock verificati sul campo (log (29)). Restano: pubblicare la release (staging
-`v0.1.3` in `dist/`) e il run in VM.
+lock verificati sul campo (log (29)); **modello di default qwen21-viggle**
+(nessuna scelta modello nel manager — log (30)). Restano: pubblicare la
+release (staging `v0.1.4` in `dist/`) e il run in VM.
 **Decisione SDK chiusa (05-10)**: target **.NET 10** — SDK **10.0.401**
 installato machine-wide (standalone) e **VS 2026** (Community v18.10)
 installato lo stesso giorno: l'MSBuild 18.10 compila `net10` (smoke WPF verde)
@@ -53,6 +54,11 @@ interno).
 aggiornata a havc 0.1.1 (smoke/update/idempotenza: `install-run8/9/10.log`
 nella radice). Check rapido: `venv\Scripts\havc-doctor.exe` (9 verdi); avvio:
 doppio click su `HAVC.vbs`.
+
+**Installazione test del manager (wizard)**: `D:\HAVC_Manager_Test` (modelli
+`D:\HAVCModels`) — installata il 05-10 via wizard (log (28)), havc **0.1.4**,
+`install.json` con `backend_default` `"qwen21"` (log (30)); log dei run in
+`<install>\logs\bootstrap-*.jsonl`.
 
 **Release coinvolte** (repo `dan64/HAVCServerDiT`; `gh` autenticato come
 `dan64`):
@@ -186,6 +192,13 @@ esterni. Obiettivo di questo filone di lavoro:
   verificato); `requirements/nunchaku.txt` punta al mirror. La wheel *già
   patchata* (vendorizzata) resta
   un'opzione rinviata con criterio.
+
+- **D12 — Modello di default: qwen21-viggle, nessuna scelta nel manager**
+  (05-10). Il manager non offre scelta modello: *Start server* avvia col
+  default registrato (`backend_default` = `"qwen21"` → `qwen21_viggle.json`),
+  il seed dei settings GUI installa `model_name = qwen21-viggle` (solo se
+  assente); preflight con check VRAM vs requisito del default (≥ 12 GB,
+  avviso non bloccante). Gli altri modelli si scelgono dalla GUI di HAVC.
 
 ---
 
@@ -629,3 +642,23 @@ storico.*
   (sleeper → dialog → Terminate now → repair ok). 24 test verdi. Fix: `Icon`
   dei dialoghi in sottocartella → URI root-relative; log di check
   aggiornamenti nel manager log. Prossimo: M4 + release/VM.
+- **2026-10-05 (30)** — **Modello di default qwen21-viggle; via la scelta
+  modello dal manager.** Manager: rimossa la combo *Model* dalla pagina
+  Installed (`Backends`/`SelectedBackend` via dalla VM; stringa `ModelLabel`
+  ritirata); *Start server* usa `backend_default` con fallback `"qwen21"`;
+  `FinalizeInstall` scrive `qwen21`; preflight: via il "suggerimento
+  backend", nuovo check **VRAM (default model)** (`memory.total` da
+  nvidia-smi; warning non bloccante sotto 12 GiB). Bootstrap: seed/wiring
+  `model_name = qwen21-viggle` nei settings GUI (costante
+  `DEFAULT_MODEL_NAME`; solo se assente, come `hf_cache`); step rinominato
+  "GUI settings (seeded/wired when missing)". Bump havc **0.1.4** (wheel +
+  staging `v0.1.4` + `test-manifest-local.json`); `staging-v0.1.3` rimossa
+  (superata). Spec: PHASE1 §4/§5/§6.2/§7/§8, PHASE0 punto 19. Verifiche:
+  build 0 warning; unit 24/24; bootstrap sul test install **21 passi (17
+  skip)** → `wheel`+`gui-settings`+`verify` ok, doctor 9/9 con havc 0.1.4;
+  rerun `--only gui-settings` → skip e file identico (hash); UI (UIA):
+  Installed senza combo e con *Start server*; Preflight con riga VRAM
+  ("15.9 GB … ≥ 12.0 GB del modello di default") e nessun "Suggested
+  backend". Sul test install: settings GUI con `model_name`, `install.json`
+  allineato (backend `qwen21`, app/last_verify 0.1.4, wheel 0.1.4 in
+  `cache/`).

@@ -19,7 +19,7 @@
 
 ---
 
-## 0. Come riprendere (handoff — aggiornato al 2026-10-05; SDK 10 e VS 2026 pronti — log (21), (22))
+## 0. Come riprendere (handoff — aggiornato al 2026-10-05; SDK 10, VS 2026 e M1 — log (21)–(23))
 
 **Dove sta il lavoro**: branch `feature/installer` nel worktree
 `D:\PProjects\HAVCServerDiT_installer`; la cartella principale
@@ -36,9 +36,9 @@ del manager scritta** (`installer/PHASE1_SPEC.md`); mirror nunchaku pubblicato
 (release `nunchaku-1.2.1`); codice, commenti, UI e spec allineati
 all'inglese (log (16), (19)).
 
-**Prossimo passo — M1**: skeleton del manager in `manager/` (`HavcManager.sln`:
-`HavcManager.Core` + `HavcManager.App` WPF, UI minima *Start installation*),
-come da `installer/PHASE1_SPEC.md` §13.
+**Prossimo passo — M2**: prima installazione end-to-end (preflight, cartelle,
+download a due stadi, progresso live, chiusura, disinstallazione), come da
+`installer/PHASE1_SPEC.md` §13. M1 (skeleton) completato — log (23).
 **Decisione SDK chiusa (05-10)**: target **.NET 10** — SDK **10.0.401**
 installato machine-wide (standalone) e **VS 2026** (Community v18.10)
 installato lo stesso giorno: l'MSBuild 18.10 compila `net10` (smoke WPF verde)
@@ -300,7 +300,8 @@ pulita.
 
 **Stato Fase 1 (04-10):** decisioni prese (§7 chiusa: D8–D11) e **spec scritta**:
 `installer/PHASE1_SPEC.md` (architettura, flussi, stato, contratto col
-bootstrap). Prossimo passo: avvio sviluppo (M1 — skeleton WPF + Core).
+bootstrap). M1 (skeleton WPF + Core) completato il 05-10 (log (23));
+prossimo passo: M2 (prima installazione end-to-end).
 
 ---
 
@@ -540,3 +541,17 @@ storico.*
   reboot); MSBuild 18.10.1 compila lo smoke WPF `net10.0-windows` (con VS 2022
   falliva: NETSDK1045). Toolchain completa: `dotnet` CLI 10.0.401 + VS 2026.
   Prossimo: M1 (skeleton manager).
+- **2026-10-05 (23)** — **M1 completata: skeleton del manager.** Creato
+  `manager/` (`HavcManager.sln` classico — l'SDK 10 ormai defaulta `.slnx`,
+  tenuto il formato da spec): `HavcManager.Core` (net10.0) con `ManifestClient`
+  funzionante (fetch/parse del manifest) e stub documentati per `Downloader`,
+  `BootstrapRunner` (eventi `--json-progress`), `StateStore`/`InstallState`
+  (schema v1), `Preflight`, `UpdateEngine`, `ProcessGuard`, `ManagerLog`;
+  `HavcManager.App` (WPF, net10.0-windows) con pagina *Start installation*
+  minima e stringhe in `Resources/Strings.resx`
+  (`PublicResXFileCodeGenerator`: `x:Static` risolve a runtime → servono
+  membri pubblici, trovato allo smoke). `Directory.Build.props` (manager
+  0.1.0), `global.json` (SDK 10.0.401); `.gitignore`/`.gitattributes`
+  aggiornati (bin/obj, LF per i sorgenti .NET). Verifiche: build verde con
+  `dotnet` CLI e MSBuild VS 2026; smoke di avvio GUI ok. Prossimo: M2 (prima
+  installazione end-to-end).

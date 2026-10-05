@@ -22,3 +22,11 @@
 *.jpeg  binary
 *.whl   binary
 *.safetensors binary
+
+# .NET sources (HAVC Manager) — LF
+*.cs     text eol=lf
+*.xaml   text eol=lf
+*.csproj text eol=lf
+*.props  text eol=lf
+*.resx   text eol=lf
+*.sln    text eol=lf

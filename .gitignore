@@ -170,3 +170,12 @@ temp/
 # models extensions
 *.gguf
 *.safetensors
+
+# .NET / Visual Studio (HAVC Manager)
+manager/**/bin/
+manager/**/obj/
+manager/**/*.user
+manager/.vs/
+
+# Agent session files
+.codewhale/

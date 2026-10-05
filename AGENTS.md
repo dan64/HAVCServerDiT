@@ -19,7 +19,7 @@
 
 ---
 
-## 0. Come riprendere (handoff — aggiornato al 2026-10-05; decisione SDK chiusa, vedi log (21))
+## 0. Come riprendere (handoff — aggiornato al 2026-10-05; SDK 10 e VS 2026 pronti — log (21), (22))
 
 **Dove sta il lavoro**: branch `feature/installer` nel worktree
 `D:\PProjects\HAVCServerDiT_installer`; la cartella principale
@@ -40,11 +40,12 @@ all'inglese (log (16), (19)).
 `HavcManager.Core` + `HavcManager.App` WPF, UI minima *Start installation*),
 come da `installer/PHASE1_SPEC.md` §13.
 **Decisione SDK chiusa (05-10)**: target **.NET 10** — SDK **10.0.401**
-installato machine-wide (standalone). Vincolo verificato: **VS 2022 non
-compila `net10`** (l'SDK 10.0.4xx richiede MSBuild ≥ 18.0 = linea **VS 2026
-(v18)**; con VS 17.14 il resolver ripiega su SDK 9 → NETSDK1045). Build e
-sviluppo via `dotnet` CLI (MSBuild 18 interno); un eventuale VS 2026 per
-l'IDE è un passo a parte, senza impatto sul codice.
+installato machine-wide (standalone) e **VS 2026** (Community v18.10)
+installato lo stesso giorno: l'MSBuild 18.10 compila `net10` (smoke WPF verde)
+→ IDE pronto. Vincolo noto: VS 2022 non compila `net10` (l'SDK 10.0.4xx
+richiede MSBuild ≥ 18.0; con VS 17.14 il resolver ripiega su SDK 9 →
+NETSDK1045). Build sempre possibile anche via `dotnet` CLI (MSBuild 18
+interno).
 
 **Installazione di test**: `D:\HAVCServerDiT_Test` — stack completo,
 aggiornata a havc 0.1.1 (smoke/update/idempotenza: `install-run8/9/10.log`
@@ -533,3 +534,9 @@ storico.*
   (`minimumMSBuildVersion`), cioè la linea VS 2026 (tabella ufficiale: SDK
   10.0.4xx ↔ VS 18.9, minimo VS 18.0). Sviluppo via CLI; VS 2026 per l'IDE
   valutabile a parte. Prossimo: M1 (skeleton manager).
+- **2026-10-05 (22)** — **VS 2026 installato (Community, workload .NET
+  desktop).** vswhere: istanza v18.10.12224.181 in
+  `C:\Program Files\Microsoft Visual Studio\18\Community` (complete, no
+  reboot); MSBuild 18.10.1 compila lo smoke WPF `net10.0-windows` (con VS 2022
+  falliva: NETSDK1045). Toolchain completa: `dotnet` CLI 10.0.401 + VS 2026.
+  Prossimo: M1 (skeleton manager).

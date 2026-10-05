@@ -41,9 +41,10 @@ test, poi run in VM (spec §13). M1–M3 completate; prima installazione reale
 riuscita il 05-10 (`D:\HAVC_Manager_Test` — log (28)); update/ripara/rollback/
 lock verificati sul campo (log (29)); **modello di default qwen21-viggle**
 (nessuna scelta modello nel manager — log (30); sotto 32 GB RAM → longcat-gguf
-Q3, log (34)); **disinstallo verificato sul campo** (log (35)). Restano:
-pubblicare la release (staging `v0.1.5` in `dist/` — sblocca anche l'URL
-manifest di default) e il run in VM; da reinstallare l'install di test
+Q3, log (34)); **disinstallo verificato sul campo** (log (35)); fallback
+manifest accanto all'exe (log (36)). Restano: pubblicare la **pre-release**
+`v0.1.5` (D13 — il default URL resta su `v1.0.0` fino alla 1.1.0), il run in
+VM, **README snello + `docs/`** (log (37)); da reinstallare l'install di test
 (disinstallata nel test, log (35)).
 **Decisione SDK chiusa (05-10)**: target **.NET 10** — SDK **10.0.401**
 installato machine-wide (standalone) e **VS 2026** (Community v18.10)
@@ -206,6 +207,13 @@ esterni. Obiettivo di questo filone di lavoro:
   diventa longcat-gguf Q3** (`backend_default` = `"longcat3"`, seed
   `longcat-gguf` + precision `q3`; con 16 GB è l'unico modello che gira).
   Gli altri modelli si scelgono dalla GUI di HAVC.
+
+- **D13 — Release del flusso installer: solo pre-release fino alla 1.1.0**
+  (05-10). Le release di sviluppo si pubblicano come **pre-release**
+  (`--prerelease`, mai "Latest": il marker resta su `v1.0.0`); la prima
+  release **ufficiale** partirà dalla **versione 1.1.0**. Conseguenza: l'URL
+  manifest di default del manager resta non risolvibile fino ad allora (test
+  con `--release-tag` o fallback locale, log (36)).
 
 ---
 
@@ -743,3 +751,13 @@ storico.*
   `--manifest` inesistente (col file presente) → dialog d'errore "Could not
   find file", resta su Folders (nessun fallback). Utile finché la release
   non è pubblicata e per usi "portable".
+- **2026-10-05 (37)** — **Politica release: pre-release fino alla 1.1.0;
+  inventario v0.1.5; prossimi lavori.** Decisione autore: le release del
+  flusso installer restano **pre-release** (`--prerelease`, mai Latest, D13);
+  la prima release ufficiale partirà dalla **1.1.0**; il manifest di default
+  resta quindi 404 fino ad allora (test con `--release-tag vX` o fallback
+  locale). Inventario di pubblicazione v0.1.5 definito (5 asset: wheel havc +
+  vscmnet2 + spatial_correlation_sampler + diffusers + `release.json`;
+  **niente exe del manager** — il publish single-file è lavoro futuro).
+  Prossimi lavori indicati dall'autore: **README più snello** (1048 righe) +
+  **cartella `docs/`** con sezioni comuni (install, what's new, …).

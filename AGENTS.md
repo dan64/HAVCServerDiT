@@ -37,8 +37,9 @@ del manager scritta** (`installer/PHASE1_SPEC.md`); mirror nunchaku pubblicato
 all'inglese (log (16), (19)).
 
 **Prossimo passo — M3**: update incrementale + rollback + ripara + lock
-istanze (spec §13). M1–M2 completate — log (23), (24). Per l'e2e reale del
-wizard: nuova release (wheel aggiornata + manifest) e run in VM.
+istanze (spec §13). M1–M2 completate; **prima installazione reale via wizard
+riuscita il 05-10** (`D:\HAVC_Manager_Test`, 21/21 passi — log (28)). Restano:
+pubblicare la release (staging `v0.1.3` pronta in `dist/`) e il run in VM.
 **Decisione SDK chiusa (05-10)**: target **.NET 10** — SDK **10.0.401**
 installato machine-wide (standalone) e **VS 2026** (Community v18.10)
 installato lo stesso giorno: l'MSBuild 18.10 compila `net10` (smoke WPF verde)
@@ -599,3 +600,18 @@ storico.*
   "HAVC" (target `.vbs`) mostra l'icona. La voce di disinstallazione
   (`DisplayIcon`) già puntava a `HAVCManager.exe`. Verifiche: build 0 warning;
   frame dell'ico trovati dentro l'exe (256×256 e 32×32); smoke finestra ok.
+- **2026-10-05 (28)** — **Prima installazione reale riuscita + fix progressbar.**
+  Run completo dell'utente su `D:\HAVC_Manager_Test`: 21/21 passi (18 ok, 3
+  skip), `verify: doctor: all checks OK`, install.json + scorciatoie + registro
+  + manager copiato (`bootstrap-20261005-153453.jsonl`, ~5m20s). Bug trovato:
+  **la progressbar restava a 0** — il bootstrap emette l'evento `plan` solo in
+  modalità `--plan`, quindi nei run reali il manager non riceveva mai la lista
+  dei 21 passi. Fix: `plan` emesso **a inizio di ogni run** (PHASE0_SPEC §5
+  aggiornata) + robustezza nel VM (righe create se manca il piano). Bump
+  **0.1.3** (wheel col fix; staging `v0.1.3` rigenerata in `dist/`, `v0.1.2`
+  locale rimossa perché superata; manifest locale di test aggiornato).
+  Verifiche: convergenza sull'install reale (tutto-skip, plan in prima riga,
+  exit 0); test UI automatizzato: **barra letta via UIA = 2/21 e in
+  avanzamento**, cancel cooperativo ok, nessun crash. Nota: l'install di test
+  è stato aggiornato a 0.1.3 (runtime+venv) via bootstrap; `install.json`
+  riporterà 0.1.3 al prossimo run del manager (M3).

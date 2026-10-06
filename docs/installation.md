@@ -14,9 +14,9 @@ on first use.
 - Windows **SmartScreen** may warn because the exe is not code-signed:
   *Windows protected your PC* → **More info** → **Run anyway**; the sha256 is
   published in the release notes.
-- While the project is in the pre-release channel (before the first official
-  **1.1.0**), the releases are marked *pre-release*: keep the `release.json`
-  shipped next to the exe, or pass `--release-tag vX`.
+- The manager fetches its manifest from the latest release URL; for testing
+  or offline use you can keep a `release.json` next to the exe, or pass
+  `--release-tag vX`.
 - Default install folder: `%LOCALAPPDATA%\HAVCServerDiT` (per-user, no admin).
   Model files live in `<install>\comfy_bridge\models` and are preserved by
   update/repair and by the uninstaller (which asks before deleting them).

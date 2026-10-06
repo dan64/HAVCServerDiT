@@ -376,11 +376,11 @@ folder*); in caso di rollback, messaggio dedicato + log.
   per i test: `--release-tag <tag>` oppure `--manifest <file|url>`. Se il
   fetch fallisce e `--manifest` non è stato passato, il manager ripiega sul
   **`release.json` nella cartella dell'exe** (uso "portable"/offline).
-- Politica release (05-10): fino alla prima release **ufficiale** (che
-  partirà dalla versione **1.1.0**) le release del flusso installer sono
-  **pre-release** (mai "Latest": il marker resta su `v1.0.0` legacy) →
-  l'URL manifest di default resta non risolvibile fino ad allora; i test
-  usano `--release-tag <tag>` o il fallback locale (§6.2).
+- Politica release (rev. 06-10): la prima release **ufficiale** è la
+  **2.0.0** (i tag 1.x.x restano riservati agli **asset** — release
+  `HAVC Assets v1.0.0`); fino a lì le release del flusso installer sono
+  **pre-release** (mai "Latest"). Da 2.0.0 l'URL manifest di default
+  risolve; per i test: `--release-tag <tag>` o fallback locale (§6.2).
 - Canali `stable`/`beta` (campo `channel` del manifest): v0 = stable; il
   supporto beta è una preferenza futura.
 - Auto-update del manager: v0 **solo link** al download; in Fase 2, campo

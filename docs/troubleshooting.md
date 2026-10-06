@@ -26,7 +26,7 @@ Subsequent runs load from the local cache.
 The installer is not code-signed yet: *Windows protected your PC* → **More info** → **Run anyway**. The sha256 of every asset is published in the release notes if you want to verify the download first.
 
 **"The manifest could not be fetched" in the installer**
-Until the first official release (1.1.0) releases are marked *pre-release* and the default manifest URL is not served. Keep the `release.json` next to the exe (it ships alongside in the release assets), or launch the manager with `--release-tag vX`.
+Check the connection first. As fallbacks: keep a `release.json` next to the exe (it ships in the release assets), or launch the manager with `--release-tag vX`.
 
 **An update brought no new files, and Repair did not either**
 *Repair* restores the currently installed version from the cached wheel — it never upgrades. New or changed files arrive with an *update* ("Check for updates").

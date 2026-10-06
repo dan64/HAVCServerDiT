@@ -15,7 +15,7 @@ Hybrid Automatic Video Colorizer (HAVC) server that exposes a GPU-accelerated co
 
 **Installer (recommended)** — download `HAVC-Setup-<version>.exe` from the [Releases](https://github.com/dan64/HAVCServerDiT/releases) page and run it: a single self-contained file (no .NET runtime needed) that installs the pinned Python runtime, the server stack, the GUI, external tools and the vs-cmnet2 plugins/weights — and keeps everything updated (*Check for updates*, *Repair*, *Uninstall* from the manager). Model weights are downloaded on first use and preserved across updates. Details: [docs/installation.md](docs/installation.md).
 
-> ⚠️ The project is in the **pre-release channel** until the first official **1.1.0**: releases are marked *pre-release*, Windows SmartScreen will warn because the exe is not code-signed (*More info* → *Run anyway*), and the sha256 of every asset is published in the release notes.
+> ⚠️ Windows **SmartScreen** will warn on first run because the exe is not code-signed: *More info* → *Run anyway*. The sha256 of every asset is published in the release notes.
 
 **Manual installation (advanced)** — clone the repository and run `install.cmd` (requires Git + Python 3.12): step-by-step instructions in [docs/installation.md](docs/installation.md#manual-installation).
 

@@ -41,6 +41,7 @@ EXTRA_FILES = (
 )
 EXTRA_GLOBS = (
     ("GUI/scripts", "havc/gui/scripts", "*.vpy"),
+    ("GUI/samples", "havc/gui/samples", "*"),
 )
 
 
@@ -83,6 +84,8 @@ class build_py(_build_py):
             if target.exists():
                 shutil.rmtree(target)
             for path in sorted(src.glob(pattern)):
+                if not path.is_file():  # e.g. a subfolder dropped into samples/
+                    continue
                 out = target / path.name
                 out.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(path, out)

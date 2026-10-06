@@ -934,6 +934,11 @@ def build_steps() -> list[Step]:
         }
         for path in sorted((src / "scripts").glob("*.vpy")):
             files[f"scripts/{path.name}"] = path
+        samples = src / "samples"
+        if samples.is_dir():
+            for path in sorted(samples.glob("*")):
+                if path.is_file():  # sample clips + their .vpy scripts
+                    files[f"samples/{path.name}"] = path
         return files
 
     def gui_check(c: Ctx) -> Optional[str]:
@@ -962,7 +967,7 @@ def build_steps() -> list[Step]:
             target = dst_root / rel
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src_path, target)
-        return f"{len(files)} file (GUI + scripts)"
+        return f"{len(files)} file (GUI + scripts + samples)"
 
     # -- 16. gui-deps ------------------------------------------------------
     def gui_deps_check(c: Ctx) -> Optional[str]:
@@ -1228,7 +1233,7 @@ def build_steps() -> list[Step]:
         Step("configs", "Pipeline configs in <install>/config", "copy missing configs",
              configs_check, configs_run),
         Step("gui", "GUI files in <install>/gui",
-             "GUI + scripts .vpy (updated if different)",
+             "GUI + scripts + samples (updated if different)",
              gui_check, gui_run),
         Step("gui-deps", "GUI dependencies (FreeSimpleGUI, tkinterdnd2, VapourSynth, vscmnet2, SCS)",
              "pip install -r requirements/gui.txt + local wheels",

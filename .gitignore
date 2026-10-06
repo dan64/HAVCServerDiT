@@ -1,4 +1,4 @@
-# Byte-compiled / optimized / DLL files
+﻿# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
@@ -25,7 +25,7 @@ share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-MANIFEST
+/MANIFEST
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
@@ -125,6 +125,7 @@ celerybeat.pid
 # Environments
 .env
 .venv/
+.venv-*/
 env/
 venv/
 ENV/
@@ -169,3 +170,15 @@ temp/
 # models extensions
 *.gguf
 *.safetensors
+
+# .NET / Visual Studio (HAVC Manager)
+manager/**/bin/
+manager/**/obj/
+manager/**/*.user
+manager/.vs/
+
+# Agent session files
+.codewhale/
+
+# Private working memory (agents/sessions) - never publish
+/AGENTS.md

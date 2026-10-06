@@ -1,0 +1,27 @@
+<UserControl x:Class="HavcManager.App.Pages.WelcomePage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:res="clr-namespace:HavcManager.App.Resources">
+    <Grid Margin="32">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Text="{x:Static res:Strings.WelcomeTitle}"
+                   FontSize="26" FontWeight="SemiBold"/>
+        <StackPanel Grid.Row="1" Margin="0,18,0,0">
+            <TextBlock Text="{x:Static res:Strings.WelcomeSubtitle}"
+                       FontSize="14" TextWrapping="Wrap"/>
+            <TextBlock Margin="0,16,0,0" Opacity="0.7">
+                <Run Text="{x:Static res:Strings.SetupVersionLabel}"/><Run Text=" "/><Run Text="{Binding ManagerVersion, Mode=OneWay}"/>
+            </TextBlock>
+        </StackPanel>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="{x:Static res:Strings.StartInstallation}"
+                    Padding="18,9" Click="OnStartClick"/>
+        </StackPanel>
+    </Grid>
+</UserControl>

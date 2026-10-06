@@ -1,0 +1,6 @@
+# "Asset" wheels installed from local files (not from an index lock).
+# The versions declared here are the expectation for the bootstrap
+# idempotency checks and for `havc doctor`; installation uses the wheels in packages/.
+diffusers==0.37.0.dev0
+vscmnet2==1.2.1
+spatial_correlation_sampler==0.5.0

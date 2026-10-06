@@ -1,0 +1,67 @@
+<UserControl x:Class="HavcManager.App.Pages.ProgressPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:res="clr-namespace:HavcManager.App.Resources">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+    </UserControl.Resources>
+    <Grid Margin="32">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Text="{x:Static res:Strings.ProgressTitle}"
+                   FontSize="22" FontWeight="SemiBold"/>
+        <ProgressBar Grid.Row="1" Height="8" Margin="0,12,0,0"
+                     Minimum="0"
+                     Maximum="{Binding ProgressMaximum, Mode=OneWay}"
+                     Value="{Binding ProgressValue, Mode=OneWay}"/>
+
+        <Grid Grid.Row="2" Margin="0,14,0,0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <ItemsControl ItemsSource="{Binding Steps}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal" Margin="0,3">
+                                <TextBlock Text="{Binding Glyph}" Width="22" FontWeight="Bold"
+                                           Foreground="{Binding StatusBrush}"/>
+                                <TextBlock Text="{Binding Title}"/>
+                                <TextBlock Text="{Binding Detail}" Margin="10,0,0,0" Opacity="0.65"
+                                           TextTrimming="CharacterEllipsis"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+            <Expander Grid.Row="1" Header="{x:Static res:Strings.LogLabel}" Margin="0,8,0,0">
+                <ScrollViewer Height="140" VerticalScrollBarVisibility="Auto">
+                    <ItemsControl ItemsSource="{Binding LogLines}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding}" FontFamily="Consolas" FontSize="11"/>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Expander>
+        </Grid>
+
+        <TextBlock Grid.Row="3" Text="{Binding StatusText}" Opacity="0.85"
+                   TextWrapping="Wrap" Margin="0,10,0,0"/>
+
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
+            <Button Content="{Binding CancelButtonText}" Padding="16,8" Click="OnCancelClick"
+                    Visibility="{Binding IsRunning, Converter={StaticResource BoolToVis}}"/>
+            <Button Content="{x:Static res:Strings.Close}" Padding="16,8" Click="OnCloseClick"
+                    Visibility="{Binding IsNotRunning, Converter={StaticResource BoolToVis}}"/>
+        </StackPanel>
+    </Grid>
+</UserControl>

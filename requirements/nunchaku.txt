@@ -1,0 +1,6 @@
+# Nunchaku (MIT Han Lab) — platform-specific wheel:
+# Windows / Python 3.12 / CUDA 13.0 / torch 2.10.
+# NEVER `pip install nunchaku` from PyPI: it is a different package, without nunchaku.models.
+# Mirror: official asset, unchanged (release `nunchaku-1.2.1` of this repo;
+# sha256 verified against the upstream GitHub digest, 2026-10-04).
+nunchaku @ https://github.com/dan64/HAVCServerDiT/releases/download/nunchaku-1.2.1/nunchaku-1.2.1+cu13.0torch2.10-cp312-cp312-win_amd64.whl

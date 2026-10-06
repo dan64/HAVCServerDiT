@@ -1,0 +1,42 @@
+{
+  "$comment": "Example release manifest (Phase 0) — fake values. Specification: installer/PHASE0_SPEC.md §6.",
+  "schema": 1,
+  "channel": "stable",
+  "app": "havc",
+  "app_version": "0.1.0",
+  "published_at": "2026-10-04T12:00:00Z",
+  "requires_python": "3.12",
+  "requires_env_rebuild": false,
+  "bootstrap_min_version": "0.1.0",
+  "runtime": {
+    "name": "cpython-3.12.15+20261003-x86_64-pc-windows-msvc-install_only_stripped.tar.gz",
+    "url": "https://github.com/dan64/HAVCServerDiT/releases/download/runtime-312/cpython-3.12.15+20261003-x86_64-pc-windows-msvc-install_only_stripped.tar.gz",
+    "sha256": "6fba7f2ae506facf41d457ea8293c7497910a675c69a4e954875169410a50402",
+    "python": "3.12.15",
+    "kind": "python-build-standalone",
+    "mirror_of": "https://github.com/astral-sh/python-build-standalone/releases/download/20261003/cpython-3.12.15%2B20261003-x86_64-pc-windows-msvc-install_only_stripped.tar.gz"
+  },
+  "wheels": [
+    {
+      "name": "havc-0.1.0-py3-none-any.whl",
+      "url": "https://github.com/dan64/HAVCServerDiT/releases/download/v0.1.0/havc-0.1.0-py3-none-any.whl",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "size": 0,
+      "kind": "project",
+      "install": "no-deps"
+    }
+  ],
+  "assets": [
+    {
+      "name": "diffusers-0.37.0.dev0-py3-none-any.whl",
+      "url": "https://github.com/dan64/HAVCServerDiT/releases/download/v0.1.0/diffusers-0.37.0.dev0-py3-none-any.whl",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "size": 0,
+      "kind": "python-wheel",
+      "target": "diffusers"
+    }
+  ],
+  "weights": [],
+  "tools": [],
+  "notes_url": "https://github.com/dan64/HAVCServerDiT/releases/tag/v0.1.0"
+}

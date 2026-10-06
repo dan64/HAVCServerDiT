@@ -1,0 +1,55 @@
+"""Progress event emission: readable (default) or JSON (one line per event).
+
+Protocol: installer/PHASE0_SPEC.md §5. In JSON mode *stdout* contains only
+JSON lines; child process output is wrapped into `log` events.
+"""
+
+from __future__ import annotations
+
+import json
+import sys
+import time
+
+
+def force_utf8() -> None:
+    """stdout/stderr as UTF-8: stable output even when redirected (e.g. the C# manager)."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+
+
+class Progress:
+    def __init__(self, json_mode: bool = False):
+        self.json_mode = json_mode
+
+    def event(self, kind: str, **data) -> None:
+        if self.json_mode:
+            payload = {"event": kind, "ts": time.time(), **data}
+            print(json.dumps(payload, ensure_ascii=False), flush=True)
+        else:
+            self._human(kind, data)
+
+    def _human(self, kind: str, data: dict) -> None:
+        if kind == "plan":
+            print("Installation plan:")
+            for i, step in enumerate(data.get("steps", []), 1):
+                mark = f"[skip: {step['skip_reason']}]" if step.get("skip_reason") else ""
+                print(f"  {i:2d}. {step['id']:<12} {step['title']} {mark}")
+        elif kind == "step_begin":
+            print(f"\n[{data.get('id')}] {data.get('title')} ...")
+        elif kind == "step_ok":
+            detail = f" ({data['detail']})" if data.get("detail") else ""
+            print(f"[{data.get('id')}] OK{detail}")
+        elif kind == "step_skip":
+            print(f"[{data.get('id')}] skipped: {data.get('reason')}")
+        elif kind == "step_error":
+            print(f"[{data.get('id')}] ERROR: {data.get('error')}")
+            if data.get("remediation"):
+                print(f"          -> {data['remediation']}")
+        elif kind == "log":
+            print(f"    {data.get('message')}")
+        elif kind == "result":
+            print(f"\nEsito: {'OK' if data.get('ok') else 'FAILED'}")
+        # other events: ignored in human mode

@@ -1,0 +1,44 @@
+# HAVC — project packaging (wheel `havc`, server stack).
+# Specification: installer/PHASE0_SPEC.md. The version comes from havc/__init__.py.
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "havc"
+description = "HAVC — Hybrid Automatic Video Colorizer: DiT colorization RPC server (server stack)."
+readme = "README.md"
+requires-python = "==3.12.*"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "dan64" }]
+classifiers = [
+    "Environment :: GPU :: NVIDIA CUDA",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Graphics",
+]
+# Dependencies intentionally EMPTY: installation is orchestrated by the
+# `havc-install` bootstrap (precise order, dedicated CUDA index, nunchaku
+# wheel from URL, post-install patch). See installer/PHASE0_SPEC.md §2 and §4.
+dependencies = []
+dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://github.com/dan64/HAVCServerDiT"
+Repository = "https://github.com/dan64/HAVCServerDiT"
+
+[project.scripts]
+havc-server = "dit_rpc_server:main"
+havc-doctor = "havc.doctor:main"
+havc-install = "havc.install:main"
+havc-patch-nunchaku = "patch_nunchaku:main"
+
+[tool.setuptools]
+py-modules = ["dit_rpc_server", "dit_colorize_main", "patch_nunchaku"]
+
+[tool.setuptools.packages.find]
+include = ["havc*"]
+
+[tool.setuptools.dynamic]
+version = { attr = "havc.__version__" }

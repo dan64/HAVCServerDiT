@@ -1,0 +1,6 @@
+# GUI dependencies (default front-end) — pins from the reference environment _dev.
+FreeSimpleGUI==5.2.0.post1
+tkinterdnd2==0.5.0
+tkinter-embed==3.12.0
+Send2Trash==2.1.0
+VapourSynth==74

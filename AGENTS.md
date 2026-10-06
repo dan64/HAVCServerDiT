@@ -48,11 +48,11 @@ manifest accanto all'exe (log (36)); **fix layout server/GUI** (log (38));
 staging `v0.1.8`); **fix junction `.venv` → `venv`** (log (42)); **pre-release
 `v0.1.9` pubblicata** (log (43)); **samples GUI nella wheel** (log (44));
 **conferma prima di sovrascrivere i config** (dialog nel manager +
-`--update-configs` nel bootstrap; havc **0.1.11**, staging pronta — log
+`--update-configs` nel bootstrap; **pre-release `v0.1.11` pubblicata** — log
 (45)). *Run Server* sull'install `D:\HAVCServerDiT` **verificato
 dall'autore** (tab #4/#5 OK; server in ascolto — log (42)). Restano: il run
-in VM, **README snello + `docs/`** (log (37)); pubblicare `v0.1.11`;
-l'eventuale test *External console* — log (45).
+in VM, **README snello + `docs/`** (log (37)); l'eventuale test *External
+console* — log (45).
 **Decisione SDK chiusa (05-10)**: target **.NET 10** — SDK **10.0.401**
 installato machine-wide (standalone) e **VS 2026** (Community v18.10)
 installato lo stesso giorno: l'MSBuild 18.10 compila `net10` (smoke WPF verde)
@@ -953,5 +953,8 @@ storico.*
   confirmation: replace`). Nota: lo script UIA non "vedeva" i dialog del
   manager in questo ambiente (li ha confermati l'autore) — verifica via
   log/stato/file. havc **0.1.11** (staging `v0.1.11` +
-  `test-manifest-local.json`; `staging-v0.1.10` rimossa, superata). Da fare:
-  pubblicare `v0.1.11` su ok.
+  `test-manifest-local.json`; `staging-v0.1.10` rimossa, superata). **Pre-release `v0.1.11` pubblicata**
+  il 06-10 (su ok esplicito): 6 asset, digest GitHub 6/6 = manifest
+  (`release.json` verificato a parte), manifest remoto byte-identico
+  (`64d9234a…`), HEAD wheel 200 (1.214.905 byte), **Latest resta
+  `v1.0.0`**; note in `dist\release-notes-v0.1.11.md`.

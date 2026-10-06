@@ -432,6 +432,7 @@ public sealed class WizardViewModel : INotifyPropertyChanged
             _stateStore.Save(InstallDir, state with
             {
                 AppVersion = _updateManifest.AppVersion,
+                ManagerVersion = ManagerVersion,
                 UpdatedAt = now,
                 Previous = snapshot,
                 Dirty = false,
@@ -485,6 +486,7 @@ public sealed class WizardViewModel : INotifyPropertyChanged
         {
             _stateStore.Save(InstallDir, state with
             {
+                ManagerVersion = ManagerVersion,
                 LastVerify = new LastVerifyState { Ts = rollbackTs, Ok = true, AppVersion = state.AppVersion },
             });
             ReloadExisting();
@@ -497,7 +499,7 @@ public sealed class WizardViewModel : INotifyPropertyChanged
         }
         else
         {
-            _stateStore.Save(InstallDir, state with { Dirty = true });
+            _stateStore.Save(InstallDir, state with { Dirty = true, ManagerVersion = ManagerVersion });
             ReloadExisting();
             Navigate(WizardPage.Installed);
             MessageDialog.Show(
@@ -544,6 +546,7 @@ public sealed class WizardViewModel : INotifyPropertyChanged
             _stateStore.Save(InstallDir, state with
             {
                 Dirty = false,
+                ManagerVersion = ManagerVersion,
                 LastVerify = new LastVerifyState { Ts = now, Ok = true, AppVersion = state.AppVersion },
             });
             RefreshInstalledManager();

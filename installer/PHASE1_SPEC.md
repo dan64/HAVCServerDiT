@@ -110,7 +110,7 @@ Scritto e letto **solo dal manager** (il bootstrap v0 resta stateless).
 Path: `<install>\install.json`. Campi:
 
 - `schema`: 1;
-- `manager_version`: versione del manager che ha scritto lo stato;
+- `manager_version`: versione del manager che ha scritto lo stato (aggiornata a fine update/ripara dal 06-10);
 - `app_version`: versione `havc` installata;
 - `installed_at`, `updated_at`: timestamp ISO-8601;
 - `install_dir`: percorso assoluto; `models_dir` è accettato per compatibilità

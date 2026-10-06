@@ -10,6 +10,7 @@ namespace HavcManager.Core.State;
 public sealed record InstallState
 {
     [JsonPropertyName("schema")] public int Schema { get; init; } = 1;
+    /// <summary>Version of the manager that last wrote the state (refreshed by every update/repair run since 2.0.1).</summary>
     [JsonPropertyName("manager_version")] public string ManagerVersion { get; init; } = "";
     [JsonPropertyName("app_version")] public string AppVersion { get; init; } = "";
     [JsonPropertyName("installed_at")] public string? InstalledAt { get; init; }

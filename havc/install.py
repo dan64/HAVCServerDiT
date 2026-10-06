@@ -328,6 +328,7 @@ class Ctx:
     with_dinov2: bool = False
     use_system_python: bool = False
     update_configs: bool = False
+    update_gui_settings: bool = False
 
     @property
     def env_dir(self) -> Path:
@@ -613,11 +614,17 @@ def staged_asset(ctx: Ctx, asset: dict, local: Optional[Path] = None) -> Path:
 
 
 # ---------------------------------------------------------------------------
-# GUI settings wiring
+# GUI settings
 #
-# Fill empty/absent managed values in gui_cmnet2_settings.json (rules: only
-# empty/absent values are filled in; user values are never overwritten).
+# gui_cmnet2_settings.json is seeded from the packaged template (the curated
+# GUI/gui_cmnet2_settings.json shipped in the wheel); managed values (paths,
+# default model) are rewritten for the install. Existing files: empty managed
+# values are wired and user values are never overwritten, unless
+# --update-gui-settings replaces the file (previous kept as .bak). 2026-10-06.
 # ---------------------------------------------------------------------------
+
+GUI_SETTINGS_FILE = "gui_cmnet2_settings.json"
+
 
 def wire_gui_settings(ctx: Ctx, settings_path: Path) -> int:
     """Fill empty/absent managed values in gui_cmnet2_settings.json
@@ -640,6 +647,42 @@ def wire_gui_settings(ctx: Ctx, settings_path: Path) -> int:
     with settings_path.open("w", encoding="utf-8", newline="\n") as fh:
         fh.write(json.dumps(data, indent=4) + "\n")
     return 1
+
+
+def gui_settings_expected(ctx: Ctx) -> Optional[dict]:
+    """The packaged gui_cmnet2_settings.json (template) with this install's
+    managed values applied: the machine-specific paths and the RAM-based
+    default model. Template order and the other (curated) values are kept.
+    None when no template is available (fallback: built-in minimal seed)."""
+    src = paths.gui_source_dir()
+    if src is None:
+        return None
+    template = src / GUI_SETTINGS_FILE
+    if not template.is_file():
+        return None
+    try:
+        data = json.loads(template.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    gui_dir = ctx.install_dir / "gui"
+    samples = gui_dir / "samples"
+    data["script_dir"] = str(gui_dir / "scripts")
+    data["vspipe_path"] = str(ctx.venv_python.parent / "vspipe.exe")
+    data["x265_path"] = str(ctx.install_dir / "tools" / "x265" / "x265.exe")
+    data["mkv_path"] = str(ctx.install_dir / "tools" / "MKVToolNix" / "mkvmerge.exe")
+    data["base_dir"] = str(samples)
+    data["fixv_base_dir"] = str(samples)
+    data["model_name"] = ctx.default_model
+    precision = DEFAULT_MODEL_PRECISION.get(ctx.default_model)
+    if precision:
+        data["model_precision"] = precision
+    return data
+
+
+def gui_settings_diff(data: dict, expected: dict) -> list[str]:
+    """Keys whose values differ between the installed file and the expected one."""
+    return sorted(k for k in set(data) | set(expected)
+                  if data.get(k) != expected.get(k))
 
 
 # ---------------------------------------------------------------------------
@@ -1158,16 +1201,30 @@ def build_steps() -> list[Step]:
 
     # -- 21. gui-settings --------------------------------------------------
     def gui_settings_check(c: Ctx) -> Optional[str]:
-        settings = c.install_dir / "gui" / "gui_cmnet2_settings.json"
+        settings = c.install_dir / "gui" / GUI_SETTINGS_FILE
         if not settings.is_file():
             return None
         try:
             data = json.loads(settings.read_text(encoding="utf-8"))
         except (OSError, ValueError):
-            return "settings already present"
+            if c.update_gui_settings:
+                return None
+            return ("settings file not parseable and kept "
+                    "(pass --update-gui-settings to replace it)")
         if not data.get("model_name"):
+            return None  # managed value missing: wire it (run below)
+        expected = gui_settings_expected(c)
+        if expected is None:
+            return "settings already present"
+        if data == expected:
+            return "settings already up to date"
+        if c.update_gui_settings:
             return None
-        return "settings already present"
+        keys = gui_settings_diff(data, expected)
+        shown = ", ".join(keys[:5]) + ("..." if len(keys) > 5 else "")
+        return (f"settings differ from the packaged defaults and are kept "
+                f"({len(keys)} keys: {shown}; "
+                f"pass --update-gui-settings to replace them)")
 
     def gui_settings_run(c: Ctx) -> str:
         if c.dry_run:
@@ -1177,26 +1234,36 @@ def build_steps() -> list[Step]:
         gui_dir = c.install_dir / "gui"
         if not gui_dir.is_dir():
             raise BootstrapError("gui folder missing", "run the `gui` step first")
-        path = gui_dir / "gui_cmnet2_settings.json"
+        path = gui_dir / GUI_SETTINGS_FILE
+        expected = gui_settings_expected(c)
+        if path.is_file() and c.update_gui_settings and expected is not None:
+            shutil.copy2(path, path.with_name(path.name + ".bak"))
+            path.write_text(json.dumps(expected, indent=4) + "\n",
+                            encoding="utf-8", newline="\n")
+            return "settings replaced from the packaged defaults (previous kept as .bak)"
         if path.is_file():
             wired = wire_gui_settings(c, path)
             return ("managed values wired in gui_cmnet2_settings.json" if wired
                     else "settings already present")
-        settings = {
-            "script_dir": str(gui_dir / "scripts"),
-            "vspipe_path": str(c.venv_python.parent / "vspipe.exe"),
-            "x265_path": str(c.install_dir / "tools" / "x265" / "x265.exe"),
-            "mkv_path": str(c.install_dir / "tools" / "MKVToolNix" / "mkvmerge.exe"),
-            "base_dir": str(c.install_dir / "work"),
-            "fixv_base_dir": str(c.install_dir / "work"),
-            "model_name": c.default_model,
-        }
-        precision = DEFAULT_MODEL_PRECISION.get(c.default_model)
-        if precision:
-            settings["model_precision"] = precision
-        with path.open("w", encoding="utf-8", newline="\n") as fh:
-            fh.write(json.dumps(settings, indent=4) + "\n")
-        return "gui_cmnet2_settings.json created"
+        data = expected
+        origin = "packaged defaults"
+        if data is None:
+            data = {
+                "script_dir": str(gui_dir / "scripts"),
+                "vspipe_path": str(c.venv_python.parent / "vspipe.exe"),
+                "x265_path": str(c.install_dir / "tools" / "x265" / "x265.exe"),
+                "mkv_path": str(c.install_dir / "tools" / "MKVToolNix" / "mkvmerge.exe"),
+                "base_dir": str(gui_dir / "samples"),
+                "fixv_base_dir": str(gui_dir / "samples"),
+                "model_name": c.default_model,
+            }
+            precision = DEFAULT_MODEL_PRECISION.get(c.default_model)
+            if precision:
+                data["model_precision"] = precision
+            origin = "built-in defaults"
+        path.write_text(json.dumps(data, indent=4) + "\n",
+                        encoding="utf-8", newline="\n")
+        return f"gui_cmnet2_settings.json created (from the {origin})"
 
     # -- 22. launchers -----------------------------------------------------
     def launcher_files(c: Ctx) -> dict[str, bytes]:
@@ -1303,8 +1370,9 @@ def build_steps() -> list[Step]:
         Step("tools", "External tools in <install>/tools",
              "tools.zip + NVEncC_9.17_x64.zip (Release v1.0.0) or --tools-zip",
              tools_check, tools_run),
-        Step("gui-settings", "GUI settings (seeded/wired when missing)",
-             "gui_cmnet2_settings.json: model_name/model_precision only if empty",
+        Step("gui-settings", "GUI settings (seeded from the packaged template)",
+             "gui_cmnet2_settings.json: seed from the packaged template; empty "
+             "model values wired; --update-gui-settings replaces differing files (.bak kept)",
              gui_settings_check, gui_settings_run),
         Step("launchers", "Launcher in <install>",
              "HAVC.cmd/.vbs (GUI), HAVC-Server.cmd, HAVC-Doctor.cmd, start_server.cmd/run_server_qwen21.cmd/run_server_{fp4,int4,longcat,q3}.cmd (rewritten if different)",
@@ -1388,6 +1456,10 @@ def main(argv=None) -> int:
                         help="replace pipeline configs that differ from the packaged ones "
                              "(the previous file is kept as <name>.json.bak); "
                              "default: only copy missing configs")
+    parser.add_argument("--update-gui-settings", action="store_true",
+                        help="replace gui_cmnet2_settings.json when it differs from the "
+                             "packaged defaults (the previous file is kept as .bak); "
+                             "default: seed only when missing, never overwrite user values")
     parser.add_argument("--use-system-python", action="store_true",
                         help="skip runtime provisioning and use the system Python (development)")
     parser.add_argument("--assets-dir", type=Path, default=None,
@@ -1444,6 +1516,7 @@ def main(argv=None) -> int:
         with_dinov2=args.with_dinov2,
         use_system_python=args.use_system_python,
         update_configs=args.update_configs,
+        update_gui_settings=args.update_gui_settings,
     )
     ok = run_steps(ctx, steps, only)
     return 0 if ok else 1

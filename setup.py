@@ -5,7 +5,8 @@ The repo stays the single source of truth: at build time, data that is not a
 
     config/*.json        ->  havc/configs/        (pipeline configs)
     requirements/*.txt   ->  havc/requirements/   (single lockfile)
-    GUI/ (script+scripts) ->  havc/gui/            (GUI: default front-end)
+    GUI/ (script+scripts+samples+settings)         (GUI: default front-end)
+                         ->  havc/gui/
 
 The vendored ComfyUI runtime is NOT part of the wheel (2026-10-05): it ships
 as a pinned zip (`dist/comfy_bridge_v0.30.zip`, built by
@@ -38,6 +39,9 @@ COPIES = (
 EXTRA_FILES = (
     ("GUI/CMNET2_colorize_client_GUI.py", "havc/gui/CMNET2_colorize_client_GUI.py"),
     ("GUI/load_image_DtD_GUI.py", "havc/gui/load_image_DtD_GUI.py"),
+    # Curated GUI settings: the template seeded into <install>\gui by the
+    # `gui-settings` step (managed paths/model are rewritten there; 2026-10-06).
+    ("GUI/gui_cmnet2_settings.json", "havc/gui/gui_cmnet2_settings.json"),
 )
 EXTRA_GLOBS = (
     ("GUI/scripts", "havc/gui/scripts", "*.vpy"),

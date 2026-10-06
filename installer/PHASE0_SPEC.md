@@ -28,8 +28,8 @@ lo schema è già fissato qui.
 
 ## 2. Packaging — wheel `havc`
 
-- Versione `0.1.1` (PEP 440); fonte unica `havc/__init__.py::__version__`
-  (`[tool.setuptools.dynamic]`).
+- Versione (PEP 440; dal 06-10 segue la numerazione dell'installer — 2.x);
+  fonte unica `havc/__init__.py::__version__` (`[tool.setuptools.dynamic]`).
 - `requires-python = "==3.12.*"` — le wheel nunchaku e
   spatial_correlation_sampler sono cp312: un ambiente 3.11/3.13 va rifiutato,
   non aggiustato.
@@ -46,8 +46,9 @@ lo schema è già fissato qui.
   - `config/*.json` → `havc/configs/`;
   - `requirements/*.txt` → `havc/requirements/`;
   - GUI → `havc/gui/` (`CMNET2_colorize_client_GUI.py`,
-    `load_image_DtD_GUI.py`, `scripts/*.vpy`): è il **front-end di default**
-    dell'installazione (vedi §4, passi 12-17).
+    `load_image_DtD_GUI.py`, `scripts/*.vpy`, `samples/`, e
+    `gui_cmnet2_settings.json` come **template** del seed — 06-10): è il
+    **front-end di default** dell'installazione (vedi §4, passi 12-17).
 - **Esclusi dalla wheel**: cache Python (`.pyc`, `__pycache__`) e backup
   (`.bak`/`.orig`/`.rej`). **`comfy_bridge/` non è più nella wheel** (dal
   2026-10-05): il runtime ComfyUI venduto si distribuisce come zip pinnato
@@ -76,8 +77,8 @@ lo schema è già fissato qui.
   server), `<install>\gui\` (GUI + `scripts/*.vpy` + `gui_cmnet2_settings.json`),
   `<install>\tools\` (x265/x264/mkvmerge/NVEncC),
   `<install>\comfy_bridge\` (runtime ComfyUI dal zip pinnato + `models\`),
-  `<install>\work\` (cartella di lavoro di default), launcher nella radice
-  (**front-end di default: la GUI**).
+  launcher nella radice (**front-end di default: la GUI**; default di
+  `base_dir`/`fixv_base_dir` della GUI: `<install>\gui\samples`).
 - Modelli: dentro l'installazione, in `<install>\comfy_bridge\models\…`
   (auto-download dei backend; **preservati** a update/ripara/disinstallazione
   salvo richiesta esplicita — D14, 2026-10-05). La cartella modelli utente
@@ -170,11 +171,15 @@ Passi, nell'ordine:
 20. `tools` — estrae in `<install>\tools` sia `tools.zip` (x265/x264/mkvmerge)
     sia `NVEncC_9.17_x64.zip` (NVEncC 9.17, pacchetto flat); entrambi pinnati
     (Release v1.0.0, sha256 verificato), o `--tools-zip` per la parte tools.zip;
-21. `gui-settings` — pre-seeda `gui_cmnet2_settings.json` (solo se assente):
-    percorsi di `scripts/`, `vspipe`, tool, cartella di lavoro e `model_name`
-    di default (`qwen21-viggle`, o `longcat-gguf` con precision `q3` via
-    `--default-model`); su file esistente riempie solo i valori vuoti
-    (`model_name`/`model_precision`), senza mai sovrascrivere;
+21. `gui-settings` — `gui_cmnet2_settings.json` in `<install>\gui`: **seed
+    dal file curato** `GUI/gui_cmnet2_settings.json` (template nella wheel)
+    con i valori macchina riscritti (`script_dir`, `vspipe`, tool,
+    `base_dir`/`fixv_base_dir` = `<install>\gui\samples`, `model_name` da
+    `--default-model`, precision `q3` per `longcat-gguf`); su file esistente
+    riempie solo i valori vuoti; con `--update-gui-settings` sostituisce il
+    file quando differisce dal template atteso (backup `.bak`), altrimenti
+    le differenze sono elencate nel motivo di skip (il manager chiede
+    conferma prima di passare il flag — 06-10);
 22. `launchers` — scrive i launcher in `<install>`: `HAVC.cmd`/`HAVC.vbs`
     (**front-end di default = GUI**), `HAVC-Server.cmd` (server con scelta
     modello), `HAVC-Doctor.cmd`, `start_server.cmd`/`run_server_qwen21.cmd` +
@@ -187,7 +192,8 @@ Passi, nell'ordine:
 
 Flag: `--install-dir` (obbligatorio), `--python`, `--runtime-zip`,
 `--tools-zip`, `--with-dinov2`, `--update-configs` (sostituisce i config
-**diversi**, `.bak` accanto), `--use-system-python`, `--assets-dir`,
+**diversi**, `.bak` accanto), `--update-gui-settings` (idem per i settings
+GUI), `--use-system-python`, `--assets-dir`,
 `--wheel`, `--comfy-zip <zip>` (comfy_bridge locale per staging/offline),
 `--default-model <nome>` (modello GUI di default nel seed settings),
 `--only a,b`, `--plan`, `--dry-run`, `--json-progress`.

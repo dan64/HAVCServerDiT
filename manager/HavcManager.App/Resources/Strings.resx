@@ -77,7 +77,7 @@
     <value>DINOv2 weights included</value>
   </data>
   <data name="ComponentsServerGui" xml:space="preserve">
-    <value>Server + GUI (fixed in this version)</value>
+    <value>Server + GUI</value>
   </data>
   <data name="ComponentsTitle" xml:space="preserve">
     <value>Components</value>

@@ -19,16 +19,16 @@
 
 ---
 
-## 0. Come riprendere (handoff — aggiornato al 2026-10-06; M1–M4 — log (21)–(46))
+## 0. Come riprendere (handoff — aggiornato al 2026-10-06; M1–M4 — log (21)–(51))
 
 **Dove sta il lavoro**: branch `feature/installer` nel worktree
 `D:\PProjects\HAVCServerDiT_installer`; la cartella principale
 `D:\PProjects\HAVCServerDiT` è su `main` (la sua vecchia copia superata di
 `AGENTS.md` è stata rimossa: finché il branch non arriva su `main`, la memoria
-è solo qui). Ultimo commit **pushato**: `7dc346a`; da lì tutto procede a
-**commit locali** — push rimandati finché non c'è "qualcosa di stabile"
-(regola in §9). Ultimo commit locale: `a16578c` (più questo commit di
-chiusura).
+è solo qui). **Primo push del branch eseguito il 06-10** (`7dc346a` →
+`07cfcc2`, 65 commit — log (51)); da qui vale la regola di §9: commit
+locali man mano, push su segnale dell'autore. Ultimo commit: `07cfcc2`
+(più questo commit di chiusura).
 
 **Stato a fine sessione 2**: Fase 0 chiusa e verificata (update incrementale
 0.1.0→0.1.1 testato, log (14)); decisioni Fase 1 prese (D8–D11, §2); **spec
@@ -54,9 +54,8 @@ dall'autore** (tab #4/#5 OK; server in ascolto — log (42)). **M4:
 rifinitura completata** (log (46); **run in VM saltata** su richiesta
 dell'autore); **exe del manager standard di release**
 (`HAVC-Setup-0.1.12.exe` nella release — log (47)); **README riscritto
-(snello) + `docs/`** (log (50)). Restano: l'eventuale test *External
-console*; il **push** del branch (tutti i commit locali — decisione
-dell'autore).
+(snello) + `docs/`** (log (50)); ***External console* testato OK**
+(autore, 06-10); **push eseguito** (log (51)).
 **Decisione SDK chiusa (05-10)**: target **.NET 10** — SDK **10.0.401**
 installato machine-wide (standalone) e **VS 2026** (Community v18.10)
 installato lo stesso giorno: l'MSBuild 18.10 compila `net10` (smoke WPF verde)
@@ -1037,3 +1036,11 @@ storico.*
   relativi** (OK, 7 corretti), UTF-8 integro. Commit `d2266bd`. Script
   one-shot in `dist/make_docs.py`/`make_readme.py` + backup
   `dist/README.full-backup.md`.
+- **2026-10-06 (51)** — **Push del branch `feature/installer`** (autorizzato
+  dall'autore: "puoi fare la push"; *External console* testato OK
+  dall'autore). **Primo push dalla sessione 2: 65 commit**, da `7dc346a` a
+  `07cfcc2` — M1–M4, fix `.venv`, fix track `Manifest/`, samples, conferma
+  config, exe `HAVC-Setup-<ver>` standard, README+`docs/`, pre-release
+  v0.1.12. Pre-check: nessun artefatto lab/segreti tracciati; `Manifest/`
+  ora tracciato → un clone compila. Verifiche post-push:
+  `origin/feature/installer` == `07cfcc2` == HEAD locale.

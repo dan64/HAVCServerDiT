@@ -123,7 +123,12 @@ public static class ShellIntegration
         File.Copy(sourceExePath, target, overwrite: true);
         foreach (Type anchor in new[] { typeof(ShellIntegration), typeof(PreflightReport) })
         {
+            // Single-file publish: Location is empty and the exe is
+            // self-contained (only the apphost needs copying) — that is the
+            // case handled right below, so silence the IL3000 analysis here.
+#pragma warning disable IL3000
             string location = anchor.Assembly.Location;
+#pragma warning restore IL3000
             if (string.IsNullOrEmpty(location))
                 continue;  // single-file publish: the exe is self-contained
             string baseName = Path.GetFileNameWithoutExtension(location);

@@ -26,6 +26,13 @@ public sealed record BootstrapInvocation
     /// <summary>Always true for the manager (D10).</summary>
     public bool WithDinov2 { get; init; }
 
+    /// <summary>
+    /// True when the user confirmed replacing installed pipeline configs that
+    /// differ from the packaged ones (--update-configs; the bootstrap keeps
+    /// the previous file as &lt;name&gt;.json.bak).
+    /// </summary>
+    public bool UpdateConfigs { get; init; }
+
     public IReadOnlyList<string> ExtraArgs { get; init; } = [];
 }
 

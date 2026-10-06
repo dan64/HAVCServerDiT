@@ -30,6 +30,10 @@ public static class Strings
 
     public static string ComponentsTitle => ResourceManager.GetString("ComponentsTitle")!;
 
+    public static string ConfigsUpdateMessage => ResourceManager.GetString("ConfigsUpdateMessage")!;
+
+    public static string ConfigsUpdateTitle => ResourceManager.GetString("ConfigsUpdateTitle")!;
+
     public static string Continue => ResourceManager.GetString("Continue")!;
 
     public static string DesktopShortcutCheck => ResourceManager.GetString("DesktopShortcutCheck")!;

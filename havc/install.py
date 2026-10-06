@@ -311,6 +311,7 @@ class Ctx:
     default_model: str = DEFAULT_MODEL_NAME
     with_dinov2: bool = False
     use_system_python: bool = False
+    update_configs: bool = False
 
     @property
     def env_dir(self) -> Path:
@@ -893,6 +894,19 @@ def build_steps() -> list[Step]:
         return COMFY_BRIDGE["name"]
 
     # -- 14. configs -------------------------------------------------------
+    def configs_diff(c: Ctx) -> list[str]:
+        """Packaged configs whose installed copy exists and differs (bytes)."""
+        src = paths.configs_dir()
+        if not src.is_dir():
+            return []
+        dst = c.install_dir / "config"
+        different = []
+        for path in sorted(src.glob("*.json")):
+            target = dst / path.name
+            if target.is_file() and target.read_bytes() != path.read_bytes():
+                different.append(path.name)
+        return different
+
     def configs_check(c: Ctx) -> Optional[str]:
         src = paths.configs_dir()
         if not src.is_dir():
@@ -901,6 +915,13 @@ def build_steps() -> list[Step]:
         missing = [p.name for p in src.glob("*.json") if not (dst / p.name).exists()]
         if missing:
             return None
+        different = configs_diff(c)
+        if different and c.update_configs:
+            return None
+        if different:
+            shown = ", ".join(different[:3]) + ("..." if len(different) > 3 else "")
+            return (f"configs already present ({len(different)} differ and are kept: "
+                    f"{shown}; pass --update-configs to replace them)")
         return "configs already present"
 
     def configs_run(c: Ctx) -> str:
@@ -914,13 +935,28 @@ def build_steps() -> list[Step]:
                                  "reinstall the havc wheel")
         dst = c.install_dir / "config"
         dst.mkdir(parents=True, exist_ok=True)
-        copied = 0
+        copied = updated = kept = 0
         for path in sorted(src.glob("*.json")):
             target = dst / path.name
             if not target.exists():
                 shutil.copy2(path, target)
                 copied += 1
-        return f"{copied} configs copied" if copied else "no new configs"
+            elif target.read_bytes() != path.read_bytes():
+                if c.update_configs:
+                    # previous file kept next to it, then replaced
+                    shutil.copy2(target, target.with_name(target.name + ".bak"))
+                    shutil.copy2(path, target)
+                    updated += 1
+                else:
+                    kept += 1
+        parts = []
+        if copied:
+            parts.append(f"{copied} copied")
+        if updated:
+            parts.append(f"{updated} updated (previous kept as .bak)")
+        if kept:
+            parts.append(f"{kept} differ and were kept (use --update-configs)")
+        return ", ".join(parts) if parts else "no config changes"
 
     # -- 15. gui -----------------------------------------------------------
     def gui_files() -> Optional[dict[str, Path]]:
@@ -1230,7 +1266,8 @@ def build_steps() -> list[Step]:
         Step("comfy-bridge", "comfy_bridge in <install>",
              f"{COMFY_BRIDGE['name']} (pinned; models/ is preserved)",
              comfy_bridge_check, comfy_bridge_run),
-        Step("configs", "Pipeline configs in <install>/config", "copy missing configs",
+        Step("configs", "Pipeline configs in <install>/config",
+             "copy missing configs; --update-configs replaces differing ones (.bak kept)",
              configs_check, configs_run),
         Step("gui", "GUI files in <install>/gui",
              "GUI + scripts + samples (updated if different)",
@@ -1331,6 +1368,10 @@ def main(argv=None) -> int:
                         help="use a local tools.zip archive instead of downloading it (sha256 verified)")
     parser.add_argument("--with-dinov2", action="store_true",
                         help="also download the legacy DINOv2 weights (dinov2 backbone, ~740 MB)")
+    parser.add_argument("--update-configs", action="store_true",
+                        help="replace pipeline configs that differ from the packaged ones "
+                             "(the previous file is kept as <name>.json.bak); "
+                             "default: only copy missing configs")
     parser.add_argument("--use-system-python", action="store_true",
                         help="skip runtime provisioning and use the system Python (development)")
     parser.add_argument("--assets-dir", type=Path, default=None,
@@ -1386,6 +1427,7 @@ def main(argv=None) -> int:
         default_model=args.default_model,
         with_dinov2=args.with_dinov2,
         use_system_python=args.use_system_python,
+        update_configs=args.update_configs,
     )
     ok = run_steps(ctx, steps, only)
     return 0 if ok else 1

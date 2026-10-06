@@ -82,6 +82,18 @@
   <data name="ComponentsTitle" xml:space="preserve">
     <value>Components</value>
   </data>
+  <data name="ConfigsUpdateMessage" xml:space="preserve">
+    <value>This version updates {0} pipeline configuration file(s) that differ from the packaged version:
+
+{1}
+
+Replace your installed copies?
+Yes = replace them (each replaced file is kept as &lt;name&gt;.json.bak)
+No = keep your copies</value>
+  </data>
+  <data name="ConfigsUpdateTitle" xml:space="preserve">
+    <value>Update configuration files</value>
+  </data>
   <data name="Continue" xml:space="preserve">
     <value>Continue</value>
   </data>

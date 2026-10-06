@@ -322,7 +322,8 @@ public sealed class WizardViewModel : INotifyPropertyChanged
             (observe, ct) => _flow!.RunAsync(
                 new InstallPlan(
                     _manifest, InstallDir, WithDinov2: true,
-                    DefaultModel: _defaultModelName ?? Preflight.DefaultModelForThisMachine()),
+                    DefaultModel: _defaultModelName ?? Preflight.DefaultModelForThisMachine(),
+                    ConfirmConfigUpdates: ConfirmConfigUpdates),
                 observe, ct));
         if (outcome.Ok)
         {
@@ -413,7 +414,8 @@ public sealed class WizardViewModel : INotifyPropertyChanged
             (observe, ct) => _flow!.RunAsync(
                 new InstallPlan(
                     _updateManifest, InstallDir, WithDinov2: true,
-                    DefaultModel: Preflight.DefaultModelForThisMachine()),
+                    DefaultModel: Preflight.DefaultModelForThisMachine(),
+                    ConfirmConfigUpdates: ConfirmConfigUpdates),
                 observe, ct));
 
         if (outcome.Ok)
@@ -512,7 +514,8 @@ public sealed class WizardViewModel : INotifyPropertyChanged
             InstallDir, PythonRuntime.PythonExePath(InstallDir), wheel,
             RuntimeArchive: RuntimeArchivePath(state, cacheDir),
             WithDinov2: true,
-            DefaultModel: Preflight.DefaultModelForThisMachine());
+            DefaultModel: Preflight.DefaultModelForThisMachine(),
+            ConfirmConfigUpdates: ConfirmConfigUpdates);
         InstallOutcome outcome = await RunFlowOnProgressAsync(
             reset: true,
             (observe, ct) => _flow!.RunRepairAsync(plan, observe, ct));
@@ -530,6 +533,26 @@ public sealed class WizardViewModel : INotifyPropertyChanged
             return;
         }
         HandleFailedRun(outcome);
+    }
+
+    /// <summary>
+    /// Confirmation shown before a run replaces installed pipeline configs that
+    /// differ from the packaged ones (2026-10-06): yes = replace (each file
+    /// kept as &lt;name&gt;.json.bak), no = keep the installed copies.
+    /// </summary>
+    private bool ConfirmConfigUpdates(IReadOnlyList<string> files)
+    {
+        const int MaxShown = 12;
+        string list = string.Join("\n", files.Take(MaxShown).Select(f => "  - " + f));
+        if (files.Count > MaxShown)
+            list += $"\n  (+{files.Count - MaxShown} more)";
+        string message = string.Format(
+            CultureInfo.InvariantCulture, Strings.ConfigsUpdateMessage, files.Count, list);
+        var app = Application.Current;
+        if (app is null)
+            return false;
+        return app.Dispatcher.Invoke(
+            () => MessageDialog.Show(app.MainWindow, Strings.ConfigsUpdateTitle, message, yesNo: true));
     }
 
     private static string? RuntimeArchivePath(InstallState state, string cacheDir)

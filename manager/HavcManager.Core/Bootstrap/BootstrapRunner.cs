@@ -136,6 +136,8 @@ public sealed class BootstrapRunner
         }
         if (invocation.WithDinov2)
             yield return "--with-dinov2";
+        if (invocation.UpdateConfigs)
+            yield return "--update-configs";
         if (invocation.DefaultModel is not null)
         {
             yield return "--default-model";

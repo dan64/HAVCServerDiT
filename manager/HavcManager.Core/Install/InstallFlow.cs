@@ -17,7 +17,8 @@ public sealed record InstallPlan(
     ReleaseManifest Manifest,
     string InstallDir,
     bool WithDinov2 = true,
-    string? DefaultModel = null);
+    string? DefaultModel = null,
+    Func<IReadOnlyList<string>, bool>? ConfirmConfigUpdates = null);
 
 /// <summary>Parameters of a repair run (§6.4): cached wheel, no downloads.</summary>
 public sealed record RepairPlan(
@@ -26,7 +27,8 @@ public sealed record RepairPlan(
     string WheelPath,
     string? RuntimeArchive = null,
     bool WithDinov2 = true,
-    string? DefaultModel = null);
+    string? DefaultModel = null,
+    Func<IReadOnlyList<string>, bool>? ConfirmConfigUpdates = null);
 
 public sealed record InstallOutcome(bool Ok, int BootstrapExitCode, string? Error);
 
@@ -119,7 +121,7 @@ public sealed class InstallFlow
 
             return await RunStage2Async(
                 plan.InstallDir, pythonExe, wheelPath, plan.WithDinov2, plan.DefaultModel,
-                observe, log, cancellationToken).ConfigureAwait(false);
+                plan.ConfirmConfigUpdates, observe, log, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -164,7 +166,7 @@ public sealed class InstallFlow
 
             return await RunStage2Async(
                 plan.InstallDir, plan.PythonExe, plan.WheelPath, plan.WithDinov2, plan.DefaultModel,
-                observe, log, cancellationToken).ConfigureAwait(false);
+                plan.ConfirmConfigUpdates, observe, log, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -184,11 +186,26 @@ public sealed class InstallFlow
         string wheelPath,
         bool withDinov2,
         string? defaultModel,
+        Func<IReadOnlyList<string>, bool>? confirmConfigUpdates,
         Action<FlowEvent>? observe,
         ManagerLog log,
         CancellationToken cancellationToken)
     {
         observe?.Invoke(new FlowEvent("phase", "Running the installer"));
+        bool updateConfigs = false;
+        if (confirmConfigUpdates is not null)
+        {
+            IReadOnlyList<string> differing = ConfigSetUpdate.DifferingConfigs(wheelPath, installDir);
+            if (differing.Count > 0)
+            {
+                observe?.Invoke(new FlowEvent(
+                    "phase", $"Pipeline configs differ: {string.Join(", ", differing)}"));
+                updateConfigs = confirmConfigUpdates(differing);
+                log.Info("config update confirmation: " +
+                         (updateConfigs ? "replace" : "keep") + 
+                         $" ({string.Join(", ", differing)})");
+            }
+        }
         var invocation = new BootstrapInvocation
         {
             PythonExe = pythonExe,
@@ -197,6 +214,7 @@ public sealed class InstallFlow
             AssetsDir = Path.Combine(installDir, "cache", "assets"),
             WithDinov2 = withDinov2,
             DefaultModel = defaultModel,
+            UpdateConfigs = updateConfigs,
         };
         BootstrapResult result = await Runner.RunAsync(invocation, cancellationToken).ConfigureAwait(false);
         log.Info($"bootstrap exit {result.ExitCode}, ok={result.Ok}");

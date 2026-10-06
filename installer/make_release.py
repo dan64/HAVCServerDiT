@@ -8,11 +8,11 @@ artifacts.
 
 Generation (after building the wheel):
 
-    python installer/make_release.py --tag v0.1.0 --artifacts-dir dist/staging
+    python installer/make_release.py --tag v2.0.2 --artifacts-dir dist/staging-latest
 
 Verification of a manifest against local artifacts:
 
-    python installer/make_release.py --verify dist/staging/release.json --artifacts-dir dist/staging
+    python installer/make_release.py --verify dist/staging-latest/release.json --artifacts-dir dist/staging-latest
 
 No publishing: uploading to GitHub stays a separate step
 (gh release create/upload).
@@ -61,6 +61,7 @@ def collect_wheels(artifacts_dir: Path, version: str) -> tuple[Path, list[Path]]
         p.name for p in sorted(artifacts_dir.iterdir())
         if p.is_file() and p.suffix != ".whl" and p.name != "release.json"
         and not p.name.startswith("comfy_bridge_v")
+        and not p.name.startswith("HAVC-Setup-")  # manager exe: assembled but not in the manifest
     ]
     if ignored:
         print(f"[warning] ignored files (not wheels): {', '.join(ignored)}")
@@ -68,7 +69,11 @@ def collect_wheels(artifacts_dir: Path, version: str) -> tuple[Path, list[Path]]
     if len(project) != 1:
         fail(f"expected exactly one 'havc-{version}-*.whl' wheel in {artifacts_dir}, "
              f"found {len(project)}")
-    others = [p for p in wheels if p not in project]
+    stale = [p.name for p in wheels if p not in project and p.name.startswith("havc-")]
+    if stale:
+        print(f"[warning] stale havc wheel(s) ignored (remove them from the staging "
+              f"folder): {', '.join(stale)}")
+    others = [p for p in wheels if p not in project and not p.name.startswith("havc-")]
     return project[0], others
 
 

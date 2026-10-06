@@ -53,8 +53,10 @@ staging `v0.1.8`); **fix junction `.venv` → `venv`** (log (42)); **pre-release
 dall'autore** (tab #4/#5 OK; server in ascolto — log (42)). **M4:
 rifinitura completata** (log (46); **run in VM saltata** su richiesta
 dell'autore); **exe del manager standard di release**
-(`HAVC-Setup-0.1.11.exe` nella release — log (47)). Restano: **README snello
-+ `docs/`** (log (37)); l'eventuale test *External console* — log (45).
+(`HAVC-Setup-0.1.12.exe` nella release — log (47)); **README riscritto
+(snello) + `docs/`** (log (50)). Restano: l'eventuale test *External
+console*; il **push** del branch (tutti i commit locali — decisione
+dell'autore).
 **Decisione SDK chiusa (05-10)**: target **.NET 10** — SDK **10.0.401**
 installato machine-wide (standalone) e **VS 2026** (Community v18.10)
 installato lo stesso giorno: l'MSBuild 18.10 compila `net10` (smoke WPF verde)
@@ -1015,6 +1017,23 @@ storico.*
   passi, `doctor: all checks OK`, modelli riusati — 32,34 GB, venv/runtime/
   tool riscaricati; `dirty: false`). L'exe locale è stato poi **rigenerato
   come `HAVC-Setup-0.1.12.exe`** (stringa Components inclusa; sha256
-  `ae0f6c83…`; il vecchio 0.1.11 locale rimosso — resta su GitHub). Da fare:
-  pubblicare `v0.1.12` su ok (e l'update dell'install a 0.1.12 dal manager
-  per i wrapper).
+  `ae0f6c83…`; il vecchio 0.1.11 locale rimosso — resta su GitHub).
+  **Update dell'install a 0.1.12 riuscito dal manager** (autore: `wheel` +
+  `launchers` → 10 file, 19 skip, doctor verde; i 4 wrapper ora presenti).
+  **Pre-release `v0.1.12` pubblicata** (7 asset, exe incluso; digest 7/7 =
+  manifest, manifest remoto byte-identico `fff64e0b…`, HEAD wheel/exe 200,
+  Latest resta `v1.0.0`; note in `dist\release-notes-v0.1.12.md`).
+- **2026-10-06 (50)** — **README riscritto (snello) + cartella `docs/`**
+  (richiesta autore, log 37). `README.md` da 1392 → **71 righe**:
+  descrizione, 4 backend, **Install** (installer first, manuale per esperti),
+  quick start, requirements, features, indice `docs/`, credits. I dettagli
+  sono stati spostati **verbatim** in `docs/`: `installation.md` (installer,
+  setup manuale, quick update, upgrade CUDA, project structure),
+  `backends.md` (note misure + requisiti per backend), `usage.md` (avvio
+  server, launch script + nota installer, step consigliati),
+  `configuration.md`, `rpc-api.md`, `troubleshooting.md` (+ "Installation
+  and updates"), `whats-new.md`. Link interni rimappati tra i file;
+  `README_GUI.md` aggiornato. Verifiche: check automatico di **tutti i link
+  relativi** (OK, 7 corretti), UTF-8 integro. Commit `d2266bd`. Script
+  one-shot in `dist/make_docs.py`/`make_readme.py` + backup
+  `dist/README.full-backup.md`.

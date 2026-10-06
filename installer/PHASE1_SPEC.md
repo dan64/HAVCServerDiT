@@ -414,7 +414,12 @@ folder*); in caso di rollback, messaggio dedicato + log.
 - **M3** — update incrementale + rollback + ripara (sul test install) + lock
   istanze. **Completata il 05-10** (log (29) in `AGENTS.md`).
 - **M4** — rifinitura UI, log, scorciatoie/registrazione, tag di test; poi run
-  in VM.
+  in VM. **Rifinitura completata il 06-10** (log (46): retention log,
+  validazione manifest, link *Open log folder* nei dialog d'errore, refresh
+  della registrazione; scorciatoie/registro verificati sul campo). **Run in
+  VM saltata** su richiesta dell'autore (06-10); "tag di test" = le
+  pre-release `v0.1.x` già usate per i test reali. Aperto: asset
+  `HAVC-Setup-<ver>.exe` (publish single-file del manager, §11).
 
 ---
 

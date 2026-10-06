@@ -19,7 +19,7 @@
 
 ---
 
-## 0. Come riprendere (handoff — aggiornato al 2026-10-05 (sera); M1–M3 + fix `.venv` — log (21)–(43))
+## 0. Come riprendere (handoff — aggiornato al 2026-10-06; M1–M4 — log (21)–(46))
 
 **Dove sta il lavoro**: branch `feature/installer` nel worktree
 `D:\PProjects\HAVCServerDiT_installer`; la cartella principale
@@ -50,9 +50,10 @@ staging `v0.1.8`); **fix junction `.venv` → `venv`** (log (42)); **pre-release
 **conferma prima di sovrascrivere i config** (dialog nel manager +
 `--update-configs` nel bootstrap; **pre-release `v0.1.11` pubblicata** — log
 (45)). *Run Server* sull'install `D:\HAVCServerDiT` **verificato
-dall'autore** (tab #4/#5 OK; server in ascolto — log (42)). Restano: il run
-in VM, **README snello + `docs/`** (log (37)); l'eventuale test *External
-console* — log (45).
+dall'autore** (tab #4/#5 OK; server in ascolto — log (42)). **M4:
+rifinitura completata** (log (46); **run in VM saltata** su richiesta
+dell'autore; aperto: l'exe del manager — §11). Restano: **README snello +
+`docs/`** (log (37)); l'eventuale test *External console* — log (45).
 **Decisione SDK chiusa (05-10)**: target **.NET 10** — SDK **10.0.401**
 installato machine-wide (standalone) e **VS 2026** (Community v18.10)
 installato lo stesso giorno: l'MSBuild 18.10 compila `net10` (smoke WPF verde)
@@ -958,3 +959,17 @@ storico.*
   (`release.json` verificato a parte), manifest remoto byte-identico
   (`64d9234a…`), HEAD wheel 200 (1.214.905 byte), **Latest resta
   `v1.0.0`**; note in `dist\release-notes-v0.1.11.md`.
+- **2026-10-06 (46)** — **M4 completata (rifinitura UI/log, senza VM).**
+  Manager: `ManagerLog` con retention (**ultimi 10 file** `manager-*.log`,
+  spec §9) + `ManifestClient` con validazione (schema 1, `app_version`,
+  project wheel, name/url/sha256) ed errori amichevoli; dialog d'errore con
+  link **"Open log folder"** (spec §9); **refresh della registrazione
+  uninstall** a fine update (DisplayVersion allineato; era rimasto 0.1.9).
+  Test: +6 unit (2 log, 4 manifest) → **42/42**. Verifiche: build 0 warning;
+  smoke del manager (pagina Installed: 0.1.11, bottoni/About ok);
+  scorciatoie/registrazione verificati sul campo (Start Menu `HAVC.lnk` +
+  `HAVC Manager.lnk`, Desktop `HAVC.lnk`, HKCU Uninstall ✓). **Run in VM
+  saltata** (richiesta autore); "tag di test" = le pre-release `v0.1.x` già
+  usate per i test reali. Aperto con l'autore: pubblicare l'**exe del
+  manager** (spec §11 `HAVC-Setup-<ver>.exe`, single-file self-contained).
+  Restano: **README snello + `docs/`**; eventuale test *External console*.

@@ -57,7 +57,7 @@ CLI arguments, the full launch-script reference and the suggested inference step
 - [Usage](docs/usage.md) — server startup, launch scripts, CLI arguments, suggested steps
 - [Pipeline configuration](docs/configuration.md) — config files and key reference
 - [RPC API](docs/rpc-api.md) — XML-RPC API, example clients, shared-memory transport
-- [GUI guide](GUI/README_GUI.md) — the desktop client
+- [GUI guide](docs/gui.md) — the desktop client
 - [Troubleshooting](docs/troubleshooting.md)
 - [What's New](docs/whats-new.md) — changelog
 

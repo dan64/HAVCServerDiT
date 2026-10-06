@@ -397,7 +397,7 @@ storico.*
 - `install.cmd`, `quick_update.cmd`, `start_server.cmd`, `run_server_*.cmd` — installazione e avvio attuali
 - `installer/PHASE0_SPEC.md` — specifica Fase 0 (packaging, lockfile, bootstrap, `release.json`)
 - `installer/PHASE1_SPEC.md` — specifica del manager C# (Fase 1: wizard, update/ripara, stato locale)
-- `GUI/README_GUI.md` — installazione GUI, pesi DINOv3, tool esterni
+- `docs/gui.md` — installazione GUI, pesi DINOv3, tool esterni
 - `packages/`, `dist/` — wheel e tool già distribuiti
 - `_dev/AGENTS.md` (in `D:\PProjects\HAVCServerDiT_dev`) — architettura e cronologia del progetto
 - `patch_nunchaku.py` — patch con `--check`/`--revert` (già idempotente-friendly)
@@ -1044,3 +1044,9 @@ storico.*
   v0.1.12. Pre-check: nessun artefatto lab/segreti tracciati; `Manifest/`
   ora tracciato → un clone compila. Verifiche post-push:
   `origin/feature/installer` == `07cfcc2` == HEAD locale.
+- **2026-10-06 (52)** — **`GUI/README_GUI.md` → `docs/gui.md`** (richiesta
+  autore). `git mv` (rename tracciato, storia preservata) + link aggiornati:
+  7 in `whats-new.md` (+ il testo di uno), 1 interno (`usage.md`), l'indice
+  del README, §8 di AGENTS, una nota nella PHASE0. Check automatico dei
+  link relativi: **tutti OK**. (I riferimenti nei log storici restano come
+  sono.)

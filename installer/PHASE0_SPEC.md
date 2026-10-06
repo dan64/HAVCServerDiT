@@ -370,7 +370,7 @@ Verificato il 2026-10-04 (in questo branch):
   `vscmnet2\`; dimensioni identiche al byte all'installazione di riferimento;
   rerun idempotente; `havc doctor` a **9 check verdi** (incluso `cmnet2`);
   dry-run del flag `--with-dinov2` verificato. Corretto il link morto in
-  `GUI/README_GUI.md` (il checkpoint DINOv3 sta nella v1.3.0, non v1.2.0).
+  `docs/gui.md` (il checkpoint DINOv3 sta nella v1.3.0, non v1.2.0).
 - **NVEncC pubblicato e integrato** (2026-10-04): `NVEncC_9.17_x64.zip`
   (100,6 MB) caricato nella Release v1.0.0 accanto a `tools.zip` (digest
   verificato); passo `tools` esteso (gestisce entrambi gli archivi, estrazione

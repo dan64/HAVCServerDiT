@@ -70,7 +70,7 @@ for example in the Cluster 2, the reference frame #000145 was selected to repres
 
 This _deduplication_ of keyframes will improve color consistency and _accelerate_ the coloring process, as fewer images will need to be colored.    
 
-See [GUI README: Tab 1](../GUI/README_GUI.md#tab-1--extraction)
+See [GUI README: Tab 1](gui.md#tab-1--extraction)
 for the full workflow and recovery steps if a run is interrupted.
 
 > Existing `gui_cmnet2_settings.json` files are migrated automatically on
@@ -157,7 +157,7 @@ clip = vs_cmnet2(
 > **Existing installations, action needed**: the shipped DINOv3 checkpoint was renamed
 > `DINOv3FeatureV6_LocalAtten_p372402.pth` → `DINOv3FeatureV6_LocalAtten_p374099.pth`
 > (default `proximity_bias_alpha` also changed 0.7 → 0.5). Re-download the checkpoint
-> under the new name — see [DINOv3 backbone weights](../GUI/README_GUI.md#dinov3-backbone-weights-required-default-since-108).
+> under the new name — see [DINOv3 backbone weights](gui.md#dinov3-backbone-weights-required-default-since-108).
 > If the old file is left in place, `vscmnet2` fails fast at init with a clear error
 > listing the files actually present in the weights directory.
 
@@ -219,7 +219,7 @@ An **Enhance Prompt** checkbox is available in Tab 2 and Tab 4 (Fix Image).
 
 ### 2026-09-25 — x264 encoder option (GUI)
 
-Added **x264** as a third software encoder choice in the GUI's Encode/Merge tab, alongside the existing `x265` (software, 10-bit) and `Nvenc` (GPU hardware, H.265). `x264` is an 8-bit H.264 CPU encoder — useful when H.265 decoding/compatibility is a constraint. The `x264.exe` binary is located next to `x265.exe`, same convention already used for `NVEncC64.exe` — no extra path field needed in the GUI. Now included in the Release 1.0.0 `tools.zip` alongside `x265.exe`/`mkvmerge.exe`. See [GUI README: install external tools](../GUI/README_GUI.md#5-install-external-tools).
+Added **x264** as a third software encoder choice in the GUI's Encode/Merge tab, alongside the existing `x265` (software, 10-bit) and `Nvenc` (GPU hardware, H.265). `x264` is an 8-bit H.264 CPU encoder — useful when H.265 decoding/compatibility is a constraint. The `x264.exe` binary is located next to `x265.exe`, same convention already used for `NVEncC64.exe` — no extra path field needed in the GUI. Now included in the Release 1.0.0 `tools.zip` alongside `x265.exe`/`mkvmerge.exe`. See [GUI README: install external tools](gui.md#5-install-external-tools).
 
 ### 2026-09-24 — vscmnet2 1.0.9 (proximity-weighted memory matching)
 
@@ -252,7 +252,7 @@ A new **Backbone** combo (`dinov3` / `dinov2`) has been added to the GUI in both
 
 Both scripts now pass the selected backbone to `vs_cmnet2()` / `vs_cmnet2_recolor()` via a `Backbone` VapourSynth argument, alongside the existing `RenderSpeed` and `MemoryFrames` parameters.
 
-> **Prerequisite**: the DINOv3 backbone requires new weight files — see [GUI README: DINOv3 backbone weights](../GUI/README_GUI.md#dinov3-backbone-weights-required-default-since-108) for download links and install steps. The `dinov2` option remains available for installations that only have the legacy DINOv2 weights.
+> **Prerequisite**: the DINOv3 backbone requires new weight files — see [GUI README: DINOv3 backbone weights](gui.md#dinov3-backbone-weights-required-default-since-108) for download links and install steps. The `dinov2` option remains available for installations that only have the legacy DINOv2 weights.
 
 ### 2026-07-10 — LongCat GGUF Backend
 
@@ -328,7 +328,7 @@ Key features:
 - **Delayed import**: `vscmnet2` is imported only when Colorize is clicked (does not block GUI startup)
 - **Backbone selection** (`dinov3` / `dinov2`, since 2026-09-28): passed to `vscmnet2.pil_cmnet2_colorize()` — same combo already available in Encode/Merge (Tab 3) and Fix Video (Tab 6)
 
-> **Prerequisite**: `vscmnet2` must be installed with model weights and checkpoints present (see [GUI README](../GUI/README_GUI.md#3-install-vscmnet2)). No RPC connection needed.
+> **Prerequisite**: `vscmnet2` must be installed with model weights and checkpoints present (see [GUI README](gui.md#3-install-vscmnet2)). No RPC connection needed.
 
 The tab order has been updated: **1.** Extraction → **2.** Colorization → **3.** Encode/Merge → **4.** Fix Image → **5.** Fix Colors → **6.** Fix Video.
 
@@ -355,7 +355,7 @@ Key features:
 The Fix Video tab is independent of the batch pipeline and does not require the RPC server.
 Only the frames between **RefStart / RefEnd** will be recolored. 
 
-> **Prerequisite**: NVEncC must be installed in `tools\NVEncC\` (see [GUI README](../GUI/README_GUI.md#5-install-external-tools)).
+> **Prerequisite**: NVEncC must be installed in `tools\NVEncC\` (see [GUI README](gui.md#5-install-external-tools)).
 
 ### 2026-06-12 — Fix Image Tab (GUI)
 
@@ -395,6 +395,6 @@ It orchestrates the full video colorization pipeline from a single graphical int
 
 ![GUI Tab #2](https://github.com/dan64/HAVCServerDiT/blob/main/GUI/assets/gui_page3.jpg)
 
-See [GUI/README_GUI.md](../GUI/README_GUI.md) for installation, setup, and usage instructions.
+See [GUI guide](gui.md) for installation, setup, and usage instructions.
 
 > **Prerequisite**: the HAVC DiT Server must be running before the GUI can colorize frames.

@@ -62,6 +62,8 @@ public static class Strings
 
     public static string OpenGui => ResourceManager.GetString("OpenGui")!;
 
+    public static string OpenLogFolderLink => ResourceManager.GetString("OpenLogFolderLink")!;
+
     public static string OpenReleaseNotes => ResourceManager.GetString("OpenReleaseNotes")!;
 
     public static string OpenWorkFolderButton => ResourceManager.GetString("OpenWorkFolderButton")!;

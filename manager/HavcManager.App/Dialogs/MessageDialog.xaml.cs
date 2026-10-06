@@ -12,25 +12,32 @@ namespace HavcManager.App.Dialogs;
 public partial class MessageDialog : Window
 {
     private string? _linkUrl;
+    private Action? _linkAction;
 
     private MessageDialog() => InitializeComponent();
 
-    /// <summary>Shows the dialog; returns true for OK/Yes, false for No/close.</summary>
+    /// <summary>
+    /// Shows the dialog; returns true for OK/Yes, false for No/close.
+    /// The optional link runs <paramref name="linkAction"/> when clicked
+    /// (e.g. "Open log folder"), otherwise it opens <paramref name="linkUrl"/>.
+    /// </summary>
     public static bool Show(
         Window? owner,
         string title,
         string message,
         bool yesNo = false,
         string? linkText = null,
-        string? linkUrl = null)
+        string? linkUrl = null,
+        Action? linkAction = null)
     {
         var dialog = new MessageDialog { Title = title };
         if (owner is not null)
             dialog.Owner = owner;
         dialog.MessageText.Text = message;
-        if (!string.IsNullOrEmpty(linkText) && !string.IsNullOrEmpty(linkUrl))
+        if (!string.IsNullOrEmpty(linkText) && (linkAction is not null || !string.IsNullOrEmpty(linkUrl)))
         {
             dialog._linkUrl = linkUrl;
+            dialog._linkAction = linkAction;
             dialog.LinkRun.Text = linkText;
             dialog.LinkBlock.Visibility = Visibility.Visible;
         }
@@ -61,7 +68,9 @@ public partial class MessageDialog : Window
 
     private void OnLinkClick(object sender, RoutedEventArgs e)
     {
-        if (_linkUrl is not null)
+        if (_linkAction is not null)
+            _linkAction();
+        else if (_linkUrl is not null)
             ShellIntegration.OpenUrl(_linkUrl);
     }
 }

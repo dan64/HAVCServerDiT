@@ -114,4 +114,52 @@ public class ManifestParsingTests
         Assert.Equal("", plan[1].CacheSubfolder);
         Assert.Equal("assets", plan[2].CacheSubfolder);
     }
+
+    [Fact]
+    public async Task Rejects_a_manifest_without_app_version()
+    {
+        var ex = await FetchInvalidAsync(
+            """{"schema": 1, "wheels": [{"name": "a.whl", "url": "u", "sha256": "s", "kind": "project"}]}""");
+        Assert.Contains("app_version", ex.Message);
+    }
+
+    [Fact]
+    public async Task Rejects_a_manifest_without_a_project_wheel()
+    {
+        var ex = await FetchInvalidAsync(
+            """{"schema": 1, "app_version": "1.0", "wheels": [{"name": "a.whl", "url": "u", "sha256": "s", "kind": "python-wheel"}]}""");
+        Assert.Contains("project wheel", ex.Message);
+    }
+
+    [Fact]
+    public async Task Rejects_an_artifact_with_missing_sha256()
+    {
+        var ex = await FetchInvalidAsync(
+            """{"schema": 1, "app_version": "1.0", "wheels": [{"name": "a.whl", "url": "u", "kind": "project"}]}""");
+        Assert.Contains("name/url/sha256", ex.Message);
+    }
+
+    [Fact]
+    public async Task Rejects_an_unsupported_schema()
+    {
+        var ex = await FetchInvalidAsync(
+            """{"schema": 2, "app_version": "1.0", "wheels": [{"name": "a.whl", "url": "u", "sha256": "s", "kind": "project"}]}""");
+        Assert.Contains("schema", ex.Message);
+    }
+
+    private static async Task<InvalidDataException> FetchInvalidAsync(string json)
+    {
+        string dir = TestPaths.NewTempDir();
+        try
+        {
+            string path = Path.Combine(dir, "release.json");
+            await File.WriteAllTextAsync(path, json);
+            return await Assert.ThrowsAsync<InvalidDataException>(
+                () => new ManifestClient().FetchAsync(path));
+        }
+        finally
+        {
+            TestPaths.Delete(dir);
+        }
+    }
 }

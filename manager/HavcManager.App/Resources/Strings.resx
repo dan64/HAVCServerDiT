@@ -136,6 +136,9 @@ No = keep your copies</value>
   <data name="OpenGui" xml:space="preserve">
     <value>Open HAVC GUI</value>
   </data>
+  <data name="OpenLogFolderLink" xml:space="preserve">
+    <value>Open log folder</value>
+  </data>
   <data name="OpenReleaseNotes" xml:space="preserve">
     <value>Open release notes</value>
   </data>

@@ -435,6 +435,16 @@ public sealed class WizardViewModel : INotifyPropertyChanged
                 Dirty = false,
                 LastVerify = new LastVerifyState { Ts = now, Ok = true, AppVersion = _updateManifest.AppVersion },
             });
+            try
+            {
+                // keep the uninstall entry in step with the updated version
+                ShellIntegration.RegisterUninstall(InstallDir, _updateManifest.AppVersion);
+            }
+            catch (Exception ex)
+            {
+                new ManagerLog(InstallDir).Warn(
+                    $"could not refresh the uninstall registration: {ex.Message}");
+            }
             ReloadExisting();
             Navigate(WizardPage.Installed);
             MessageDialog.Show(
@@ -477,7 +487,10 @@ public sealed class WizardViewModel : INotifyPropertyChanged
             ReloadExisting();
             Navigate(WizardPage.Installed);
             MessageDialog.Show(
-                Application.Current?.MainWindow, Strings.ErrorTitle, Strings.UpdateRolledBackMessage + share);
+                Application.Current?.MainWindow, Strings.ErrorTitle,
+                Strings.UpdateRolledBackMessage + share,
+                linkText: Strings.OpenLogFolderLink,
+                linkAction: () => ShellIntegration.OpenLogs(InstallDir));
         }
         else
         {
@@ -486,7 +499,9 @@ public sealed class WizardViewModel : INotifyPropertyChanged
             Navigate(WizardPage.Installed);
             MessageDialog.Show(
                 Application.Current?.MainWindow, Strings.ErrorTitle,
-                Strings.UpdateDirtyMessage + "\n" + Path.Combine(InstallDir, "logs") + share);
+                Strings.UpdateDirtyMessage + "\n" + Path.Combine(InstallDir, "logs") + share,
+                linkText: Strings.OpenLogFolderLink,
+                linkAction: () => ShellIntegration.OpenLogs(InstallDir));
         }
     }
 
@@ -625,7 +640,7 @@ public sealed class WizardViewModel : INotifyPropertyChanged
             string message = _failureDetail ?? outcome.Error ?? Strings.StatusFailed;
             if (!string.IsNullOrEmpty(_failureRemediation))
                 message += "\n\n" + _failureRemediation;
-            ShowError(Strings.ErrorTitle, message);
+            ShowError(Strings.ErrorTitle, message, () => ShellIntegration.OpenLogs(InstallDir));
         }
     }
 
@@ -924,8 +939,11 @@ public sealed class WizardViewModel : INotifyPropertyChanged
         return bytes + " B";
     }
 
-    private static void ShowError(string title, string message)
-        => MessageDialog.Show(Application.Current?.MainWindow, title, message);
+    private static void ShowError(string title, string message, Action? openLogs = null)
+        => MessageDialog.Show(
+            Application.Current?.MainWindow, title, message,
+            linkText: openLogs is null ? null : Strings.OpenLogFolderLink,
+            linkAction: openLogs);
 
     private static void OnUi(Action action)
     {

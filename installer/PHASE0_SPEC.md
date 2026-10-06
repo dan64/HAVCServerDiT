@@ -150,7 +150,11 @@ Passi, nell'ordine:
     sha256; `--comfy-zip` per staging/offline) e lo estrae in
     `<install>\comfy_bridge`, **preservando `models/`**; marker `.source` per
     l'idempotenza;
-14. `configs` — copia le config di pipeline in `<install>\config` (solo mancanti);
+14. `configs` — copia le config di pipeline in `<install>\config`: le mancanti
+    sempre; con `--update-configs` sostituisce anche quelle **diverse** dalla
+    versione packaged (backup `<nome>.json.bak` accanto); senza flag le
+    differenze sono elencate nel motivo di skip (il manager chiede conferma
+    prima di passare il flag — 06-10, log (45));
 15. `gui` — copia i file GUI in `<install>\gui` (script principale, helper,
     `scripts/*.vpy`, `samples/` — dalla copia inclusa nella wheel o dal
     checkout); aggiorna i file se il contenuto differisce (skip solo se
@@ -181,7 +185,8 @@ Passi, nell'ordine:
     un FAIL qui è un errore del bootstrap.
 
 Flag: `--install-dir` (obbligatorio), `--python`, `--runtime-zip`,
-`--tools-zip`, `--with-dinov2`, `--use-system-python`, `--assets-dir`,
+`--tools-zip`, `--with-dinov2`, `--update-configs` (sostituisce i config
+**diversi**, `.bak` accanto), `--use-system-python`, `--assets-dir`,
 `--wheel`, `--comfy-zip <zip>` (comfy_bridge locale per staging/offline),
 `--default-model <nome>` (modello GUI di default nel seed settings),
 `--only a,b`, `--plan`, `--dry-run`, `--json-progress`.

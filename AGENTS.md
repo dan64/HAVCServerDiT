@@ -46,12 +46,13 @@ manifest accanto all'exe (log (36)); **fix layout server/GUI** (log (38));
 **pre-release `v0.1.6` pubblicata** (log (39)); **External console** (log
 (40)); **comfy self-contained + niente cartella modelli** (D14, log (41);
 staging `v0.1.8`); **fix junction `.venv` → `venv`** (log (42)); **pre-release
-`v0.1.9` pubblicata** (log (43)); **samples GUI nella wheel** (havc
-**0.1.10**, staging `v0.1.10` pronta — log (44)). *Run Server* sull'install
-`D:\HAVCServerDiT` **verificato dall'autore** (tab #4/#5 OK; server in
-ascolto — log (42)). Restano: il run in VM, **README snello + `docs/`**
-(log (37)); pubblicare `v0.1.10`; decidere il punto `configs`
-(content-compare?) e l'eventuale test *External console* — log (44).
+`v0.1.9` pubblicata** (log (43)); **samples GUI nella wheel** (log (44));
+**conferma prima di sovrascrivere i config** (dialog nel manager +
+`--update-configs` nel bootstrap; havc **0.1.11**, staging pronta — log
+(45)). *Run Server* sull'install `D:\HAVCServerDiT` **verificato
+dall'autore** (tab #4/#5 OK; server in ascolto — log (42)). Restano: il run
+in VM, **README snello + `docs/`** (log (37)); pubblicare `v0.1.11`;
+l'eventuale test *External console* — log (45).
 **Decisione SDK chiusa (05-10)**: target **.NET 10** — SDK **10.0.401**
 installato machine-wide (standalone) e **VS 2026** (Community v18.10)
 installato lo stesso giorno: l'MSBuild 18.10 compila `net10` (smoke WPF verde)
@@ -69,9 +70,9 @@ doppio click su `HAVC.vbs`.
 05-10 dal bootstrap con la staging `v0.1.8` (23/23 step, doctor verde;
 `install.json` scritto a mano per farla riconoscere dal manager — le
 scorciatoie/registro le scrive il wizard al prossimo giro), aggiornata a
-havc **0.1.10** (alias `.venv` → `venv` per la GUI; `gui\samples` inclusi;
-**Run Server + tab #4/#5 verificati dall'autore**, log (42)–(44)). La
-precedente
+havc **0.1.11** (alias `.venv` → `venv` per la GUI; `gui\samples` inclusi;
+**Run Server + tab #4/#5 verificati dall'autore**; conferma config nel flow
+update — log (42)–(45)). La precedente
 `D:\HAVC_Manager_Test` è stata disinstallata (log (35)). I modelli (una
 volta scaricati) stanno in `<install>\comfy_bridge\models`, preservati.
 
@@ -933,3 +934,24 @@ storico.*
   aggiornato a mano il q3 nell'install) — decidere se passare a
   content-compare. Da fare: pubblicare `v0.1.10` su ok; chiudere il punto
   `configs`.
+- **2026-10-06 (45)** — **Conferma prima di sovrascrivere i config (dialog
+  nel manager) — punto `configs` chiuso; havc 0.1.11.** Bootstrap: nuovo
+  `--update-configs` (content-compare sui config; backup `<nome>.json.bak`
+  accanto); senza flag le differenze finiscono nel motivo di skip ("N differ
+  and are kept: ...; pass --update-configs to replace them"). Manager:
+  `ConfigSetUpdate.DifferingConfigs` (confronto zip-wheel vs install, solo
+  file presenti su entrambi i lati) + callback di conferma nel plan
+  (update/ripara/fresh; **il rollback non chiede**) + dialog inglese *Update
+  configuration files* (Yes/No, elenco fino a 12 file) + flag al runner.
+  Test: +4 unit (`ConfigSetUpdateTests`) → **36/36**. Verifiche: console
+  e2e su `D:\HAVCServerDiT` (keep-mode: 4 config elencati e non toccati;
+  `--update-configs`: 4 aggiornati, `.bak` verificati al byte; rerun
+  pulito); **UI reale** (manager Debug + test-manifest: update 0.1.9→0.1.11
+  → dialog *Update available* → **dialog configs apparso e confermato** →
+  bootstrap con `--update-configs` → q4 ripristinato + `.bak`;
+  `install.json` 0.1.11, doctor verde; riga di log `config update
+  confirmation: replace`). Nota: lo script UIA non "vedeva" i dialog del
+  manager in questo ambiente (li ha confermati l'autore) — verifica via
+  log/stato/file. havc **0.1.11** (staging `v0.1.11` +
+  `test-manifest-local.json`; `staging-v0.1.10` rimossa, superata). Da fare:
+  pubblicare `v0.1.11` su ok.

@@ -234,11 +234,17 @@ prima installazione.
    up to date*; se `requires_env_rebuild` → §6.7.
 3. Download delta: nuova wheel (sha256) e asset il cui sha256 differisce
    dalla cache; la wheel precedente resta in cache.
-4. Stadio 1 (bootstrap nel runtime) → stadio 2 (run bootstrap con la nuova
+4. **Conferma config** (06-10): se qualche config in `<install>\config`
+   differisce da quello dentro la wheel nuova (file presenti su entrambi i
+   lati), dialog *Update configuration files* con l'elenco (Yes =
+   sostituisci, tenendo `<nome>.json.bak`; No = conserva). La scelta passa
+   il flag `--update-configs` al bootstrap. Nessun dialog se l'elenco è
+   vuoto; il rollback non chiede mai.
+5. Stadio 1 (bootstrap nel runtime) → stadio 2 (run bootstrap con la nuova
    wheel) → exit 0 + `result.ok`.
-5. **PASS** → `previous` = snapshot corrente, `app_version` = nuova,
+6. **PASS** → `previous` = snapshot corrente, `app_version` = nuova,
    `last_verify` aggiornato; messaggio con `notes_url`.
-6. **FAIL** → **rollback**: reinstallare la wheel precedente nel runtime e nel
+7. **FAIL** → **rollback**: reinstallare la wheel precedente nel runtime e nel
    venv (rerun bootstrap con la wheel precedente — il passo `wheel` fa
    `--force-reinstall`) → verify; se anche il rollback fallisce → stato
    `dirty`, dialog con percorso log e istruzioni. Nessun retry automatico.
@@ -247,7 +253,9 @@ prima installazione.
 
 Rerun bootstrap sulla versione installata (wheel già in cache) — stessa
 macchina dell'update, senza download nuovo. Usato anche per completare un
-`dirty`.
+`dirty`. Se qualche config installato differisce da quello nella wheel,
+l'utente riceve la stessa conferma dell'update (dialog *Update
+configuration files*; il rollback non chiede mai).
 
 ### 6.5 Disinstallazione
 

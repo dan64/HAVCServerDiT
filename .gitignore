@@ -179,3 +179,6 @@ manager/.vs/
 
 # Agent session files
 .codewhale/
+
+# Private working memory (agents/sessions) - never publish
+/AGENTS.md

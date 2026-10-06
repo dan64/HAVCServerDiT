@@ -973,3 +973,10 @@ storico.*
   usate per i test reali. Aperto con l'autore: pubblicare l'**exe del
   manager** (spec §11 `HAVC-Setup-<ver>.exe`, single-file self-contained).
   Restano: **README snello + `docs/`**; eventuale test *External console*.
+  **Trovato per strada (fix `84a6eb0`)**: la regola `MANIFEST` di
+  `.gitignore` (case-insensitive su Windows) nascondeva
+  `manager/HavcManager.Core/Manifest/` — i 5 file (ManifestClient,
+  ReleaseManifest, ArtifactEntry, DownloadPlan, RuntimeInfo) **non erano mai
+  stati committati** da M1 (un clone fresco non compilava il manager); regola
+  ristretta a `/MANIFEST` + file tracciati — nessun push precedente, quindi
+  nessuna storia da correggere.

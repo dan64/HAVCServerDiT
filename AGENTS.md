@@ -1001,3 +1001,15 @@ storico.*
   versione"; il senso era "unica modalità in questa versione", D10).
   Nessun rebuild/publish per ora: la stringa uscirà col **prossimo** build
   dell'exe.
+- **2026-10-06 (49)** — **Wrapper per-modello ripristinati nel layout
+  installato** (segnalazione autore: mancavano `run_server_fp4/int4/
+  longcat`). Il passo `launchers` scrive ora anche
+  **`run_server_{fp4,int4,longcat,q3}.cmd`** (gli storici del repo/README,
+  adattati: `call "%~dp0start_server.cmd" <arg>`; q3 incluso per completare
+  la tabella del README); hint/step e PHASE0 §5 aggiornati. havc **0.1.12**
+  (wheel + staging `v0.1.12` + `test-manifest-local.json`/`release.json`
+  accanto all'exe → aggiornati a 0.1.12; `staging-v0.1.11` resta = record
+  pubblicato). Verifiche: scratch `--only launchers` → **10 file** con CRLF,
+  contenuti ok, rerun idempotente; manifest verificato. In corso: test
+  install dell'autore (con la staging 0.1.12). Da fare: pubblicare `v0.1.12`
+  su ok.

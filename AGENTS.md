@@ -1010,6 +1010,11 @@ storico.*
   (wheel + staging `v0.1.12` + `test-manifest-local.json`/`release.json`
   accanto all'exe → aggiornati a 0.1.12; `staging-v0.1.11` resta = record
   pubblicato). Verifiche: scratch `--only launchers` → **10 file** con CRLF,
-  contenuti ok, rerun idempotente; manifest verificato. In corso: test
-  install dell'autore (con la staging 0.1.12). Da fare: pubblicare `v0.1.12`
-  su ok.
+  contenuti ok, rerun idempotente; manifest verificato. **Test install
+  dell'autore riuscito** (06-10: 0.1.11 dall'exe + manifest locale; 23
+  passi, `doctor: all checks OK`, modelli riusati — 32,34 GB, venv/runtime/
+  tool riscaricati; `dirty: false`). L'exe locale è stato poi **rigenerato
+  come `HAVC-Setup-0.1.12.exe`** (stringa Components inclusa; sha256
+  `ae0f6c83…`; il vecchio 0.1.11 locale rimosso — resta su GitHub). Da fare:
+  pubblicare `v0.1.12` su ok (e l'update dell'install a 0.1.12 dal manager
+  per i wrapper).

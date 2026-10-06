@@ -274,6 +274,22 @@ if %errorlevel% neq 0 (
 )
 endlocal
 """,
+    "run_server_fp4.cmd": r"""@echo off
+:: run_server_fp4.cmd : launch the server with Nunchaku FP4 (RTX 50-series)
+call "%~dp0start_server.cmd" fp4
+""",
+    "run_server_int4.cmd": r"""@echo off
+:: run_server_int4.cmd : launch the server with Nunchaku INT4 (RTX 30/40-series)
+call "%~dp0start_server.cmd" int4
+""",
+    "run_server_longcat.cmd": r"""@echo off
+:: run_server_longcat.cmd : launch the server with LongCat Image Edit Turbo (Q4_K_M)
+call "%~dp0start_server.cmd" longcat-q4
+""",
+    "run_server_q3.cmd": r"""@echo off
+:: run_server_q3.cmd : launch the server with GGUF Q3_K_S (12 GB VRAM)
+call "%~dp0start_server.cmd" q3
+""",
     "HAVC-Doctor.cmd": r"""@echo off
 setlocal
 set "HERE=%~dp0"
@@ -1291,7 +1307,7 @@ def build_steps() -> list[Step]:
              "gui_cmnet2_settings.json: model_name/model_precision only if empty",
              gui_settings_check, gui_settings_run),
         Step("launchers", "Launcher in <install>",
-             "HAVC.cmd/.vbs (GUI), HAVC-Server.cmd, HAVC-Doctor.cmd, start_server.cmd/run_server_qwen21.cmd (rewritten if different)",
+             "HAVC.cmd/.vbs (GUI), HAVC-Server.cmd, HAVC-Doctor.cmd, start_server.cmd/run_server_qwen21.cmd/run_server_{fp4,int4,longcat,q3}.cmd (rewritten if different)",
              launchers_check, launchers_run),
         Step("verify", "Final verification (havc doctor)", "python -m havc.doctor",
              lambda c: None, verify_run),

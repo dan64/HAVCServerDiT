@@ -89,12 +89,22 @@ def generate(args: argparse.Namespace) -> None:
         fail(f"--version {args.version} does not match havc/__init__.py "
              f"({HAVC_VERSION}): the version is changed ONLY in havc/__init__.py")
     version = HAVC_VERSION
+    bucket = args.bucket_tag or args.tag
 
     project, others = collect_wheels(artifacts_dir, version)
 
-    wheels = [{**make_entry(project, args.repo, args.tag),
+    def asset_entry(path: Path) -> dict:
+        # vscmnet2 is published by its own project (dan64/vs-cmnet2): its
+        # release tag is the version in the file name. Everything else lives
+        # in the stable asset bucket of this repo (--bucket-tag).
+        if path.name.startswith("vscmnet2-"):
+            upstream = path.name.split("-")[1]
+            return make_entry(path, "dan64/vs-cmnet2", f"v{upstream}")
+        return make_entry(path, args.repo, bucket)
+
+    wheels = [{**make_entry(project, args.repo, bucket),
                "kind": "project", "install": "no-deps"}]
-    assets = [{**make_entry(path, args.repo, args.tag),
+    assets = [{**asset_entry(path),
                "kind": "python-wheel", "target": path.name.split("-")[0]}
               for path in others]
 
@@ -103,7 +113,7 @@ def generate(args: argparse.Namespace) -> None:
     # step at the install root. Optional: installs can also fall back to the
     # pinned URL in havc/install.py.
     comfy_zips = sorted(artifacts_dir.glob("comfy_bridge_v*.zip"))
-    assets += [{**make_entry(path, args.repo, args.tag),
+    assets += [{**make_entry(path, args.repo, bucket),
                 "kind": "comfy-bridge", "target": "comfy_bridge"}
                for path in comfy_zips]
 
@@ -138,6 +148,7 @@ def generate(args: argparse.Namespace) -> None:
     print(f"Manifest generated: {out}")
     print(f"  app_version : {version}")
     print(f"  tag/repo    : {args.tag}  ({args.repo})")
+    print(f"  bucket tag  : {bucket}")
     print(f"  wheels: {len(wheels)} | assets: {len(assets)}")
     for item in wheels + assets:
         print(f"    - {item['name']}  sha256 {item['sha256'][:16]}...  {item['size']} byte")
@@ -194,7 +205,11 @@ def main(argv=None) -> int:
                     "(spec: installer/PHASE0_SPEC.md §6).",
     )
     parser.add_argument("--tag", default=None,
-                        help="release tag (e.g. v0.1.0) — required for generation")
+                        help="release tag (e.g. v2.0.0) — required for generation")
+    parser.add_argument("--bucket-tag", default=None,
+                        help="release tag of the stable asset bucket for the project wheel, "
+                             "the pinned packages and the comfy-bridge zip (default: --tag); "
+                             "vscmnet2 always points at dan64/vs-cmnet2")
     parser.add_argument("--artifacts-dir", type=Path, required=True,
                         help="folder with the artifacts (wheels); also used for verification")
     parser.add_argument("--out", type=Path, default=None,

@@ -445,6 +445,7 @@ public sealed class WizardViewModel : INotifyPropertyChanged
                 new ManagerLog(InstallDir).Warn(
                     $"could not refresh the uninstall registration: {ex.Message}");
             }
+            RefreshInstalledManager();
             ReloadExisting();
             Navigate(WizardPage.Installed);
             MessageDialog.Show(
@@ -542,12 +543,30 @@ public sealed class WizardViewModel : INotifyPropertyChanged
                 Dirty = false,
                 LastVerify = new LastVerifyState { Ts = now, Ok = true, AppVersion = state.AppVersion },
             });
+            RefreshInstalledManager();
             ReloadExisting();
             Navigate(WizardPage.Installed);
             MessageDialog.Show(Application.Current?.MainWindow, Strings.AppTitle, Strings.RepairCompleteMessage);
             return;
         }
         HandleFailedRun(outcome);
+    }
+
+    /// <summary>
+    /// Copies the running manager app over the installed HAVCManager.exe so
+    /// the Start Menu shortcut picks up fixes without a fresh install
+    /// (2026-10-06). No-op when the running app is already the installed copy.
+    /// </summary>
+    private void RefreshInstalledManager()
+    {
+        try
+        {
+            ShellIntegration.CopyManagerTo(InstallDir);
+        }
+        catch (Exception ex)
+        {
+            new ManagerLog(InstallDir).Warn($"could not refresh the installed manager copy: {ex.Message}");
+        }
     }
 
     /// <summary>

@@ -995,3 +995,9 @@ storico.*
   sha256). Smoke: l'exe si avvia → finestra + pagina Installed (0.1.11).
   Da qui in avanti **ogni release include l'exe** (spec §11, comando nei
   "Comandi pronti" di §0).
+- **2026-10-06 (48)** — **Stringa Components semplificata** (richiesta
+  autore): la riga è ora solo **`Server + GUI`** — via il
+  "(fixed in this version)" (in inglese si leggeva "riparato in questa
+  versione"; il senso era "unica modalità in questa versione", D10).
+  Nessun rebuild/publish per ora: la stringa uscirà col **prossimo** build
+  dell'exe.

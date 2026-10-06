@@ -365,8 +365,12 @@ folder*); in caso di rollback, messaggio dedicato + log.
 
 ## 11. Distribuzione e aggiornamento del manager
 
-- Asset della release: `HAVC-Setup-<ver>.exe` (+ `release.json`); note con
-  avvertenza SmartScreen (D1: *Windows protected your PC* → *More info* → *Run anyway*) e sha256 pubblicati.
+- Asset della release: `HAVC-Setup-<ver>.exe` (+ `release.json`), costruito da
+  `installer/build_manager_exe.py` (dotnet publish Release, win-x64,
+  self-contained **single-file**; stampa size+sha256); note con avvertenza
+  SmartScreen (D1: *Windows protected your PC* → *More info* → *Run anyway*)
+  e sha256 pubblicati. **Standard dal 06-10** (v0.1.11 = primo exe
+  pubblicato, log (47)).
 - URL manifest di default:
   `https://github.com/dan64/HAVCServerDiT/releases/latest/download/release.json`;
   per i test: `--release-tag <tag>` oppure `--manifest <file|url>`. Se il

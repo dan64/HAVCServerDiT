@@ -52,8 +52,9 @@ staging `v0.1.8`); **fix junction `.venv` → `venv`** (log (42)); **pre-release
 (45)). *Run Server* sull'install `D:\HAVCServerDiT` **verificato
 dall'autore** (tab #4/#5 OK; server in ascolto — log (42)). **M4:
 rifinitura completata** (log (46); **run in VM saltata** su richiesta
-dell'autore; aperto: l'exe del manager — §11). Restano: **README snello +
-`docs/`** (log (37)); l'eventuale test *External console* — log (45).
+dell'autore); **exe del manager standard di release**
+(`HAVC-Setup-0.1.11.exe` nella release — log (47)). Restano: **README snello
++ `docs/`** (log (37)); l'eventuale test *External console* — log (45).
 **Decisione SDK chiusa (05-10)**: target **.NET 10** — SDK **10.0.401**
 installato machine-wide (standalone) e **VS 2026** (Community v18.10)
 installato lo stesso giorno: l'MSBuild 18.10 compila `net10` (smoke WPF verde)
@@ -102,10 +103,11 @@ Set-Location $env:TEMP
 Set-Location D:\PProjects\HAVCServerDiT_installer
 & .\.venv-dev\Scripts\python.exe -m havc.install --install-dir D:\HAVCServerDiT_Test --plan
 
-# nuova versione: build wheel → staging → manifest
+# nuova versione: build wheel → staging → manifest → exe del manager
 & .\.venv-dev\Scripts\python.exe -m build --wheel --outdir dist
 & .\.venv-dev\Scripts\python.exe installer\make_release.py --tag vX --artifacts-dir dist\staging-vX
 & .\.venv-dev\Scripts\python.exe installer\make_release.py --verify dist\staging-vX\release.json --artifacts-dir dist\staging-vX
+& .\.venv-dev\Scripts\python.exe installer\build_manager_exe.py --version <ver>   # HAVC-Setup-<ver>.exe (standard dal 06-10)
 
 # update end-to-end sul test install (pattern log (14)): wheel nuova nel runtime,
 # poi rerun bootstrap con --wheel/--assets-dir → log in install-runN.log
@@ -980,3 +982,16 @@ storico.*
   stati committati** da M1 (un clone fresco non compilava il manager); regola
   ristretta a `/MANIFEST` + file tracciati — nessun push precedente, quindi
   nessuna storia da correggere.
+- **2026-10-06 (47)** — **`HAVC-Setup-<ver>.exe`: exe del manager, standard
+  di release** (su richiesta dell'autore). Nuovo
+  `installer/build_manager_exe.py` (`dotnet publish` Release win-x64,
+  self-contained **single-file** → `HAVC-Setup-<ver>.exe`; stampa
+  size+sha256; **deterministico** — stesso sha256 su build ripetuti) +
+  pragma IL3000 in `ShellIntegration.CopyApplicationFiles` (il caso
+  single-file era già gestito; publish a **0 warning**). Costruito
+  `HAVC-Setup-0.1.11.exe` (140.235.427 byte) ed **allegato alla release
+  v0.1.11** (ora 7 asset; digest GitHub == locale `d3fa5130…`); note della
+  release aggiornate (exe come entry point + avvertenza SmartScreen D1 +
+  sha256). Smoke: l'exe si avvia → finestra + pagina Installed (0.1.11).
+  Da qui in avanti **ogni release include l'exe** (spec §11, comando nei
+  "Comandi pronti" di §0).

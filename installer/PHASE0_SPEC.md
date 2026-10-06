@@ -152,8 +152,9 @@ Passi, nell'ordine:
     l'idempotenza;
 14. `configs` — copia le config di pipeline in `<install>\config` (solo mancanti);
 15. `gui` — copia i file GUI in `<install>\gui` (script principale, helper,
-    `scripts/*.vpy` — dalla copia inclusa nella wheel o dal checkout);
-    aggiorna i file se il contenuto differisce (skip solo se identici);
+    `scripts/*.vpy`, `samples/` — dalla copia inclusa nella wheel o dal
+    checkout); aggiorna i file se il contenuto differisce (skip solo se
+    identici);
 16. `gui-deps` — `pip install -r requirements/gui.txt` + wheel `vscmnet2` e
     `spatial_correlation_sampler` da `--assets-dir`;
 17. `cmnet2-plugins` — estrae `plugins_win.zip` (vs-cmnet2 v1.0.0, sha256)

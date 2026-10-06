@@ -45,12 +45,13 @@ Q3, log (34)); **disinstallo verificato sul campo** (log (35)); fallback
 manifest accanto all'exe (log (36)); **fix layout server/GUI** (log (38));
 **pre-release `v0.1.6` pubblicata** (log (39)); **External console** (log
 (40)); **comfy self-contained + niente cartella modelli** (D14, log (41);
-staging `v0.1.8`); **fix junction `.venv` → `venv`** (la GUI trova sempre il
-python del venv, log (42); havc **0.1.9**, **pre-release `v0.1.9`
-pubblicata** — log (43)). *Run Server* sull'install `D:\HAVCServerDiT`
-**verificato dall'autore** (tab #4/#5 OK; server in ascolto — log (42)).
-Restano: il run in VM, **README snello + `docs/`** (log (37)); eventuale test
-*External console* post-0.1.9.
+staging `v0.1.8`); **fix junction `.venv` → `venv`** (log (42)); **pre-release
+`v0.1.9` pubblicata** (log (43)); **samples GUI nella wheel** (havc
+**0.1.10**, staging `v0.1.10` pronta — log (44)). *Run Server* sull'install
+`D:\HAVCServerDiT` **verificato dall'autore** (tab #4/#5 OK; server in
+ascolto — log (42)). Restano: il run in VM, **README snello + `docs/`**
+(log (37)); pubblicare `v0.1.10`; decidere il punto `configs`
+(content-compare?) e l'eventuale test *External console* — log (44).
 **Decisione SDK chiusa (05-10)**: target **.NET 10** — SDK **10.0.401**
 installato machine-wide (standalone) e **VS 2026** (Community v18.10)
 installato lo stesso giorno: l'MSBuild 18.10 compila `net10` (smoke WPF verde)
@@ -68,8 +69,9 @@ doppio click su `HAVC.vbs`.
 05-10 dal bootstrap con la staging `v0.1.8` (23/23 step, doctor verde;
 `install.json` scritto a mano per farla riconoscere dal manager — le
 scorciatoie/registro le scrive il wizard al prossimo giro), aggiornata a
-havc **0.1.9** (alias `.venv` → `venv` per la GUI; **Run Server + tab
-#4/#5 verificati dall'autore**, log (42)). La precedente
+havc **0.1.10** (alias `.venv` → `venv` per la GUI; `gui\samples` inclusi;
+**Run Server + tab #4/#5 verificati dall'autore**, log (42)–(44)). La
+precedente
 `D:\HAVC_Manager_Test` è stata disinstallata (log (35)). I modelli (una
 volta scaricati) stanno in `<install>\comfy_bridge\models`, preservati.
 
@@ -911,3 +913,23 @@ storico.*
   **Latest resta `v1.0.0`**; note in `dist\release-notes-v0.1.9.md`.
   Prossimo: M4 (rifinitura UI/log) + run in VM; **README snello + `docs/`**
   (richiesta dell'autore, log (37)).
+- **2026-10-06 (44)** — **`samples` GUI nella wheel + passo `gui`; config
+  2511 dell'autore.** Triaged delle modifiche autore (commit `386d4c7`):
+  config GGUF q3–q8 → Qwen-Image-Edit **2511** (clip unificata `Q4_K_M`,
+  `hf_unet` 2511), tweak GUI (box prompt 3→4 righe), settings dev aggiornati.
+  Trovato: `GUI/samples/` (`sample_bw.mp4` + `sample_cmnet2dit.vpy`,
+  tracciati) **non era confezionato** → aggiunto a `EXTRA_GLOBS` di
+  `setup.py` (`GUI/samples` → `havc/gui/samples`; skip dei non-file nel
+  loop) e a `gui_files()` del bootstrap (copia in `<install>\gui\samples`,
+  content-compare); hint/step aggiornati. havc **0.1.10** (staging
+  `v0.1.10` + `test-manifest-local.json`; `staging-v0.1.9` resta = record
+  della pre-release pubblicata). Verifiche: wheel con `samples/` dentro
+  (1.214.423 byte), manifest verificato; bootstrap su `D:\HAVCServerDiT`
+  (23 passi, 19 skip) → `wheel` 0.1.10, **`gui` 11 file (GUI + scripts +
+  samples)**, `verify` verde; hash samples/GUI nell'install == sorgente;
+  parse GUI installato OK; rerun 21 skip. **Nota aperta**: il passo
+  `configs` copia **solo i mancanti** → gli aggiornamenti dei config (es.
+  2511) non arrivano alle install esistenti via update (l'autore aveva
+  aggiornato a mano il q3 nell'install) — decidere se passare a
+  content-compare. Da fare: pubblicare `v0.1.10` su ok; chiudere il punto
+  `configs`.

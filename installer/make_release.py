@@ -102,7 +102,7 @@ def generate(args: argparse.Namespace) -> None:
             return make_entry(path, "dan64/vs-cmnet2", f"v{upstream}")
         return make_entry(path, args.repo, bucket)
 
-    wheels = [{**make_entry(project, args.repo, bucket),
+    wheels = [{**make_entry(project, args.repo, args.tag),
                "kind": "project", "install": "no-deps"}]
     assets = [{**asset_entry(path),
                "kind": "python-wheel", "target": path.name.split("-")[0]}
@@ -207,9 +207,9 @@ def main(argv=None) -> int:
     parser.add_argument("--tag", default=None,
                         help="release tag (e.g. v2.0.0) — required for generation")
     parser.add_argument("--bucket-tag", default=None,
-                        help="release tag of the stable asset bucket for the project wheel, "
-                             "the pinned packages and the comfy-bridge zip (default: --tag); "
-                             "vscmnet2 always points at dan64/vs-cmnet2")
+                        help="release tag of the stable asset bucket for the pinned packages "
+                             "and the comfy-bridge zip (default: --tag); the project wheel "
+                             "uses --tag; vscmnet2 always points at dan64/vs-cmnet2")
     parser.add_argument("--artifacts-dir", type=Path, required=True,
                         help="folder with the artifacts (wheels); also used for verification")
     parser.add_argument("--out", type=Path, default=None,

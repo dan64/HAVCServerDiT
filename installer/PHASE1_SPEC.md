@@ -177,6 +177,9 @@ Invocazione standard dal manager:
     (`longcat-gguf` seeda anche `model_precision` = `q3`); il manager lo
     passa a install/update/ripara — `qwen21-viggle`, oppure `longcat-gguf`
     quando il preflight rileva RAM < 32 GB;
+  - `--update-configs` / `--update-gui-settings` (**06-10**): sostituiscono
+    rispettivamente i config e i settings GUI **diversi** dal packaged
+    (`.bak` accanto), su conferma dell'utente (dialog nel manager);
   - `--with-dinov2` già esiste: il manager lo passa **sempre** (D10).
 - `--runtime-zip`/`--tools-zip` non usati dal manager (download diretti da URL
   pinnati, con cache nella cartella di installazione).
@@ -234,12 +237,16 @@ prima installazione.
    up to date*; se `requires_env_rebuild` → §6.7.
 3. Download delta: nuova wheel (sha256) e asset il cui sha256 differisce
    dalla cache; la wheel precedente resta in cache.
-4. **Conferma config** (06-10): se qualche config in `<install>\config`
-   differisce da quello dentro la wheel nuova (file presenti su entrambi i
-   lati), dialog *Update configuration files* con l'elenco (Yes =
-   sostituisci, tenendo `<nome>.json.bak`; No = conserva). La scelta passa
-   il flag `--update-configs` al bootstrap. Nessun dialog se l'elenco è
-   vuoto; il rollback non chiede mai.
+4. **Conferma config e settings GUI** (06-10): se qualche config in
+   `<install>\config` differisce da quello dentro la wheel nuova (file
+   presenti su entrambi i lati), dialog *Update configuration files* con
+   l'elenco (Yes = sostituisci, tenendo `<nome>.json.bak`; No = conserva).
+   La scelta passa il flag `--update-configs` al bootstrap. Allo stesso
+   modo, se `<install>\gui\gui_cmnet2_settings.json` differisce dal template
+   packaged (con i valori d'installazione applicati), dialog *Update GUI
+   settings* (Yes = sostituisci, tenendo `gui_cmnet2_settings.json.bak`;
+   No = conserva) → flag `--update-gui-settings`. Nessun dialog se il file
+   installato manca; il rollback non chiede mai.
 5. Stadio 1 (bootstrap nel runtime) → stadio 2 (run bootstrap con la nuova
    wheel) → exit 0 + `result.ok`.
 6. **PASS** → `previous` = snapshot corrente, `app_version` = nuova,
@@ -253,9 +260,10 @@ prima installazione.
 
 Rerun bootstrap sulla versione installata (wheel già in cache) — stessa
 macchina dell'update, senza download nuovo. Usato anche per completare un
-`dirty`. Se qualche config installato differisce da quello nella wheel,
-l'utente riceve la stessa conferma dell'update (dialog *Update
-configuration files*; il rollback non chiede mai).
+`dirty`. Se qualche config installato differisce da quello nella wheel — o
+i settings GUI differiscono dal template — l'utente riceve la stessa
+conferma dell'update (dialog *Update configuration files* / *Update GUI
+settings*; il rollback non chiede mai).
 
 ### 6.5 Disinstallazione
 
@@ -332,7 +340,8 @@ di HAVC), **Check for updates**, **Repair**,
 aggiornato (v0: link, niente auto-update).
 
 Dialog principali: *Update available* (versione + note), *Close the GUI/server
-to continue* (§6.6), *Update failed — rolled back*, *Update failed* (stato
+to continue* (§6.6), *Update configuration files* (§6.3), *Update GUI
+settings* (§6.3), *Update failed — rolled back*, *Update failed* (stato
 `dirty`), conferma di disinstallazione (con checkbox *Also delete the models
 folder*); in caso di rollback, messaggio dedicato + log.
 

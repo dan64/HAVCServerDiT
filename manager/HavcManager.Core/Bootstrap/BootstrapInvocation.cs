@@ -33,6 +33,13 @@ public sealed record BootstrapInvocation
     /// </summary>
     public bool UpdateConfigs { get; init; }
 
+    /// <summary>
+    /// True when the user confirmed replacing gui_cmnet2_settings.json when it
+    /// differs from the packaged defaults (--update-gui-settings; the
+    /// bootstrap keeps the previous file as gui_cmnet2_settings.json.bak).
+    /// </summary>
+    public bool UpdateGuiSettings { get; init; }
+
     public IReadOnlyList<string> ExtraArgs { get; init; } = [];
 }
 

@@ -48,6 +48,10 @@ public static class Strings
 
     public static string ForceStop => ResourceManager.GetString("ForceStop")!;
 
+    public static string GuiSettingsUpdateMessage => ResourceManager.GetString("GuiSettingsUpdateMessage")!;
+
+    public static string GuiSettingsUpdateTitle => ResourceManager.GetString("GuiSettingsUpdateTitle")!;
+
     public static string Install => ResourceManager.GetString("Install")!;
 
     public static string InstalledTitle => ResourceManager.GetString("InstalledTitle")!;

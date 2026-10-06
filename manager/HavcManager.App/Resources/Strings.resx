@@ -115,6 +115,16 @@ No = keep your copies</value>
   <data name="ForceStop" xml:space="preserve">
     <value>Force stop</value>
   </data>
+  <data name="GuiSettingsUpdateMessage" xml:space="preserve">
+    <value>The installed GUI settings (gui_cmnet2_settings.json) differ from the packaged defaults.
+
+Replace the installed file?
+Yes = replace it (the previous file is kept as gui_cmnet2_settings.json.bak)
+No = keep your settings</value>
+  </data>
+  <data name="GuiSettingsUpdateTitle" xml:space="preserve">
+    <value>Update GUI settings</value>
+  </data>
   <data name="Install" xml:space="preserve">
     <value>Install</value>
   </data>

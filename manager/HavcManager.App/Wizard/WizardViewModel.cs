@@ -323,7 +323,8 @@ public sealed class WizardViewModel : INotifyPropertyChanged
                 new InstallPlan(
                     _manifest, InstallDir, WithDinov2: true,
                     DefaultModel: _defaultModelName ?? Preflight.DefaultModelForThisMachine(),
-                    ConfirmConfigUpdates: ConfirmConfigUpdates),
+                    ConfirmConfigUpdates: ConfirmConfigUpdates,
+                    ConfirmGuiSettings: ConfirmGuiSettings),
                 observe, ct));
         if (outcome.Ok)
         {
@@ -415,7 +416,8 @@ public sealed class WizardViewModel : INotifyPropertyChanged
                 new InstallPlan(
                     _updateManifest, InstallDir, WithDinov2: true,
                     DefaultModel: Preflight.DefaultModelForThisMachine(),
-                    ConfirmConfigUpdates: ConfirmConfigUpdates),
+                    ConfirmConfigUpdates: ConfirmConfigUpdates,
+                    ConfirmGuiSettings: ConfirmGuiSettings),
                 observe, ct));
 
         if (outcome.Ok)
@@ -531,7 +533,8 @@ public sealed class WizardViewModel : INotifyPropertyChanged
             RuntimeArchive: RuntimeArchivePath(state, cacheDir),
             WithDinov2: true,
             DefaultModel: Preflight.DefaultModelForThisMachine(),
-            ConfirmConfigUpdates: ConfirmConfigUpdates);
+            ConfirmConfigUpdates: ConfirmConfigUpdates,
+            ConfirmGuiSettings: ConfirmGuiSettings);
         InstallOutcome outcome = await RunFlowOnProgressAsync(
             reset: true,
             (observe, ct) => _flow!.RunRepairAsync(plan, observe, ct));
@@ -587,6 +590,22 @@ public sealed class WizardViewModel : INotifyPropertyChanged
             return false;
         return app.Dispatcher.Invoke(
             () => MessageDialog.Show(app.MainWindow, Strings.ConfigsUpdateTitle, message, yesNo: true));
+    }
+
+    /// <summary>
+    /// Confirmation shown before a run replaces gui_cmnet2_settings.json when
+    /// it differs from the packaged defaults (2026-10-06): yes = replace (the
+    /// previous file is kept as gui_cmnet2_settings.json.bak), no = keep the
+    /// installed settings.
+    /// </summary>
+    private bool ConfirmGuiSettings()
+    {
+        var app = Application.Current;
+        if (app is null)
+            return false;
+        return app.Dispatcher.Invoke(
+            () => MessageDialog.Show(app.MainWindow, Strings.GuiSettingsUpdateTitle,
+                Strings.GuiSettingsUpdateMessage, yesNo: true));
     }
 
     private static string? RuntimeArchivePath(InstallState state, string cacheDir)

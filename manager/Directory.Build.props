@@ -3,7 +3,7 @@
   <!-- Shared settings for the HAVC Manager solution (spec: installer/PHASE1_SPEC.md §2). -->
   <PropertyGroup>
     <!-- The manager has its own version, independent from the havc package. -->
-    <Version>2.0.0</Version>
+    <Version>2.0.1</Version>
     <Product>HAVC Manager</Product>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>

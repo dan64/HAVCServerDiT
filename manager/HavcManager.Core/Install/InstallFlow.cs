@@ -18,7 +18,8 @@ public sealed record InstallPlan(
     string InstallDir,
     bool WithDinov2 = true,
     string? DefaultModel = null,
-    Func<IReadOnlyList<string>, bool>? ConfirmConfigUpdates = null);
+    Func<IReadOnlyList<string>, bool>? ConfirmConfigUpdates = null,
+    Func<bool>? ConfirmGuiSettings = null);
 
 /// <summary>Parameters of a repair run (§6.4): cached wheel, no downloads.</summary>
 public sealed record RepairPlan(
@@ -28,7 +29,8 @@ public sealed record RepairPlan(
     string? RuntimeArchive = null,
     bool WithDinov2 = true,
     string? DefaultModel = null,
-    Func<IReadOnlyList<string>, bool>? ConfirmConfigUpdates = null);
+    Func<IReadOnlyList<string>, bool>? ConfirmConfigUpdates = null,
+    Func<bool>? ConfirmGuiSettings = null);
 
 public sealed record InstallOutcome(bool Ok, int BootstrapExitCode, string? Error);
 
@@ -121,7 +123,8 @@ public sealed class InstallFlow
 
             return await RunStage2Async(
                 plan.InstallDir, pythonExe, wheelPath, plan.WithDinov2, plan.DefaultModel,
-                plan.ConfirmConfigUpdates, observe, log, cancellationToken).ConfigureAwait(false);
+                plan.ConfirmConfigUpdates, plan.ConfirmGuiSettings, observe, log,
+                cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -166,7 +169,8 @@ public sealed class InstallFlow
 
             return await RunStage2Async(
                 plan.InstallDir, plan.PythonExe, plan.WheelPath, plan.WithDinov2, plan.DefaultModel,
-                plan.ConfirmConfigUpdates, observe, log, cancellationToken).ConfigureAwait(false);
+                plan.ConfirmConfigUpdates, plan.ConfirmGuiSettings, observe, log,
+                cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -187,6 +191,7 @@ public sealed class InstallFlow
         bool withDinov2,
         string? defaultModel,
         Func<IReadOnlyList<string>, bool>? confirmConfigUpdates,
+        Func<bool>? confirmGuiSettings,
         Action<FlowEvent>? observe,
         ManagerLog log,
         CancellationToken cancellationToken)
@@ -206,6 +211,13 @@ public sealed class InstallFlow
                          $" ({string.Join(", ", differing)})");
             }
         }
+        bool updateGuiSettings = false;
+        if (confirmGuiSettings is not null && GuiSettingsUpdate.Differs(wheelPath, installDir, defaultModel))
+        {
+            observe?.Invoke(new FlowEvent("phase", "GUI settings differ from the packaged defaults"));
+            updateGuiSettings = confirmGuiSettings();
+            log.Info("gui settings update confirmation: " + (updateGuiSettings ? "replace" : "keep"));
+        }
         var invocation = new BootstrapInvocation
         {
             PythonExe = pythonExe,
@@ -215,6 +227,7 @@ public sealed class InstallFlow
             WithDinov2 = withDinov2,
             DefaultModel = defaultModel,
             UpdateConfigs = updateConfigs,
+            UpdateGuiSettings = updateGuiSettings,
         };
         BootstrapResult result = await Runner.RunAsync(invocation, cancellationToken).ConfigureAwait(false);
         log.Info($"bootstrap exit {result.ExitCode}, ok={result.Ok}");

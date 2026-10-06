@@ -185,11 +185,11 @@ python patch_nunchaku.py --revert
 > Nunchaku 1.2.1 requires exactly `0.37.0.dev0`. Later dev builds (≥ 0.39.0) changed
 > the `QwenEmbedRope` API in a way that is incompatible even after the nunchaku patch.
 
-A tested compatible wheel is included in the `packages/` folder.
-Install it directly:
+A tested compatible wheel is published in the release assets.
+Download it (or install it straight from the URL):
 
 ```bash
-pip install packages\diffusers-0.37.0.dev0-py3-none-any.whl
+pip install https://github.com/dan64/HAVCServerDiT/releases/download/v1.0.0/diffusers-0.37.0.dev0-py3-none-any.whl
 ```
 
 Verify:
@@ -251,8 +251,8 @@ git pull
 # 3) Install / update the GUI dependencies (if new packages were added)
 pip install -r GUI\requirements.txt
 
-# 4) Update vscmnet2 (if a newer wheel is available in packages/)
-pip install packages\vscmnet2-1.2.1-py3-none-any.whl
+# 4) Update vscmnet2 (if a newer release is available)
+pip install https://github.com/dan64/vs-cmnet2/releases/download/v1.2.1/vscmnet2-1.2.1-py3-none-any.whl
 
 # 5) Re-apply the Nunchaku patch
 python patch_nunchaku.py
@@ -271,7 +271,7 @@ pip show comfy-kitchen  # Expected: 0.2.35
 pip show comfy-aimdo    # Expected: 0.5.5
 ```
 
-> **Note**: steps 4–5 are only needed if `packages/` or `patch_nunchaku.py`
+> **Note**: steps 4–5 are only needed if `vscmnet2` or `patch_nunchaku.py`
 > have changed. Step 6 is only needed to use `qwen21-viggle` — the other
 > three backends work with the older `comfy-kitchen`/`comfy-aimdo` versions.
 > Check `git log --oneline -5` to see what was updated.
@@ -337,7 +337,5 @@ dit-colorize-rpc/
 │   ├── santa_bw.png             # Sample B&W image (single frame test)
 │   ├── sample1_bw.jpg           # Sample B&W image 1 (paired inference test)
 │   └── sample2_bw.jpg           # Sample B&W image 2 (paired inference test)
-├── packages/
-│   └── diffusers-0.37.0.dev0-py3-none-any.whl  # Tested compatible diffusers build
 └── README.md
 ```

@@ -139,8 +139,8 @@ Passi, nell'ordine:
    `install.cmd`);
 8. `patch` — applica la patch di compatibilità nunchaku (skip se già applicata
    o se nunchaku non è installato);
-9. `diffusers` — installa la wheel locale (cercata in `--assets-dir`,
-   default `packages/`);
+9. `diffusers` — installa la wheel pinnata (cercata in `--assets-dir`;
+   release asset);
 10. `deps` — `pip install -r requirements/core.txt`;
 11. `wheel` — installa la wheel del progetto (`--wheel`, con `--no-deps`);
 12. `server` — copia `dit_rpc_server.py` e `dit_colorize_main.py` dalla wheel
@@ -214,7 +214,8 @@ end-to-end dal mirror); `RUNTIME["url"]` punta al mirror.
 
 Modalità operative:
 
-- **checkout** (default): gira dal repo, `--assets-dir` default `packages/`;
+- **checkout**: gira dal repo; `--assets-dir` da passare esplicitamente
+  (le wheel stanno nei release asset);
 - **staged**: `--assets-dir`/`--wheel`/`--runtime-zip` puntano a file locali;
 - **macchina pulita (flusso manager)**: il manager estrae il runtime
   dall'asset pinnato, installa la wheel nel runtime

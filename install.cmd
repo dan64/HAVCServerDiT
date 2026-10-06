@@ -28,7 +28,7 @@ set CONDA_ENV=
 :: Example: set PYTHON_EXE=C:\Users\YourName\.venv\Scripts\python.exe
 set PYTHON_EXE=
 
-:: Directory containing install.cmd, patch_nunchaku.py and the packages\ folder
+:: Directory containing install.cmd and patch_nunchaku.py
 :: Leave empty to use the directory of this script
 set INSTALL_DIR=
 
@@ -39,14 +39,19 @@ if "%INSTALL_DIR%"=="" set INSTALL_DIR=%~dp0
 if "%INSTALL_DIR:~-1%"=="\" set INSTALL_DIR=%INSTALL_DIR:~0,-1%
 
 set PATCH_SCRIPT=%INSTALL_DIR%\patch_nunchaku.py
-set DIFFUSERS_WHEEL=%INSTALL_DIR%\packages\diffusers-0.37.0.dev0-py3-none-any.whl
+set DIFFUSERS_URL=https://github.com/dan64/HAVCServerDiT/releases/download/v1.0.0/diffusers-0.37.0.dev0-py3-none-any.whl
+set DIFFUSERS_WHEEL=%TEMP%\diffusers-0.37.0.dev0-py3-none-any.whl
 
 if not exist "%PATCH_SCRIPT%" (
     echo [ERROR] patch_nunchaku.py not found in: %INSTALL_DIR%
     pause & exit /b 1
 )
 if not exist "%DIFFUSERS_WHEEL%" (
-    echo [ERROR] diffusers wheel not found: %DIFFUSERS_WHEEL%
+    echo [INFO] Downloading the pinned diffusers wheel...
+    curl -L --fail -o "%DIFFUSERS_WHEEL%" "%DIFFUSERS_URL%"
+)
+if not exist "%DIFFUSERS_WHEEL%" (
+    echo [ERROR] diffusers wheel not available: %DIFFUSERS_WHEEL%
     pause & exit /b 1
 )
 
@@ -132,9 +137,9 @@ if %errorlevel% neq 0 ( echo [ERROR] Nunchaku patch failed. & pause & exit /b 1 
 echo.
 
 :: ---------------------------------------------------------------------------
-:: STEP 4 — Diffusers (local wheel)
+:: STEP 4 — Diffusers (pinned wheel)
 :: ---------------------------------------------------------------------------
-echo [4/6] Installing Diffusers 0.37.0.dev0 (local wheel) ...
+echo [4/6] Installing Diffusers 0.37.0.dev0 (pinned wheel) ...
 "%PYTHON_EXE%" -m pip install "%DIFFUSERS_WHEEL%"
 if %errorlevel% neq 0 ( echo [ERROR] Diffusers install failed. & pause & exit /b 1 )
 echo.

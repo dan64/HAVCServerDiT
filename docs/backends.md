@@ -24,7 +24,7 @@ Choose the backend that matches your hardware:
 | **CUDA Toolkit** | Must match the PyTorch build       |
 
 > **RTX 30/40-Series (Ampere / Ada)**: use `"model_precision": "int4"`. FP4 requires Blackwell (RTX 50).
-> Requires Nunchaku 1.2.1 and `diffusers==0.37.0.dev0` (wheel included in `packages/`).
+> Requires Nunchaku 1.2.1 and `diffusers==0.37.0.dev0` (wheel published in the release assets).
 
 ### gguf-qwen : 14 sec/frame (Q3, Q4, Q5, Q6, Q8)
 

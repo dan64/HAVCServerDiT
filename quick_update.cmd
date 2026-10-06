@@ -55,18 +55,11 @@ if errorlevel 1 (
 )
 echo.
 
-REM Step 5: Update vscmnet2
-set VSCMNET2_FOUND=0
-for %%f in (packages\vscmnet2*.whl) do (
-    set VSCMNET2_FOUND=1
-    echo [5/7] Updating vscmnet2 from %%~nxf...
-    pip install "%%f"
-    if errorlevel 1 (
-        echo [WARNING] Failed to update vscmnet2.
-    )
-)
-if !VSCMNET2_FOUND! equ 0 (
-    echo [5/7] No vscmnet2 wheel found in packages/. Skipping.
+REM Step 5: Update vscmnet2 (pinned release; bump the URL when a newer release is out)
+echo [5/7] Updating vscmnet2 from its pinned release...
+pip install https://github.com/dan64/vs-cmnet2/releases/download/v1.2.1/vscmnet2-1.2.1-py3-none-any.whl
+if errorlevel 1 (
+    echo [WARNING] Failed to update vscmnet2.
 )
 echo.
 
@@ -111,7 +104,7 @@ echo.
 echo Notes:
 echo   - Step 4 (comfy-kitchen/comfy-aimdo pin) is only required to use qwen21-viggle;
 echo     the other three backends work with older versions of these two packages.
-echo   - Steps 5-6 are only needed if packages/ or patch_nunchaku.py changed.
+echo   - Steps 5-6 are only needed if vscmnet2 or patch_nunchaku.py changed.
 echo   - Run 'git log --oneline -5' to see what was updated in this pull.
 echo.
 pause

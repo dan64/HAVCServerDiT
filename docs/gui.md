@@ -118,7 +118,7 @@ deduplication, encoding, and color merging). It is available from
 [github.com/dan64/vs-cmnet2](https://github.com/dan64/vs-cmnet2):
 
 ```powershell
-pip install packages\vscmnet2-1.2.1-py3-none-any.whl
+pip install https://github.com/dan64/vs-cmnet2/releases/download/v1.2.1/vscmnet2-1.2.1-py3-none-any.whl
 ```
 
 To complete the installation of this filter is necessary to install the models, weights and plugins, as described in the filter home page: [vs-cmnet2](https://github.com/dan64/vs-cmnet2#installation)
@@ -171,7 +171,7 @@ This is a compiled extension (PyTorch 2.10 + CUDA 13.0) of
 required by `vscmnet2` for temporal alignment during encoding:
 
 ```powershell
-pip install packages\spatial_correlation_sampler-0.5.0-cp312-cp312-win_amd64.whl
+pip install https://github.com/dan64/HAVCServerDiT/releases/download/v1.0.0/spatial_correlation_sampler-0.5.0-cp312-cp312-win_amd64.whl
 ```
 
 > The wheel is pre-built for **Python 3.12 / PyTorch 2.10+cu130 / Windows x64**.

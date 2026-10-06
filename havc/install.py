@@ -822,7 +822,7 @@ def build_steps() -> list[Step]:
         if wheel is None:
             raise BootstrapError(
                 "diffusers wheel not found",
-                "pass --assets-dir <folder with the repo wheels> (e.g. packages/)",
+                "pass --assets-dir <folder with the wheels> (release asset: HAVC Assets v1.0.0)",
             )
         c.run([c.venv_python, "-m", "pip", "install", str(wheel)])
         return wheel.name
@@ -1034,7 +1034,7 @@ def build_steps() -> list[Step]:
             if wheel is None:
                 raise BootstrapError(
                     f"{label} wheel not found",
-                    "pass --assets-dir with the repo wheels (e.g. packages/)")
+                    "pass --assets-dir with the wheels (release asset: HAVC Assets v1.0.0)")
             c.run([c.venv_python, "-m", "pip", "install", str(wheel)])
         return "GUI + vscmnet2 + spatial_correlation_sampler"
 
@@ -1270,7 +1270,7 @@ def build_steps() -> list[Step]:
              repin_check, repin_run),
         Step("patch", "Nunchaku compatibility patch", "python patch_nunchaku.py",
              patch_check, patch_run),
-        Step("diffusers", "diffusers 0.37.0.dev0 (local wheel)", "pip install packages/diffusers-*.whl",
+        Step("diffusers", "diffusers 0.37.0.dev0 (pinned wheel)", "pip install <assets-dir>/diffusers-*.whl",
              diffusers_check, diffusers_run),
         Step("deps", "Core dependencies", "pip install -r requirements/core.txt",
              deps_check, deps_run),
@@ -1391,7 +1391,7 @@ def main(argv=None) -> int:
     parser.add_argument("--use-system-python", action="store_true",
                         help="skip runtime provisioning and use the system Python (development)")
     parser.add_argument("--assets-dir", type=Path, default=None,
-                        help="folder with the local wheels (default: packages/ of the checkout)")
+                        help="folder with the pinned wheels (release assets; the manager passes cache/assets)")
     parser.add_argument("--wheel", type=Path, default=None,
                         help="project wheel (havc-*.whl) to install")
     parser.add_argument("--comfy-zip", type=Path, default=None,

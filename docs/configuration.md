@@ -179,6 +179,12 @@ Differences from the default config above:
 - `hf_lora` is unused (empty) — nothing to download for a LoRA;
 - `steps: 6` matches the checkpoint's native step count.
 
+The same merged checkpoint is also published as **GGUF quants**
+(`*-Q4_K_M.gguf` … `*-Q8_0.gguf`, ~4–5.7 GB); they work the same way — just
+point `unet_name` at the `.gguf` file (e.g.
+`models/unet/Qwen-Image-2.1-viggle-turbo-v0.3-6step-Q4_K_M.gguf`) — the
+loader detects the extension and uses the ComfyUI-GGUF recipe.
+
 > The GUI lists it in **Model Config** as `qwen21_viggle-soft_fp8`, next to
 the default `qwen21_viggle`.
 
@@ -190,7 +196,7 @@ the default `qwen21_viggle`.
 | `quant`                                   |          | **GGUF only**: quantization level (`"q3"`, `"q4"`, `"q5"`, `"q6"`, `"q8"`). Default: `"q4"`  |
 | `model_precision`                         | ✅        | **Nunchaku**: `"fp4"` (RTX 50) or `"int4"` (RTX 30/40). **GGUF/qwen21-viggle**: not used     |
 | `unet_gguf` / `clip_gguf`                 | ✅        | **GGUF only**: local paths to the GGUF model files                                           |
-| `unet_name` / `clip_name`                 | ✅        | **qwen21-viggle only**: local paths to the model files — `unet_name` is always `.safetensors`, `clip_name` can be `.safetensors` or `.gguf` |
+| `unet_name` / `clip_name`                 | ✅        | **qwen21-viggle only**: local paths to the model files — `unet_name` can be `.safetensors` or `.gguf` (GGUF quants load through the same ComfyUI-GGUF recipe as the gguf backends), `clip_name` can be `.safetensors` or `.gguf` |
 | `clip_mmproj` / `clip_mmproj_hf_name`     |          | **GGUF/qwen21-viggle-with-GGUF-CLIP**: local path to the mmproj (vision tower) file / its filename on HuggingFace if different from the local one. Required for a GGUF CLIP to see images at all — without it the vision tower silently isn't loaded |
 | `unet_hf_name`                            |          | **qwen21-viggle only**: UNet filename on HuggingFace when it differs from the default download path (`diffusion_models/<local filename>`, the Comfy-Org layout) — e.g. merged checkpoints kept at the repo root. Only used by auto-download |
 | `model_rank`                              |          | **Nunchaku**: SVD rank (`"32"`). **GGUF/qwen21-viggle**: not used                            |

@@ -167,7 +167,13 @@ def colorize(pipeline, image, prompt, steps=4, seed=42):
 
 
 def load_viggle_pipeline(unet_path, clip_path, vae_name="qwen_image_2.1_vae_bf16.safetensors", lora_path=None, clip_mmproj=None):
-    """Load Qwen-Image-2.1 (native ComfyUI int8 ConvRot) + Viggle-Turbo LoRA (unmerged).
+    """Load Qwen-Image-2.1 (native ComfyUI int8 ConvRot or GGUF-quantized).
+
+    The Viggle-Turbo LoRA is applied as an unmerged runtime hook when
+    lora_path is given; with lora_path empty/None the checkpoint is used
+    as-is (merged models, e.g. the v0.3-6step quants).
+    unet_path may be a safetensors file (stock UNETLoader) or a .gguf file
+    (ComfyUI-GGUF recipe, same one load_gguf_pipeline() uses).
 
     clip_path may be either the default safetensors text encoder (loaded via
     the standard CLIPLoader node) or a GGUF text encoder -- in the latter
@@ -184,7 +190,23 @@ def load_viggle_pipeline(unet_path, clip_path, vae_name="qwen_image_2.1_vae_bf16
     clip_name = os.path.basename(clip_path)
 
     logger.info("Loading UNet: %s", unet_name)
-    model = get_value_at_index(cn.UNETLoader().load_unet(unet_name=unet_name, weight_dtype="default"), 0)
+    if unet_name.lower().endswith(".gguf"):
+        # GGUF UNet (e.g. the merged Viggle checkpoints' Q4..Q8 quants): the
+        # stock UNETLoader only reads safetensors/torch files, so use the
+        # same ComfyUI-GGUF recipe as load_gguf_pipeline().
+        _gguf_loader = importlib.import_module("ComfyUI-GGUF.loader")
+        _gguf_nodes = importlib.import_module("ComfyUI-GGUF.nodes")
+        _gguf_ops = importlib.import_module("ComfyUI-GGUF.ops")
+        import comfy.sd
+        _sd, _extra = _gguf_loader.gguf_sd_loader(unet_path)
+        model = comfy.sd.load_diffusion_model_state_dict(
+            _sd, model_options={"custom_operations": _gguf_ops.GGMLOps()})
+        if model is None:
+            raise RuntimeError(f"Failed to load UNet from {unet_path}")
+        model = _gguf_nodes.GGUFModelPatcher.clone(model)
+        logger.info("UNet GGUF loaded (%s)", _extra.get("arch_str", "?"))
+    else:
+        model = get_value_at_index(cn.UNETLoader().load_unet(unet_name=unet_name, weight_dtype="default"), 0)
 
     if lora_path and os.path.isfile(lora_path):
         logger.info("Applying Viggle-Turbo LoRA: %s", os.path.basename(lora_path))

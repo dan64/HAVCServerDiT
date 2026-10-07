@@ -1,7 +1,7 @@
 {
     "model_name":          "qwen21-viggle",
-    "unet_name":           "models/unet/Qwen-Image-2.1-viggle-turbo-v0.3-6step-fp8_e4m3fn.safetensors",
-    "unet_hf_name":        "Qwen-Image-2.1-viggle-turbo-v0.3-6step-fp8_e4m3fn.safetensors",
+    "unet_name":           "models/unet/Qwen-Image-2.1-viggle-turbo-v0.2.1-6step-Q4_K_M.gguf",
+    "unet_hf_name":        "Qwen-Image-2.1-viggle-turbo-v0.2.1-6step-Q4_K_M.gguf",
     "clip_name":           "models/clip/Qwen3-VL-8B-Instruct-UD-Q4_K_XL.gguf",
     "clip_mmproj":         "models/clip/Qwen3-VL-8B-Instruct-mmproj-BF16.gguf",
     "clip_mmproj_hf_name": "mmproj-BF16.gguf",

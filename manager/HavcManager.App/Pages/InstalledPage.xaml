@@ -13,8 +13,12 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <TextBlock Text="{x:Static res:Strings.InstalledTitle}"
-                   FontSize="22" FontWeight="SemiBold"/>
+        <StackPanel Grid.Row="0">
+            <TextBlock Text="{x:Static res:Strings.InstalledTitle}"
+                       FontSize="22" FontWeight="SemiBold"/>
+            <TextBlock Text="{x:Static res:Strings.InstalledUpdateHint}"
+                       Margin="0,6,0,0" Opacity="0.75" TextWrapping="Wrap"/>
+        </StackPanel>
 
         <StackPanel Grid.Row="1" Margin="0,14,0,0">
             <ItemsControl ItemsSource="{Binding InstalledLines}">

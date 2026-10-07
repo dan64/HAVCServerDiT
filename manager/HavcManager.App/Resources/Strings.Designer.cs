@@ -56,6 +56,8 @@ public static class Strings
 
     public static string InstalledTitle => ResourceManager.GetString("InstalledTitle")!;
 
+    public static string InstalledUpdateHint => ResourceManager.GetString("InstalledUpdateHint")!;
+
     public static string LabelInstallFolder => ResourceManager.GetString("LabelInstallFolder")!;
 
     public static string LogLabel => ResourceManager.GetString("LogLabel")!;

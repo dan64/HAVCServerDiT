@@ -131,6 +131,9 @@ No = keep your settings</value>
   <data name="InstalledTitle" xml:space="preserve">
     <value>HAVC is already installed</value>
   </data>
+  <data name="InstalledUpdateHint" xml:space="preserve">
+    <value>To update to a newer version, click "Check for updates" below.</value>
+  </data>
   <data name="LabelInstallFolder" xml:space="preserve">
     <value>Install folder</value>
   </data>

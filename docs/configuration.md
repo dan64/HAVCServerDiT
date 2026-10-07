@@ -92,12 +92,13 @@ The LoRA file `Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors` enab
 
 The LoRA is merged statically (not applied as an adapter), so there is no runtime overhead.
 
-### qwen21-viggle Backend : `config/qwen21_viggle.json`
+### qwen21-viggle Backend : `config/qwen21_viggle.json` & `qwen21_viggle-soft_fp8.json`
 
 The default config uses the int8 ConvRot UNet with the Viggle-Turbo LoRA
-applied at load time. The CLIP, unlike the UNet, can be either a
-`.safetensors` file or a GGUF+mmproj pair — the default uses GGUF+mmproj
-(see [What's New](whats-new.md)):
+applied at load time; a **merged-LoRA fp8 variant** is also provided as a
+separate config file (see the subsection below). The CLIP, unlike the UNet,
+can be either a `.safetensors` file or a GGUF+mmproj pair — the default
+uses GGUF+mmproj (see [What's New](whats-new.md)):
 
 ```json
 {
@@ -136,17 +137,50 @@ applied at load time. The CLIP, unlike the UNet, can be either a
 > **Merged-LoRA checkpoints** (e.g. the `v0.3-6step-*` files in the
 > [Viggle repo](https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo),
 > which already contain the LoRA) simply omit `lora_path` (or leave it
-> empty). When such a file lives at the *root* of its HuggingFace repo, add
-> `unet_hf_name` with its filename as it exists upstream — by default the
-> loader assumes the Comfy-Org-style `diffusion_models/<local filename>`
-> path when auto-downloading a missing UNet:
->
-> ```json
->     "unet_name":    "models/unet/Qwen-Image-2.1-viggle-turbo-v0.3-6step-fp8_e4m3fn.safetensors",
->     "unet_hf_name": "Qwen-Image-2.1-viggle-turbo-v0.3-6step-fp8_e4m3fn.safetensors",
->     "lora_path":    "",
->     "hf_unet":      "Viggle/Qwen-Image-2.1-viggle-turbo",
-> ```
+> empty); when such a file lives at the *root* of its HuggingFace repo, add
+> `unet_hf_name` with its filename as it exists upstream — the next
+> subsection shows a ready-to-use example.
+
+#### Merged-LoRA variant : `config/qwen21_viggle-soft_fp8.json`
+
+The [Viggle repo](https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo)
+also publishes checkpoints that **already contain the Viggle-Turbo LoRA**
+(the `v0.3-6step-*` files), including this fp8_e4m3fn safetensors (~6.75 GB).
+This config uses it directly — no LoRA is applied at runtime:
+
+```json
+{
+    "model_name":          "qwen21-viggle",
+    "unet_name":           "models/unet/Qwen-Image-2.1-viggle-turbo-v0.3-6step-fp8_e4m3fn.safetensors",
+    "unet_hf_name":        "Qwen-Image-2.1-viggle-turbo-v0.3-6step-fp8_e4m3fn.safetensors",
+    "clip_name":           "models/clip/Qwen3-VL-8B-Instruct-UD-Q4_K_XL.gguf",
+    "clip_mmproj":         "models/clip/Qwen3-VL-8B-Instruct-mmproj-BF16.gguf",
+    "clip_mmproj_hf_name": "mmproj-BF16.gguf",
+    "vae_name":            "qwen_image_2.1_vae_bf16.safetensors",
+    "lora_path":           "",
+    "steps":               6,
+    "hf_unet":             "Viggle/Qwen-Image-2.1-viggle-turbo",
+    "hf_clip":             "unsloth/Qwen3-VL-8B-Instruct-GGUF",
+    "hf_vae":              "Comfy-Org/Qwen-Image-2.1",
+    "hf_lora":             ""
+}
+```
+
+Differences from the default config above:
+
+- `unet_name` points at the merged fp8 checkpoint (downloaded to
+  `comfy_bridge/models/unet/` on first use, like every other model file);
+- `lora_path` is empty — the checkpoint is loaded as-is, the loader skips
+  the runtime LoRA hook;
+- `unet_hf_name` gives the filename as it exists on the Viggle repo: the
+  merged files sit at the **repo root**, where the loader's default
+  auto-download path would be the Comfy-Org-style
+  `diffusion_models/<local filename>` (which does not exist there → 404);
+- `hf_lora` is unused (empty) — nothing to download for a LoRA;
+- `steps: 6` matches the checkpoint's native step count.
+
+> The GUI lists it in **Model Config** as `qwen21_viggle-soft_fp8`, next to
+the default `qwen21_viggle`.
 
 ### Key reference
 

@@ -94,8 +94,8 @@ The LoRA is merged statically (not applied as an adapter), so there is no runtim
 
 ### qwen21-viggle Backend : `config/qwen21_viggle.json`
 
-A single config file — this backend has no quantization variants for the
-UNet (int8 ConvRot only). The CLIP, unlike the UNet, can be either a
+The default config uses the int8 ConvRot UNet with the Viggle-Turbo LoRA
+applied at load time. The CLIP, unlike the UNet, can be either a
 `.safetensors` file or a GGUF+mmproj pair — the default uses GGUF+mmproj
 (see [What's New](whats-new.md)):
 
@@ -133,6 +133,21 @@ UNet (int8 ConvRot only). The CLIP, unlike the UNet, can be either a
 > colorization RPC methods (see [Suggested Inference Steps](usage.md#-suggested-inference-steps)
 > and [RPC API Reference](rpc-api.md)), same as every other backend.
 
+> **Merged-LoRA checkpoints** (e.g. the `v0.3-6step-*` files in the
+> [Viggle repo](https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo),
+> which already contain the LoRA) simply omit `lora_path` (or leave it
+> empty). When such a file lives at the *root* of its HuggingFace repo, add
+> `unet_hf_name` with its filename as it exists upstream — by default the
+> loader assumes the Comfy-Org-style `diffusion_models/<local filename>`
+> path when auto-downloading a missing UNet:
+>
+> ```json
+>     "unet_name":    "models/unet/Qwen-Image-2.1-viggle-turbo-v0.3-6step-fp8_e4m3fn.safetensors",
+>     "unet_hf_name": "Qwen-Image-2.1-viggle-turbo-v0.3-6step-fp8_e4m3fn.safetensors",
+>     "lora_path":    "",
+>     "hf_unet":      "Viggle/Qwen-Image-2.1-viggle-turbo",
+> ```
+
 ### Key reference
 
 | Key                                       | Required | Description                                                                                  |
@@ -143,11 +158,12 @@ UNet (int8 ConvRot only). The CLIP, unlike the UNet, can be either a
 | `unet_gguf` / `clip_gguf`                 | ✅        | **GGUF only**: local paths to the GGUF model files                                           |
 | `unet_name` / `clip_name`                 | ✅        | **qwen21-viggle only**: local paths to the model files — `unet_name` is always `.safetensors`, `clip_name` can be `.safetensors` or `.gguf` |
 | `clip_mmproj` / `clip_mmproj_hf_name`     |          | **GGUF/qwen21-viggle-with-GGUF-CLIP**: local path to the mmproj (vision tower) file / its filename on HuggingFace if different from the local one. Required for a GGUF CLIP to see images at all — without it the vision tower silently isn't loaded |
+| `unet_hf_name`                            |          | **qwen21-viggle only**: UNet filename on HuggingFace when it differs from the default download path (`diffusion_models/<local filename>`, the Comfy-Org layout) — e.g. merged checkpoints kept at the repo root. Only used by auto-download |
 | `model_rank`                              |          | **Nunchaku**: SVD rank (`"32"`). **GGUF/qwen21-viggle**: not used                            |
 | `model_inference_steps`                   |          | **Nunchaku**: diffusion steps (`"4"`). **GGUF/qwen21-viggle**: not used at load time          |
 | `cache_dir`                               |          | HuggingFace cache directory. Leave empty to use the default `~/.cache/huggingface`           |
 | `full_model_path`                         |          | **Nunchaku**: local path to the transformer checkpoint. **GGUF**: not used                   |
-| `lora_path`                               |          | **GGUF/qwen21-viggle**: path to the LoRA (`.safetensors`). Omit for GGUF to skip LoRA merging |
+| `lora_path`                               |          | **GGUF/qwen21-viggle**: path to the LoRA (`.safetensors`). Omit (or empty) to skip LoRA merging — e.g. GGUF, or a qwen21-viggle checkpoint with the LoRA already merged in |
 | `steps`                                   |          | **GGUF**: inference steps (`4` with LoRA, `20` without). **qwen21-viggle**: documents the native step count only, not consumed at load time |
 | `vae_name`                                |          | **GGUF/qwen21-viggle only**: VAE filename                                                    |
 | `hf_*`                                    |          | **GGUF/qwen21-viggle only**: HuggingFace repo names for auto-download                        |

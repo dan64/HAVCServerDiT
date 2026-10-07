@@ -360,10 +360,13 @@ def load_viggle_pipeline(model_name: str, unet_path: str, clip_path: str,
                           hf_vae="Comfy-Org/Qwen-Image-2.1",
                           hf_lora="Viggle/Qwen-Image-2.1-viggle-turbo",
                           clip_mmproj: str = "",
-                          clip_mmproj_hf_name: str = ""):
+                          clip_mmproj_hf_name: str = "",
+                          unet_hf_name: str = ""):
     """
-    Load the Qwen-Image-2.1 pipeline (native ComfyUI int8 ConvRot weights)
-    with the Viggle-Turbo LoRA applied as an unmerged runtime hook.
+    Load the Qwen-Image-2.1 pipeline (native ComfyUI int8 ConvRot weights).
+    The Viggle-Turbo LoRA is applied as an unmerged runtime hook when
+    lora_path is given; with lora_path empty the checkpoint is used as-is
+    (for models that already have the LoRA merged in).
 
     clip_mmproj : optional path to a separate mmproj GGUF file, only used
     when clip_path points to a GGUF text encoder (vs. the default
@@ -372,6 +375,10 @@ def load_viggle_pipeline(model_name: str, unet_path: str, clip_path: str,
     hf_clip repo, when it differs from clip_mmproj's local basename (e.g.
     a generic "mmproj-BF16.gguf" upstream vs. a locally prefixed name).
     Defaults to clip_mmproj's own basename when not given.
+    unet_hf_name : optional, the UNet filename as it exists on the hf_unet
+    repo, when it differs from the default download path the loader assumes
+    ("diffusion_models/<local filename>", the Comfy-Org layout) -- e.g. for
+    files kept at the root of the Viggle repo.
     """
     if model_name != "qwen21-viggle":
         return None
@@ -402,7 +409,10 @@ def load_viggle_pipeline(model_name: str, unet_path: str, clip_path: str,
         else "text_encoders/" + _os.path.basename(clip_path)
     )
     _files = {
-        "unet": (unet_path,  hf_unet, "diffusion_models/" + _os.path.basename(unet_path)),
+        # unet: unet_hf_name overrides the assumed remote path when the file
+        # is not stored under the Comfy-Org-style "diffusion_models/" folder
+        # (e.g. the merged checkpoints at the root of the Viggle repo).
+        "unet": (unet_path,  hf_unet, unet_hf_name or ("diffusion_models/" + _os.path.basename(unet_path))),
         "clip": (clip_path,  hf_clip, _clip_hf_filename),
         "vae":  (_vae_local, hf_vae,  "vae/" + vae_name),
         "lora": (lora_path,  hf_lora, _os.path.basename(lora_path)) if lora_path else None,

@@ -27,6 +27,7 @@ file there. Supported config formats (see config/*.json):
     Nunchaku:        model_name/model_precision/model_rank/model_inference_steps
     GGUF / LongCat:  model_name/unet_gguf/clip_gguf/vae_name/steps
     qwen21-viggle:   model_name/unet_name/clip_name/lora_path/vae_name/steps
+                     (optional: clip_mmproj, clip_mmproj_hf_name, unet_hf_name)
 -------------------------------------------------------------------------------
 """
 
@@ -224,6 +225,7 @@ class ColorizeService:
         hf_lora: str = "",
         clip_mmproj: str = "",
         clip_mmproj_hf_name: str = "",
+        unet_hf_name: str = "",
     ) -> dict:
         """
         Load the Nunchaku/Qwen pipeline.
@@ -296,6 +298,7 @@ class ColorizeService:
                         hf_lora=hf_lora,
                         clip_mmproj=clip_mmproj,
                         clip_mmproj_hf_name=clip_mmproj_hf_name,
+                        unet_hf_name=unet_hf_name,
                     )
                 else:
                     pipe = None
@@ -1032,6 +1035,7 @@ def parse_pipeline_config(config_path: str) -> dict:
             "hf_lora": cfg.get("hf_lora", "Viggle/Qwen-Image-2.1-viggle-turbo"),
             "clip_mmproj": cfg.get("clip_mmproj", ""),
             "clip_mmproj_hf_name": cfg.get("clip_mmproj_hf_name", ""),
+            "unet_hf_name": cfg.get("unet_hf_name", ""),
         }
 
     # Legacy format
@@ -1102,6 +1106,7 @@ def _load_pipeline_from_parsed(service: ColorizeService, cfg: dict,
         hf_lora=cfg.get("hf_lora", ""),
         clip_mmproj=cfg.get("clip_mmproj", ""),
         clip_mmproj_hf_name=cfg.get("clip_mmproj_hf_name", ""),
+        unet_hf_name=cfg.get("unet_hf_name", ""),
     )
 
 

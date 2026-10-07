@@ -52,7 +52,7 @@ lo schema è già fissato qui.
 - **Esclusi dalla wheel**: cache Python (`.pyc`, `__pycache__`) e backup
   (`.bak`/`.orig`/`.rej`). **`comfy_bridge/` non è più nella wheel** (dal
   2026-10-05): il runtime ComfyUI venduto si distribuisce come zip pinnato
-  (`comfy_bridge_v0.30.zip`, script `installer/build_comfy_zip.py`) ed è
+  (`comfy_bridge_v0.31.zip`, script `installer/build_comfy_zip.py`) ed è
   estratto nella root dell'installazione dal passo `comfy-bridge` (D14). Lo
   zip esclude — come prima la wheel — **`comfy_bridge/blueprints/`** (96 file
   di materiale UI, nessun riferimento nel runtime: nessun caso d'uso).
@@ -147,7 +147,7 @@ Passi, nell'ordine:
 12. `server` — copia `dit_rpc_server.py` e `dit_colorize_main.py` dalla wheel
     (site-packages del venv) nella root di `<install>`, riscritti se diversi:
     la GUI avvia il server da lì (file path + `--module-dir`);
-13. `comfy-bridge` — scarica/verifica `comfy_bridge_v0.30.zip` (pinnato,
+13. `comfy-bridge` — scarica/verifica `comfy_bridge_v0.31.zip` (pinnato,
     sha256; `--comfy-zip` per staging/offline) e lo estrae in
     `<install>\comfy_bridge`, **preservando `models/`**; marker `.source` per
     l'idempotenza;
@@ -293,7 +293,7 @@ Campi: `schema`, `channel`, `app`, `app_version`, `published_at`,
 `runtime` (`name`, `url`, `sha256`, `python`, `kind`, `mirror_of` — la build
 Python provisionata, §4-bis), `wheels[]` (`name`, `url`, `sha256`, `size`,
 `kind`, `install`), `assets[]` (wheel di terze parti, es. diffusers, e
-`comfy_bridge_v0.30.zip` con `kind: comfy-bridge`),
+`comfy_bridge_v0.31.zip` con `kind: comfy-bridge`),
 `weights[]` e `tools[]` (riservati alle fasi GUI, per ora vuoti), `notes_url`.
 
 Regole: **sha256 obbligatori** per ogni artefatto; `requires_env_rebuild` a

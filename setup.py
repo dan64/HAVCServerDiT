@@ -9,7 +9,7 @@ The repo stays the single source of truth: at build time, data that is not a
                          ->  havc/gui/
 
 The vendored ComfyUI runtime is NOT part of the wheel (2026-10-05): it ships
-as a pinned zip (`dist/comfy_bridge_v0.30.zip`, built by
+as a pinned zip (`dist/comfy_bridge_v0.31.zip`, built by
 `installer/build_comfy_zip.py`) that havc-install extracts at the install
 root (`<install>\comfy_bridge`) — models are preserved on update.
 

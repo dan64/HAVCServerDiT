@@ -53,11 +53,14 @@ NVENC = {
 # extracted at the install root (<install>\comfy_bridge), where both the
 # runtime imports and the model paths resolve consistently. Extracted by the
 # `comfy-bridge` step; existing `models/` files are preserved on update.
+# v0.31 (2026-10-07): adds GGUF UNet support to the qwen21-viggle loader;
+# the NEW FILE NAME is what makes existing installs re-extract it (the
+# `.source` marker only tracks the name). Bucket: HAVC Assets v1.0.1.
 COMFY_BRIDGE = {
-    "name": "comfy_bridge_v0.30.zip",
-    "url": "https://github.com/dan64/HAVCServerDiT/releases/download/v0.1.8/comfy_bridge_v0.30.zip",
-    "sha256": "294311d0ca6b0b373bef64ea691429f14eba7252314ab58693234d0d4b4b7736",
-    "size": 10557227,
+    "name": "comfy_bridge_v0.31.zip",
+    "url": "https://github.com/dan64/HAVCServerDiT/releases/download/v1.0.1/comfy_bridge_v0.31.zip",
+    "sha256": "27061832d155b06535e66688d414efb2d0b5b1d1c24957687fc53d81ff13cd67",
+    "size": 10666823,
 }
 
 # cmnet2 assets (plugins + weights) — pinned; sha256 also verified against

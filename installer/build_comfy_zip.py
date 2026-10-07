@@ -13,7 +13,7 @@ The zip is published as a release asset and extracted by `havc-install` step
 preserved on update).
 
 Usage:
-    python installer/build_comfy_zip.py [--version v0.30] [--out dist/comfy_bridge_v0.30.zip]
+    python installer/build_comfy_zip.py [--version v0.31] [--out dist/comfy_bridge_v0.31.zip]
 """
 
 from __future__ import annotations
@@ -27,8 +27,8 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 # ComfyUI version contained in the vendored tree (release naming, e.g. the
-# published asset is `comfy_bridge_v0.30.zip`).
-DEFAULT_VERSION = "v0.30"
+# published asset is `comfy_bridge_v0.31.zip`).
+DEFAULT_VERSION = "v0.31"
 
 ROOT_DIR = "comfy_bridge"
 SKIP_DIRS = {"__pycache__", ".mypy_cache", ".pytest_cache"}
@@ -62,6 +62,12 @@ def main() -> int:
             continue
         rel = path.relative_to(src).as_posix()
         if any(rel == ex or rel.startswith(ex + "/") for ex in EXCLUDE_RELS):
+            continue
+        # models/ ships as an EMPTY skeleton (the weights are downloaded on
+        # first use and live only in the install): anything under it but the
+        # .gitkeep placeholders (local test models, HF download caches) must
+        # never leak into the release zip.
+        if (rel == "models" or rel.startswith("models/")) and path.name != ".gitkeep":
             continue
         files.append((path, f"{ROOT_DIR}/{rel}"))
 

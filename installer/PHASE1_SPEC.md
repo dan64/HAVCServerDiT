@@ -168,7 +168,7 @@ Invocazione standard dal manager:
   a due stadi, già verificato).
 - **Nuove opzioni bootstrap (Fase 1)**:
   - `--comfy-zip <zip>` (**implementato il 05-10**, con
-    `comfy_bridge_v0.30.zip`): comfy_bridge locale per staging/offline; il
+    `comfy_bridge_v0.31.zip`): comfy_bridge locale per staging/offline; il
     passo `comfy-bridge` usa anche la copia in `--assets-dir` (dal manifest)
     e in mancanza scarica dall'URL pinnato (sha256). Il seed/wiring dei
     settings GUI (`model_config`) è di `--default-model`;
@@ -220,7 +220,7 @@ prima installazione.
    per i test; **fallback a `<exe folder>\release.json`** se il fetch di rete
    fallisce e `--manifest` non è stato passato); mostra versione e note.
 4. **Download**: archivio runtime + wheel `havc` + asset wheel +
-   `comfy_bridge_v0.30.zip` →
+   `comfy_bridge_v0.31.zip` →
    `<install>\cache\` (nomi originali), ognuno verificato sha256; riuso dei
    file in cache se il digest combacia.
 5. **Stadio 1**: estrazione runtime in `<install>\runtime\python` (tar.gz,
@@ -297,7 +297,7 @@ rimozione) è Fase 2.
 
 - **I modelli vivono dentro l'installazione**: `<install>\comfy_bridge\models\…`
   (unet/clip/loras/vae + `.cache` dei download). Il runtime ComfyUI
-  (`comfy_bridge/`, zip pinnato `comfy_bridge_v0.30.zip`) è estratto nella
+  (`comfy_bridge/`, zip pinnato `comfy_bridge_v0.31.zip`) è estratto nella
   root; import e percorsi modelli coincidono per costruzione (PHASE0 §2).
 - **Preservati** a update/ripara; in disinstallazione restano salvo la
   checkbox *Also delete the model files* (§6.5). Reinstall sulla stessa

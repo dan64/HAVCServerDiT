@@ -174,19 +174,23 @@ Passi, nell'ordine:
 21. `gui-settings` — `gui_cmnet2_settings.json` in `<install>\gui`: **seed
     dal file curato** `GUI/gui_cmnet2_settings.json` (template nella wheel)
     con i valori macchina riscritti (`script_dir`, `vspipe`, tool,
-    `base_dir`/`fixv_base_dir` = `<install>\gui\samples`, `model_name` da
-    `--default-model`, precision `q3` per `longcat-gguf`); su file esistente
-    riempie solo i valori vuoti; con `--update-gui-settings` sostituisce il
-    file quando differisce dal template atteso (backup `.bak`), altrimenti
-    le differenze sono elencate nel motivo di skip (il manager chiede
-    conferma prima di passare il flag — 06-10);
+    `base_dir`/`fixv_base_dir` = `<install>\gui\samples`, `model_config` da
+    `--default-model`: `qwen21_viggle`, oppure `longcat_gguf_q3`); su file
+    esistente riempie solo i valori vuoti — il vecchio
+    `model_name`/`model_precision` è migrato a `model_config` e rimosso
+    (07-10); con `--update-gui-settings` sostituisce il file quando
+    differisce dal template atteso (backup `.bak`), altrimenti le differenze
+    sono elencate nel motivo di skip (il manager chiede conferma prima di
+    passare il flag — 06-10);
 22. `launchers` — scrive i launcher in `<install>`: `HAVC.cmd`/`HAVC.vbs`
-    (**front-end di default = GUI**), `HAVC-Server.cmd` (server con scelta
-    modello), `HAVC-Doctor.cmd`, `start_server.cmd`/`run_server_qwen21.cmd` +
+    (**front-end di default = GUI**), `HAVC-Server.cmd` (server; argomento:
+    nome storico oppure nome di un file in `config\`), `HAVC-Doctor.cmd`,
+    `start_server.cmd`/`run_server_qwen21.cmd` +
     i wrapper per-modello `run_server_{fp4,int4,longcat,q3}.cmd` (avvio in
     console per la modalità *External console* della GUI e uso manuale;
     stessi nomi argomento dello storico `start_server.cmd`, come da tabella
-    del README); riscritti se il contenuto differisce;
+    del README; un file `config\<arg>.json` vince sugli alias — 07-10);
+    riscritti se il contenuto differisce;
 23. `verify` — esegue `havc doctor --json` **nel venv di destinazione**;
     un FAIL qui è un errore del bootstrap.
 

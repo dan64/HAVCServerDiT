@@ -26,7 +26,7 @@ From the install folder (or the repository root on a manual install):
 ```
 HAVC.vbs               # desktop GUI (the recommended front-end)
 HAVC-Server.cmd        # console server — pick the model at the prompt
-start_server.cmd q3    # console server with a specific backend/quantization
+start_server.cmd q3    # console server with a backend/quantization or a config name
 ```
 
 CLI arguments, the full launch-script reference and the suggested inference steps: [docs/usage.md](docs/usage.md).

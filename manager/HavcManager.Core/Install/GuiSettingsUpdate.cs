@@ -98,8 +98,11 @@ public static class GuiSettingsUpdate
         template["base_dir"] = samples;
         template["fixv_base_dir"] = samples;
         string model = defaultModel ?? "qwen21-viggle"; // --default-model default
-        template["model_name"] = model;
-        if (model == "longcat-gguf")
-            template["model_precision"] = "q3"; // DEFAULT_MODEL_PRECISION in install.py
+        // GUI "Model Config" (config/ file stem): DEFAULT_MODEL_CONFIG in
+        // havc/install.py. The old model_name/model_precision pair is
+        // superseded and dropped from the expected shape as well.
+        template["model_config"] = model == "longcat-gguf" ? "longcat_gguf_q3" : "qwen21_viggle";
+        template.Remove("model_name");
+        template.Remove("model_precision");
     }
 }

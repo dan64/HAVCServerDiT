@@ -134,9 +134,31 @@ CMNET2_DINOV2 = (
 # default (qwen21-viggle) it seeds the lighter longcat-gguf (Q3).
 DEFAULT_MODEL_NAME = "qwen21-viggle"
 
-# GUI precision paired with a non-viggle default model (seeded/wired only
-# when absent; qwen21-viggle ignores the precision).
-DEFAULT_MODEL_PRECISION = {"longcat-gguf": "q3"}
+# GUI "Model Config" (the config/ file stem, without .json) seeded/wired for
+# each --default-model value: the config folder is what selects the model.
+DEFAULT_MODEL_CONFIG = {"qwen21-viggle": "qwen21_viggle",
+                        "longcat-gguf": "longcat_gguf_q3"}
+
+
+def default_model_config(model: str) -> str:
+    return DEFAULT_MODEL_CONFIG.get(model, DEFAULT_MODEL_CONFIG[DEFAULT_MODEL_NAME])
+
+
+def legacy_model_config(data: dict) -> str:
+    """Config name equivalent of the old model_name/model_precision pair
+    (migrates settings saved before the "Model Config" field; same mapping as
+    the GUI). "" when there is nothing to migrate."""
+    name = data.get("model_name", "")
+    precision = data.get("model_precision", "")
+    if name == "qwen21-viggle":
+        return "qwen21_viggle"
+    if name == "nunchaku-qwen" and precision:
+        return f"qwen_nunchaku_{precision}"
+    if name == "gguf-qwen" and precision:
+        return f"qwen_gguf_{precision}"
+    if name == "longcat-gguf" and precision:
+        return f"longcat_gguf_{precision}"
+    return ""
 
 # Launchers written into the install folder (default front-end = GUI).
 # ASCII content; lines are rewritten with CRLF on save (.cmd files with
@@ -196,8 +218,11 @@ if /i "%WHICH%"=="q4"      set "CFG=qwen_gguf_q4.json"
 if /i "%WHICH%"=="longcat"  set "CFG=longcat_gguf_q4.json"
 if /i "%WHICH%"=="longcat3" set "CFG=longcat_gguf_q3.json"
 if /i "%WHICH%"=="qwen21"   set "CFG=qwen21_viggle.json"
+rem The config folder is the source of truth: a matching config\<name>.json
+rem wins over the shortcuts above, so a new model only needs a new file there.
+if exist "%HERE%config\%WHICH%.json" set "CFG=%WHICH%.json"
 if "%CFG%"=="" (
-    echo [ERROR] Unknown model "%WHICH%". Available: int4 fp4 q3 q4 longcat longcat3 qwen21
+    echo [ERROR] Unknown model "%WHICH%". Available: int4 fp4 q3 q4 longcat longcat3 qwen21, or any config name in the config folder.
     pause
     exit /b 1
 )
@@ -236,8 +261,11 @@ if /i "%WHICH%"=="longcat-q4" set "CFG=longcat_gguf_q4.json"
 if /i "%WHICH%"=="longcat-q5" set "CFG=longcat_gguf_q5.json"
 if /i "%WHICH%"=="longcat-q6" set "CFG=longcat_gguf_q6.json"
 if /i "%WHICH%"=="longcat-q8" set "CFG=longcat_gguf_q8.json"
+rem The config folder is the source of truth: a matching config\<name>.json
+rem wins over the shortcuts above, so a new model only needs a new file there.
+if exist "%HERE%config\%WHICH%.json" set "CFG=%WHICH%.json"
 if "%CFG%"=="" (
-    echo [ERROR] Unknown model "%WHICH%". Available: fp4 int4 q3 q4 q5 q6 q8 longcat longcat-q3 longcat-q4 longcat-q5 longcat-q6 longcat-q8
+    echo [ERROR] Unknown model "%WHICH%". Available: fp4 int4 q3 q4 q5 q6 q8 longcat longcat-q3 longcat-q4 longcat-q5 longcat-q6 longcat-q8, or any config name in the config folder.
     pause
     exit /b 1
 )
@@ -618,17 +646,32 @@ def staged_asset(ctx: Ctx, asset: dict, local: Optional[Path] = None) -> Path:
 #
 # gui_cmnet2_settings.json is seeded from the packaged template (the curated
 # GUI/gui_cmnet2_settings.json shipped in the wheel); managed values (paths,
-# default model) are rewritten for the install. Existing files: empty managed
-# values are wired and user values are never overwritten, unless
-# --update-gui-settings replaces the file (previous kept as .bak). 2026-10-06.
+# default model config) are rewritten for the install. Existing files: empty
+# managed values are wired (the old model_name/model_precision pair is
+# migrated to model_config) and user values are never overwritten, unless
+# --update-gui-settings replaces the file (previous kept as .bak). 2026-10-07.
 # ---------------------------------------------------------------------------
 
 GUI_SETTINGS_FILE = "gui_cmnet2_settings.json"
 
 
+def _model_config_available(ctx: Ctx, name: str) -> bool:
+    """True when <install>\\config\\<name>.json exists (when the config
+    folder is there at all; otherwise the name is accepted as-is)."""
+    if not name:
+        return False
+    cfg_dir = ctx.install_dir / "config"
+    if not cfg_dir.is_dir():
+        return True
+    return (cfg_dir / f"{name}.json").is_file()
+
+
 def wire_gui_settings(ctx: Ctx, settings_path: Path) -> int:
-    """Fill empty/absent managed values in gui_cmnet2_settings.json
-    (default `model_name`/`model_precision`). Returns 1 if changed."""
+    """Fill/normalize the managed model value in gui_cmnet2_settings.json:
+    a missing `model_config` is derived from the old `model_name`/
+    `model_precision` pair (user choices are kept) or seeded from
+    --default-model, then the superseded legacy keys are removed.
+    Returns 1 if changed."""
     if not settings_path.is_file():
         return 0
     try:
@@ -636,12 +679,16 @@ def wire_gui_settings(ctx: Ctx, settings_path: Path) -> int:
     except (OSError, ValueError):
         return 0
     changed = False
-    if not data.get("model_name"):
-        data["model_name"] = ctx.default_model
-        precision = DEFAULT_MODEL_PRECISION.get(ctx.default_model)
-        if precision and not data.get("model_precision"):
-            data["model_precision"] = precision
+    if not data.get("model_config"):
+        name = legacy_model_config(data)
+        if not _model_config_available(ctx, name):
+            name = default_model_config(ctx.default_model)
+        data["model_config"] = name
         changed = True
+    for legacy in ("model_name", "model_precision"):
+        if legacy in data:
+            del data[legacy]
+            changed = True
     if not changed:
         return 0
     with settings_path.open("w", encoding="utf-8", newline="\n") as fh:
@@ -672,10 +719,10 @@ def gui_settings_expected(ctx: Ctx) -> Optional[dict]:
     data["mkv_path"] = str(ctx.install_dir / "tools" / "MKVToolNix" / "mkvmerge.exe")
     data["base_dir"] = str(samples)
     data["fixv_base_dir"] = str(samples)
-    data["model_name"] = ctx.default_model
-    precision = DEFAULT_MODEL_PRECISION.get(ctx.default_model)
-    if precision:
-        data["model_precision"] = precision
+    data["model_config"] = default_model_config(ctx.default_model)
+    # superseded by model_config (also dropped from an older template)
+    data.pop("model_name", None)
+    data.pop("model_precision", None)
     return data
 
 
@@ -1211,8 +1258,9 @@ def build_steps() -> list[Step]:
                 return None
             return ("settings file not parseable and kept "
                     "(pass --update-gui-settings to replace it)")
-        if not data.get("model_name"):
-            return None  # managed value missing: wire it (run below)
+        if (not data.get("model_config")
+                or "model_name" in data or "model_precision" in data):
+            return None  # managed model value missing/migratable: wire it
         expected = gui_settings_expected(c)
         if expected is None:
             return "settings already present"
@@ -1255,11 +1303,8 @@ def build_steps() -> list[Step]:
                 "mkv_path": str(c.install_dir / "tools" / "MKVToolNix" / "mkvmerge.exe"),
                 "base_dir": str(gui_dir / "samples"),
                 "fixv_base_dir": str(gui_dir / "samples"),
-                "model_name": c.default_model,
+                "model_config": default_model_config(c.default_model),
             }
-            precision = DEFAULT_MODEL_PRECISION.get(c.default_model)
-            if precision:
-                data["model_precision"] = precision
             origin = "built-in defaults"
         path.write_text(json.dumps(data, indent=4) + "\n",
                         encoding="utf-8", newline="\n")
@@ -1372,7 +1417,8 @@ def build_steps() -> list[Step]:
              tools_check, tools_run),
         Step("gui-settings", "GUI settings (seeded from the packaged template)",
              "gui_cmnet2_settings.json: seed from the packaged template; empty "
-             "model values wired; --update-gui-settings replaces differing files (.bak kept)",
+             "model_config wired (migrates the old model_name/model_precision); "
+             "--update-gui-settings replaces differing files (.bak kept)",
              gui_settings_check, gui_settings_run),
         Step("launchers", "Launcher in <install>",
              "HAVC.cmd/.vbs (GUI), HAVC-Server.cmd, HAVC-Doctor.cmd, start_server.cmd/run_server_qwen21.cmd/run_server_{fp4,int4,longcat,q3}.cmd (rewritten if different)",
@@ -1472,7 +1518,7 @@ def main(argv=None) -> int:
     parser.add_argument("--default-model", default=DEFAULT_MODEL_NAME,
                         help="GUI default model seeded/wired in the GUI settings "
                              f"when empty (default: {DEFAULT_MODEL_NAME}; "
-                             "e.g. longcat-gguf seeds precision q3)")
+                             "e.g. longcat-gguf seeds model_config longcat_gguf_q3)")
     parser.add_argument("--only", default="",
                         help="run only these steps (comma-separated ids)")
     parser.add_argument("--plan", action="store_true",

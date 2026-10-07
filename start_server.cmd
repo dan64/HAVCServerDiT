@@ -12,6 +12,9 @@
 ::   start_server.cmd q6       -> loads Q6_K GGUF config    (18 GB VRAM)
 ::   start_server.cmd q8       -> loads Q8_0 GGUF config    (22 GB VRAM)
 ::   start_server.cmd longcat  -> loads LongCat config      (18+ GB VRAM)
+::   start_server.cmd <name>   -> loads config\<name>.json  (any config in the
+::                                config folder; new models only need a new
+::                                file there, the shortcuts above are fallbacks)
 ::
 :: Edit the USER CONFIGURATION block below before first use.
 :: =============================================================================
@@ -62,18 +65,26 @@ if /i "%ARG%"=="longcat-q5"  ( set CONFIG_FILE=config\longcat_gguf_q5.json    & 
 if /i "%ARG%"=="longcat-q6"  ( set CONFIG_FILE=config\longcat_gguf_q6.json    & set BACKEND=LongCat Q6_K  )
 if /i "%ARG%"=="longcat-q8"  ( set CONFIG_FILE=config\longcat_gguf_q8.json    & set BACKEND=LongCat Q8_0  )
 
-if "%CONFIG_FILE%"=="" (
-    echo [ERROR] Unknown argument: "%ARG%". Use "q4" ^(default^), "q3", "q5", "q6", "q8", "fp4", "int4", "longcat", "longcat-q3", "longcat-q5", "longcat-q6", or "longcat-q8".
-    pause
-    exit /b 1
-)
-
 :: ---------------------------------------------------------------------------
 :: RESOLVE PATHS
 :: ---------------------------------------------------------------------------
 if "%SERVER_DIR%"=="" set SERVER_DIR=%~dp0
 :: Remove trailing backslash if present
 if "%SERVER_DIR:~-1%"=="\" set SERVER_DIR=%SERVER_DIR:~0,-1%
+
+:: The config folder is the source of truth: a matching config\<arg>.json wins
+:: over the shortcuts above, so a new model only needs a new file there
+:: ("start_server.cmd my_model" -> config\my_model.json).
+if exist "%SERVER_DIR%\config\%ARG%.json" (
+    set CONFIG_FILE=config\%ARG%.json
+    set BACKEND=%ARG%
+)
+
+if "%CONFIG_FILE%"=="" (
+    echo [ERROR] Unknown argument: "%ARG%". Use "q4" ^(default^), "q3", "q5", "q6", "q8", "fp4", "int4", "longcat", "longcat-q3", "longcat-q5", "longcat-q6", "longcat-q8", or the name of a config file in config\.
+    pause
+    exit /b 1
+)
 
 set SERVER_SCRIPT=%SERVER_DIR%\dit_rpc_server.py
 set CONFIG_PATH=%SERVER_DIR%\%CONFIG_FILE%

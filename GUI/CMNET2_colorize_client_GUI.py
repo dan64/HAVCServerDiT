@@ -118,6 +118,10 @@ class CMNET2RpcClient:
             vae_name, hf_unet, hf_clip, hf_vae, hf_lora,
         )
 
+    def load_pipeline_from_config(self, config_name: str, cache_dir: str = "") -> dict:
+        """Load the pipeline from a config in the server's config/ folder."""
+        return self._proxy_slow.load_pipeline_from_config(config_name, cache_dir)
+
     def is_pipeline_loaded(self) -> bool:
         return bool(self._proxy_fast.is_pipeline_loaded())
 
@@ -147,6 +151,67 @@ class CMNET2RpcClient:
 # ---------------------------------------------------------------------------
 CONFIG_FILE = "gui_cmnet2_settings.json"
 
+# Install/project root: one level above this GUI folder. The model configs
+# live in <root>\config (same folder dit_rpc_server.py reads).
+SERVER_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def model_config_dir():
+    return os.path.join(SERVER_DIR, "config")
+
+
+def scan_model_configs():
+    """Stems (file names without the .json extension) of the model configs in
+    config/, sorted: the combo list for "Model Config"."""
+    cfg_dir = model_config_dir()
+    try:
+        entries = os.listdir(cfg_dir)
+    except OSError:
+        return []
+    stems = [f[:-len(".json")] for f in entries
+             if f.lower().endswith(".json")
+             and os.path.isfile(os.path.join(cfg_dir, f))]
+    return sorted(stems, key=str.lower)
+
+
+def legacy_model_config(cfg):
+    """Config name equivalent of the old model_name/model_precision pair
+    (migrates settings saved before the "Model Config" field)."""
+    name = cfg.get("model_name", "")
+    precision = cfg.get("model_precision", "")
+    if name == "qwen21-viggle":
+        return "qwen21_viggle"
+    if name == "nunchaku-qwen" and precision:
+        return f"qwen_nunchaku_{precision}"
+    if name == "gguf-qwen" and precision:
+        return f"qwen_gguf_{precision}"
+    if name == "longcat-gguf" and precision:
+        return f"longcat_gguf_{precision}"
+    return ""
+
+
+def resolve_model_config(cfg, configs):
+    """Pick the config to select: the saved value, else its equivalent from
+    the old model_name/model_precision pair, else the default
+    (qwen21_viggle), else the first available config."""
+    for candidate in (cfg.get("model_config", ""), legacy_model_config(cfg)):
+        if candidate in configs:
+            return candidate
+    if "qwen21_viggle" in configs:
+        return "qwen21_viggle"
+    return configs[0] if configs else ""
+
+
+def read_model_config(config_name):
+    """Parsed JSON of the selected config file (None when missing/broken).
+    Used for the few values that depend on the model type."""
+    path = os.path.join(model_config_dir(), config_name + ".json")
+    try:
+        with open(path, "r") as f:
+            return json.load(f)
+    except Exception:
+        return None
+
 
 def load_all_configs():
     defaults = {
@@ -158,8 +223,7 @@ def load_all_configs():
         "encode_script":    "encode_cmnet2.vpy",
         "base_dir":         r"",
         # --- model ---
-        "model_name":             "nunchaku-qwen",
-        "model_precision":        "fp4",
+        "model_config":           "",   # resolved from config/ (see below)
         "steps":                  "2",
         "fast_pipe":              True,
         "enhance_prompt":         False,
@@ -228,6 +292,7 @@ def load_all_configs():
         "window_w": 820,
         "window_h": 640,
     }
+    merged = dict(defaults)
     if os.path.exists(CONFIG_FILE):
         try:
             with open(CONFIG_FILE, "r") as f:
@@ -242,23 +307,15 @@ def load_all_configs():
                 loaded["do_step4"] = loaded.get("do_step3", False)
                 loaded["do_step3"] = loaded.get("do_step2", False)
                 loaded["do_step2"] = False
-            return {**defaults, **loaded}
+            merged = {**defaults, **loaded}
         except Exception:
-            return defaults
-    return defaults
-
-
-def load_viggle_config():
-    """Read config/qwen21_viggle.json (unet/clip/lora/vae paths + hf_* repos).
-    Returns None (and shows a popup) if missing or malformed - never raises."""
-    server_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    path = os.path.join(server_dir, "config", "qwen21_viggle.json")
-    try:
-        with open(path, "r") as f:
-            return json.load(f)
-    except Exception as e:
-        sg.popup_error(f"Could not read {path}: {e}")
-        return None
+            pass
+    # "Model Config" is resolved against the config folder: the saved value
+    # wins, then the old model_name/model_precision pair (migration).
+    merged["model_config"] = resolve_model_config(merged, scan_model_configs())
+    merged.pop("model_name", None)        # superseded by model_config
+    merged.pop("model_precision", None)
+    return merged
 
 
 def save_all_configs(cfg):
@@ -465,21 +522,6 @@ def log_gui_only(msg):
 # available unchanged.
 # ---------------------------------------------------------------------------
 state["server_handle"] = None  # {"proc": Popen, "thread": Thread}
-
-
-def _server_pipeline_config_path(server_dir: str, model_name: str, precision: str):
-    """Mirror the model_name/precision -> config JSON mapping already used by
-    start_server.cmd / run_server_qwen21.cmd, for the GUI-managed server."""
-    cfg_dir = os.path.join(server_dir, "config")
-    if model_name == "qwen21-viggle":
-        return os.path.join(cfg_dir, "qwen21_viggle.json")
-    if model_name == "nunchaku-qwen":
-        return os.path.join(cfg_dir, f"qwen_nunchaku_{precision}.json")
-    if model_name == "gguf-qwen":
-        return os.path.join(cfg_dir, f"qwen_gguf_{precision}.json")
-    if model_name == "longcat-gguf":
-        return os.path.join(cfg_dir, f"longcat_gguf_{precision}.json")
-    return None
 
 
 def _set_run_server_button(window, **kwargs):
@@ -837,32 +879,8 @@ def orchestrator(init_values, window):
         # Load pipeline if not already loaded
         if not rpc.is_pipeline_loaded():
             log_message('Loading AI pipeline on server...')
-            model_name = values["-MODEL_NAME-"]
-            if model_name == "qwen21-viggle":
-                vcfg = load_viggle_config()
-                if vcfg is None:
-                    return
-                result = rpc.load_pipeline(
-                    model_name,
-                    vcfg["unet_name"],
-                    vcfg["clip_name"],
-                    str(vcfg.get("steps", 6)),
-                    values["-CACHE_DIR-"],
-                    vcfg["lora_path"],
-                    vcfg["vae_name"],
-                    vcfg.get("hf_unet", ""),
-                    vcfg.get("hf_clip", ""),
-                    vcfg.get("hf_vae", ""),
-                    vcfg.get("hf_lora", ""),
-                )
-            else:
-                result = rpc.load_pipeline(
-                    model_name,
-                    values["-MODEL_PRECISION-"],
-                    cfg.get("model_rank", "32"),
-                    cfg.get("model_inference_steps", "4"),
-                    values["-CACHE_DIR-"],
-                )
+            result = rpc.load_pipeline_from_config(
+                values["-MODEL_CONFIG-"], values["-CACHE_DIR-"])
             if not result.get("ok"):
                 log_message(f"⚠️ Unable to load pipeline: {result.get('msg')}")
                 return
@@ -947,41 +965,19 @@ def orchestrator(init_values, window):
             log_message("⚠️ No connection to RPC server.")
             return
 
-        model_name = values["-MODEL_NAME-"]
         # qwen21-viggle works at a higher pair-mode resolution
         # (VIGGLE_PAIR_RESOLUTION=1280, see dit_colorize_main.py) than the
         # other backends (1024) - that headroom allows a wider gap between
         # the two merged frames without eating into per-frame detail.
-        gap_px = 16 if model_name == "qwen21-viggle" else 8
+        model_type = (read_model_config(values["-MODEL_CONFIG-"]) or {}).get(
+            "model_name", "")
+        gap_px = 16 if model_type == "qwen21-viggle" else 8
 
         # Load pipeline if not already loaded
         if not rpc.is_pipeline_loaded():
             log_message("Loading AI pipeline on server...")
-            if model_name == "qwen21-viggle":
-                vcfg = load_viggle_config()
-                if vcfg is None:
-                    return
-                result = rpc.load_pipeline(
-                    model_name,
-                    vcfg["unet_name"],
-                    vcfg["clip_name"],
-                    str(vcfg.get("steps", 6)),
-                    values["-CACHE_DIR-"],
-                    vcfg["lora_path"],
-                    vcfg["vae_name"],
-                    vcfg.get("hf_unet", ""),
-                    vcfg.get("hf_clip", ""),
-                    vcfg.get("hf_vae", ""),
-                    vcfg.get("hf_lora", ""),
-                )
-            else:
-                result = rpc.load_pipeline(
-                    model_name,
-                    values["-MODEL_PRECISION-"],
-                    cfg.get("model_rank", "32"),
-                    cfg.get("model_inference_steps", "4"),
-                    values["-CACHE_DIR-"],
-                )
+            result = rpc.load_pipeline_from_config(
+                values["-MODEL_CONFIG-"], values["-CACHE_DIR-"])
             if not result.get("ok"):
                 log_message(f"⚠️ Unable to load pipeline: {result.get('msg')}")
                 return
@@ -1473,8 +1469,7 @@ steps_values:      list[str] = ['2', '4', '6', '8']
 speed_values:    list[str] = ['auto', 'fast', 'medium', 'slow', 'slower']
 backbone_values: list[str] = ['dinov3', 'dinov2']
 proximity_alpha_values: list[str] = [f"{x/100:.2f}" for x in range(10, 110, 10)]
-model_list:        list[str] = ["nunchaku-qwen", "gguf-qwen", "longcat-gguf", "qwen21-viggle"]
-model_p_list:      list[str] = ["fp4", "int4", "q3", "q4", "q5", "q6", "q8"]
+model_configs:     list[str] = scan_model_configs()
 model_r_list:      list[str] = ["32", "128"]
 model_steps_list:  list[str] = ["4", "8"]
 
@@ -1534,32 +1529,8 @@ def _fix_colorize_worker(values, window, seed, pil_in=None):
         # Ensure pipeline loaded  
         if not rpc.is_pipeline_loaded():  
             window.write_event_value("-FIX_LOG-", "Loading pipeline...")
-            model_name = values["-MODEL_NAME-"]
-            if model_name == "qwen21-viggle":
-                vcfg = load_viggle_config()
-                if vcfg is None:
-                    return
-                result = rpc.load_pipeline(
-                    model_name,
-                    vcfg["unet_name"],
-                    vcfg["clip_name"],
-                    str(vcfg.get("steps", 6)),
-                    values["-CACHE_DIR-"],
-                    vcfg["lora_path"],
-                    vcfg["vae_name"],
-                    vcfg.get("hf_unet", ""),
-                    vcfg.get("hf_clip", ""),
-                    vcfg.get("hf_vae", ""),
-                    vcfg.get("hf_lora", ""),
-                )
-            else:
-                result = rpc.load_pipeline(
-                    model_name,
-                    values["-MODEL_PRECISION-"],
-                    cfg.get("model_rank", "32"),
-                    cfg.get("model_inference_steps", "4"),
-                    values["-CACHE_DIR-"],
-                )
+            result = rpc.load_pipeline_from_config(
+                values["-MODEL_CONFIG-"], values["-CACHE_DIR-"])
             if not result.get("ok"):
                 window.write_event_value("-FIX_LOG-", f"⚠️ {result.get('msg')}")  
                 return  
@@ -1793,10 +1764,8 @@ tab3_layout = [
     [sg.Text("HF Cache:"),
      sg.Input(cfg["hf_cache"], key="-CACHE_DIR-", expand_x=True), sg.FolderBrowse()],
     [sg.Frame("Model Technical Details", [
-        [sg.Text("Model Name:"),
-         sg.Combo(model_list,      default_value=cfg["model_name"],           key="-MODEL_NAME-",     readonly=True, size=(18,1), enable_events=True),
-         sg.Text("Precision:"),
-         sg.Combo(model_p_list,    default_value=cfg["model_precision"],      key="-MODEL_PRECISION-",readonly=True, size=(6,1)),
+        [sg.Text("Model Config:"),
+         sg.Combo(model_configs,   default_value=cfg["model_config"],         key="-MODEL_CONFIG-",   readonly=True, size=(24,1)),
           sg.Button("Run Server", key="-RUN_SERVER-", button_color=("white", "#1a6b1a")),
           sg.Checkbox("External console", key="-RUN_SERVER_EXTERNAL-",
                       default=cfg.get("run_server_external", False),
@@ -3000,11 +2969,6 @@ while True:
             window["-FIX_STATUS-"].update("Loaded: from Fix Colors output")
             window["-FIXC_STATUS-"].update("Copied output → Fix Image")
 
-    # ---- Model Name changed: disable Precision for backends that don't use it ----
-    if event == "-MODEL_NAME-":
-        is_viggle = (values["-MODEL_NAME-"] == "qwen21-viggle")
-        window["-MODEL_PRECISION-"].update(disabled=is_viggle)
-
     # ---- Backbone changed: Proximity Bias is DINOv3-only ----
     if event == "-BACKBONE-":
         is_dinov2 = (values["-BACKBONE-"] == "dinov2")
@@ -3013,43 +2977,32 @@ while True:
 
     # ---- Run Server (Tab 2 button, and its Dashboard mirror) ----
     if event in ("-RUN_SERVER-", "-RUN_SERVER_DASH-"):
-        model_name = values["-MODEL_NAME-"]
-        precision = values["-MODEL_PRECISION-"]
+        config_name = values["-MODEL_CONFIG-"]
         rpc_host = values["-RPC_HOST-"].strip()
         rpc_port = values["-RPC_PORT-"].strip()
-        server_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-        if values["-RUN_SERVER_EXTERNAL-"]:
+        if not config_name:
+            sg.popup_error(
+                "No model config selected - add a JSON file to the config folder:\n"
+                + model_config_dir())
+        elif values["-RUN_SERVER_EXTERNAL-"]:
             # ---- External console: previous behavior, unchanged ----
-            cmd_path = None
-            arg = ''
-            if model_name == "qwen21-viggle":
-                cmd_path = os.path.join(server_dir, 'run_server_qwen21.cmd')
-            elif model_name == "longcat-gguf":
-                longcat_quant_map = {"q3": "longcat-q3", "q4": "longcat-q4", "q5": "longcat-q5",
-                                     "q6": "longcat-q6", "q8": "longcat-q8"}
-                arg = longcat_quant_map.get(precision, "longcat-q4")
-                cmd_path = os.path.join(server_dir, 'start_server.cmd')
-            elif model_name == "nunchaku-qwen":
-                arg = precision
-                cmd_path = os.path.join(server_dir, 'start_server.cmd')
-            elif model_name == "gguf-qwen":
-                arg = precision
-                cmd_path = os.path.join(server_dir, 'start_server.cmd')
-            if cmd_path and os.path.isfile(cmd_path):
-                launch_args = ['cmd', '/c', 'start', 'Running HAVC Server - ' + model_name, cmd_path]
-                if arg:
-                    launch_args.append(arg)
+            # start_server.cmd takes the config name directly (the config
+            # folder is the source of truth), so every config works without
+            # a mapping table here.
+            cmd_path = os.path.join(SERVER_DIR, 'start_server.cmd')
+            if os.path.isfile(cmd_path):
+                launch_args = ['cmd', '/c', 'start',
+                               'Running HAVC Server - ' + config_name,
+                               cmd_path, config_name]
                 subprocess.Popen(
                     launch_args,
-                    cwd=server_dir,
+                    cwd=SERVER_DIR,
                     creationflags=subprocess.CREATE_NEW_CONSOLE,
                 )
-                window["-LOG_BOX-"].print(f'[Run Server] Launched: {cmd_path} {arg}'.rstrip())
-            elif cmd_path:
-                sg.popup_error(f'{os.path.basename(cmd_path)} not found at: {cmd_path}')
+                window["-LOG_BOX-"].print(f'[Run Server] Launched: {cmd_path} {config_name}')
             else:
-                sg.popup_error('Unknown model/precision combination.')
+                sg.popup_error(f'{os.path.basename(cmd_path)} not found at: {cmd_path}')
 
         else:
             # ---- GUI-managed child process, output in "Server Log" ----
@@ -3065,24 +3018,24 @@ while True:
                 ).start()
             else:
                 # Not running -> Start
-                pipeline_config = _server_pipeline_config_path(server_dir, model_name, precision)
-                if not pipeline_config or not os.path.isfile(pipeline_config):
-                    sg.popup_error(f"Pipeline config not found:\n{pipeline_config}")
+                pipeline_config = os.path.join(model_config_dir(), config_name + ".json")
+                if not os.path.isfile(pipeline_config):
+                    sg.popup_error(f"Model config not found:\n{pipeline_config}")
                     # Unblocks a pipeline start left waiting on this server
                     # (see -RUN-/pending_run_values) - nothing was actually
                     # started, so this just re-enables the UI, no real stop.
                     window.write_event_value("-SERVER_STOPPED-", None)
                 else:
-                    venv_python = os.path.join(server_dir, ".venv", "Scripts", "python.exe")
+                    venv_python = os.path.join(SERVER_DIR, ".venv", "Scripts", "python.exe")
                     python_exe = venv_python if os.path.isfile(venv_python) else "python"
                     cmd = [python_exe, "-u",
-                           os.path.join(server_dir, "dit_rpc_server.py"),
+                           os.path.join(SERVER_DIR, "dit_rpc_server.py"),
                            "--host", rpc_host, "--port", rpc_port,
-                           "--module-dir", server_dir,
+                           "--module-dir", SERVER_DIR,
                            "--load-pipeline", "--pipeline-config", pipeline_config]
                     try:
                         proc = subprocess.Popen(
-                            cmd, cwd=server_dir,
+                            cmd, cwd=SERVER_DIR,
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                             stdin=subprocess.DEVNULL, text=True, bufsize=1,
                             encoding="utf-8", errors="replace",
@@ -3101,7 +3054,7 @@ while True:
                         _set_server_status(
                             window, f"Starting server on {rpc_host}:{rpc_port}...", "yellow")
                         window["-SERVER_LOG_BOX-"].print(
-                            f"[Server] Starting {model_name} ({precision})... (pid {proc.pid})")
+                            f"[Server] Starting {config_name}... (pid {proc.pid})")
                         t = threading.Thread(
                             target=_pump_server_output,
                             args=(proc, window, rpc_host, rpc_port), daemon=True)
@@ -3213,8 +3166,7 @@ while True:
             "select_script":         values["-SELECT_VPY-"],
             "encode_script":         values["-ENCODE_VPY-"],
             "base_dir":              values["-BASE_DIR-"],
-            "model_name":            values["-MODEL_NAME-"],
-            "model_precision":       values["-MODEL_PRECISION-"],
+            "model_config":          values["-MODEL_CONFIG-"],
             "steps":                 values["-STEPS-"],
             "fast_pipe":             values["-FAST_PIPE-"],
             "enhance_prompt":        values["-ENHANCE_PROMPT-"],

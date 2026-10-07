@@ -99,7 +99,7 @@ public class GuiSettingsUpdateTests
     }
 
     [Fact]
-    public void Longcat_default_applies_its_precision()
+    public void Longcat_default_applies_its_config()
     {
         string dir = TestPaths.NewTempDir();
         try
@@ -117,10 +117,35 @@ public class GuiSettingsUpdateTests
         }
     }
 
+    [Fact]
+    public void Legacy_model_keys_are_reported_for_migration()
+    {
+        // A settings file saved before the "Model Config" field (old
+        // model_name/model_precision pair, no model_config) differs from the
+        // packaged shape and is offered for replacement/migration.
+        string dir = TestPaths.NewTempDir();
+        try
+        {
+            string template = Template();
+            string wheel = WriteWheel(dir, template);
+            JsonObject installed = Parse(WithInstallValues(template, dir, "qwen21-viggle"));
+            installed.Remove("model_config");
+            installed["model_name"] = "nunchaku-qwen";
+            installed["model_precision"] = "fp4";
+            WriteInstalled(dir, installed.ToJsonString());
+
+            Assert.True(GuiSettingsUpdate.Differs(wheel, dir, "qwen21-viggle"));
+        }
+        finally
+        {
+            TestPaths.Delete(dir);
+        }
+    }
+
     private static string Template() =>
         "{\"script_dir\": \"\", \"vspipe_path\": \"\", \"x265_path\": \"\", " +
         "\"mkv_path\": \"\", \"base_dir\": \"\", \"fixv_base_dir\": \"\", " +
-        "\"model_name\": \"qwen21-viggle\", \"model_precision\": \"q3\", " +
+        "\"model_config\": \"qwen21_viggle\", " +
         "\"fix_steps\": \"2\", \"window_w\": 926, \"window_h\": 814}";
 
     private static JsonObject Parse(string json) => JsonNode.Parse(json)!.AsObject();
@@ -136,9 +161,7 @@ public class GuiSettingsUpdateTests
         node["mkv_path"] = Path.Combine(installDir, "tools", "MKVToolNix", "mkvmerge.exe");
         node["base_dir"] = samples;
         node["fixv_base_dir"] = samples;
-        node["model_name"] = model;
-        if (model == "longcat-gguf")
-            node["model_precision"] = "q3";
+        node["model_config"] = model == "longcat-gguf" ? "longcat_gguf_q3" : "qwen21_viggle";
         return node.ToJsonString();
     }
 

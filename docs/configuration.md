@@ -2,6 +2,9 @@
 
 Ready-to-use config files for both backends are in the `config/` folder.
 Pick the one that matches your hardware and pass it to `--pipeline-config`.
+The GUI lists every `.json` file in `config/` as a **Model Config** entry
+(Tab 2) and loads the selected file, so adding a model only means adding a
+config file here.
 
 ### Nunchaku Backend : `config/qwen_nunchaku_fp4.json` & `qwen_nunchaku_int4.json`
 

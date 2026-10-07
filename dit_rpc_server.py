@@ -18,15 +18,15 @@ Start on the GPU machine:
 
 Default: localhost:8765
 
-Pipeline config file (JSON)  :  required only with --load-pipeline:
-{
-    "model_name":            "...",
-    "model_precision":       "...",
-    "model_rank":            "...",
-    "model_inference_steps": "...",
-    "cache_dir":             "...",
-    "full_model_path":       ""       // optional, may be omitted
-}
+Models are defined by the JSON files in the config/ folder next to this
+script: --pipeline-config takes a full path (the launchers pass
+config/<name>.json) and the load_pipeline_from_config() RPC takes the file
+name without the extension, so adding a model only means adding a config
+file there. Supported config formats (see config/*.json):
+
+    Nunchaku:        model_name/model_precision/model_rank/model_inference_steps
+    GGUF / LongCat:  model_name/unet_gguf/clip_gguf/vae_name/steps
+    qwen21-viggle:   model_name/unet_name/clip_name/lora_path/vae_name/steps
 -------------------------------------------------------------------------------
 """
 
@@ -312,6 +312,34 @@ class ColorizeService:
             except Exception as e:
                 logging.exception("Error while loading the pipeline")
                 return {"ok": False, "msg": str(e)}
+
+    def load_pipeline_from_config(self, config_name: str, cache_dir: str = "") -> dict:
+        """
+        Load the pipeline using a JSON file from the server's config/ folder.
+
+        config_name is the file name with or without the .json extension
+        (e.g. "longcat_gguf_q3"); path separators are not accepted. The config
+        folder is the single source of truth for the supported models: adding
+        a new file there makes a new model available, with no code changes.
+
+        cache_dir (optional) overrides the config's own value - only
+        meaningful for Nunchaku; empty means "use the config/default".
+        """
+        name = str(config_name).strip()
+        if not name:
+            return {"ok": False, "msg": "Config name is empty"}
+        if not name.lower().endswith(".json"):
+            name += ".json"
+        if os.path.basename(name) != name or ":" in name:
+            return {"ok": False, "msg": f"Invalid config name: {config_name}"}
+        path = Path(_script_dir) / "config" / name
+        try:
+            cfg = parse_pipeline_config(str(path))
+        except PipelineConfigError as exc:
+            logging.error(str(exc))
+            return {"ok": False, "msg": str(exc)}
+        logging.info(f"Loading pipeline from config: {path}")
+        return _load_pipeline_from_parsed(self, cfg, cache_dir)
 
     def is_pipeline_loaded(self) -> bool:
         """Return True if the pipeline is already in memory."""
@@ -917,16 +945,25 @@ class ColorizeService:
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
-def _load_pipeline_config(config_path: str) -> dict:
-    """
-    Read and validate the JSON pipeline configuration file.
+class PipelineConfigError(ValueError):
+    """A pipeline config file is missing, not valid JSON, or has an
+    unknown/incomplete format."""
 
-    Supports two formats:
+
+def parse_pipeline_config(config_path: str) -> dict:
+    """
+    Read and validate a JSON pipeline configuration file (see config/*.json).
+
+    Supports these formats:
 
     New format (GGUF models):
         {"model_name": "gguf-qwen", "quant": "q3",
          "unet_gguf": "...", "clip_gguf": "...", "vae_name": "...",
          "lora_path": "...", "steps": 2}
+
+    New format (qwen21-viggle, native ComfyUI int8 ConvRot weights):
+        {"model_name": "qwen21-viggle", "unet_name": "...", "clip_name": "...",
+         "vae_name": "...", "lora_path": "...", "steps": 6}
 
     Legacy format (Nunchaku models):
         {"model_name": "nunchaku-qwen", "model_precision": "...",
@@ -935,18 +972,20 @@ def _load_pipeline_config(config_path: str) -> dict:
 
     Returns a normalized dict with keys:
         model_name, quant, unet_gguf, clip_gguf, vae_name, lora_path, steps
+
+    Raises PipelineConfigError on any problem; the callers decide how to
+    report it (startup exits, load_pipeline_from_config() returns the error).
     """
     path = Path(config_path)
     if not path.is_file():
-        logging.error(f"Pipeline config file not found: {config_path}")
-        sys.exit(1)
+        raise PipelineConfigError(f"Pipeline config file not found: {config_path}")
 
     try:
         with path.open(encoding="utf-8") as fh:
             cfg = json.load(fh)
     except json.JSONDecodeError as exc:
-        logging.error(f"Invalid JSON in pipeline config '{config_path}': {exc}")
-        sys.exit(1)
+        raise PipelineConfigError(
+            f"Invalid JSON in pipeline config '{config_path}': {exc}") from exc
 
     model_name = cfg.get("model_name", "")
 
@@ -956,8 +995,7 @@ def _load_pipeline_config(config_path: str) -> dict:
         required = {"model_name", "unet_gguf", "clip_gguf", "vae_name", "steps"}
         missing = required - cfg.keys()
         if missing:
-            logging.error(f"Config missing keys: {', '.join(sorted(missing))}")
-            sys.exit(1)
+            raise PipelineConfigError(f"Config missing keys: {', '.join(sorted(missing))}")
         return {
             "model_name": model_name,
             "quant": cfg.get("quant", ""),
@@ -979,8 +1017,7 @@ def _load_pipeline_config(config_path: str) -> dict:
         required = {"model_name", "unet_name", "clip_name", "vae_name", "lora_path", "steps"}
         missing = required - cfg.keys()
         if missing:
-            logging.error(f"Config missing keys: {', '.join(sorted(missing))}")
-            sys.exit(1)
+            raise PipelineConfigError(f"Config missing keys: {', '.join(sorted(missing))}")
         return {
             "model_name": model_name,
             "quant": "",
@@ -1002,8 +1039,7 @@ def _load_pipeline_config(config_path: str) -> dict:
         required = {"model_name", "model_precision", "model_rank", "model_inference_steps"}
         missing = required - cfg.keys()
         if missing:
-            logging.error(f"Config missing keys: {', '.join(sorted(missing))}")
-            sys.exit(1)
+            raise PipelineConfigError(f"Config missing keys: {', '.join(sorted(missing))}")
         # Map legacy to new
         legacy_name = model_name
         # Extract quant from old name like "gguf-q3-qwen" → "q3"
@@ -1024,14 +1060,49 @@ def _load_pipeline_config(config_path: str) -> dict:
             "vae_name": "qwen_image_vae.safetensors",
             "lora_path": cfg.get("full_model_path", ""),
             "steps": int(cfg["model_inference_steps"]),
+            "cache_dir": cfg.get("cache_dir", ""),
             "hf_unet": "unsloth/Qwen-Image-Edit-2511-GGUF",
             "hf_clip": "unsloth/Qwen2.5-VL-7B-Instruct-GGUF",
             "hf_vae":  "Comfy-Org/Qwen-Image_ComfyUI",
             "hf_lora": "lightx2v/Qwen-Image-Edit-2511-Lightning",
         }
 
-    logging.error(f"Unknown config format in '{config_path}'")
-    sys.exit(1)
+    raise PipelineConfigError(f"Unknown config format in '{config_path}'")
+
+
+def _load_pipeline_config(config_path: str) -> dict:
+    """Startup variant of parse_pipeline_config: a bad config is fatal (the
+    server could not honor the pipeline requested at launch)."""
+    try:
+        return parse_pipeline_config(config_path)
+    except PipelineConfigError as exc:
+        logging.error(str(exc))
+        sys.exit(1)
+
+
+def _load_pipeline_from_parsed(service: ColorizeService, cfg: dict,
+                               cache_dir: str = "") -> dict:
+    """Load a normalized config (parse_pipeline_config) into the service.
+    cache_dir overrides the config's own value when non-empty (Nunchaku
+    only; the other backends ignore it)."""
+    effective_cache = cache_dir.strip() if cache_dir else ""
+    if not effective_cache:
+        effective_cache = str(cfg.get("cache_dir", "") or "")
+    return service.load_pipeline(
+        model_name=cfg["model_name"],
+        model_precision=cfg["unet_gguf"],
+        model_rank=cfg["clip_gguf"],
+        model_inference_steps=str(cfg["steps"]),
+        cache_dir=effective_cache,
+        full_model_path=cfg["lora_path"],
+        vae_name=cfg.get("vae_name", "qwen_image_vae.safetensors"),
+        hf_unet=cfg.get("hf_unet", ""),
+        hf_clip=cfg.get("hf_clip", ""),
+        hf_vae=cfg.get("hf_vae", ""),
+        hf_lora=cfg.get("hf_lora", ""),
+        clip_mmproj=cfg.get("clip_mmproj", ""),
+        clip_mmproj_hf_name=cfg.get("clip_mmproj_hf_name", ""),
+    )
 
 
 def main():
@@ -1104,21 +1175,7 @@ def main():
     if args.load_pipeline:
         cfg = _load_pipeline_config(args.pipeline_config)
         logging.info(f"Loading pipeline from config: {args.pipeline_config}")
-        result = service.load_pipeline(
-            model_name=cfg["model_name"],
-            model_precision=cfg["unet_gguf"],
-            model_rank=cfg["clip_gguf"],
-            model_inference_steps=str(cfg["steps"]),
-            cache_dir="",
-            full_model_path=cfg["lora_path"],
-            vae_name=cfg.get("vae_name", "qwen_image_vae.safetensors"),
-            hf_unet=cfg.get("hf_unet", ""),
-            hf_clip=cfg.get("hf_clip", ""),
-            hf_vae=cfg.get("hf_vae", ""),
-            hf_lora=cfg.get("hf_lora", ""),
-            clip_mmproj=cfg.get("clip_mmproj", ""),
-            clip_mmproj_hf_name=cfg.get("clip_mmproj_hf_name", ""),
-        )
+        result = _load_pipeline_from_parsed(service, cfg)
         if not result["ok"]:
             logging.error(f"Failed to load pipeline: {result['msg']}")
             sys.exit(1)

@@ -49,7 +49,7 @@ Edit the variables at the top of the file to match your setup, then double-click
 In installations created by the installer everything is already configured: the same launchers live in the HAVC folder (`HAVC.vbs`, `HAVC-Server.cmd`, `start_server.cmd`, `run_server_*.cmd`) and run the bundled Python — just double-click them.
 
 ```
-start_server.cmd [q3|q4|q5|q6|q8|fp4|int4|longcat]
+start_server.cmd [q3|q4|q5|q6|q8|fp4|int4|longcat|<config-name>]
 ```
 
 | Argument  | Backend  | Quantization | VRAM  |
@@ -70,6 +70,17 @@ If no argument is passed it defaults to `q4` (Q4_K_S). Use `int4` for RTX 30 / 4
 start_server.cmd int4
 ```
 
+Any file in the `config/` folder can also be selected directly by its name
+(a name matching a file there wins over the shortcuts above):
+
+```
+start_server.cmd longcat_gguf_q3     # same as "longcat-q3"
+start_server.cmd my_new_model        # -> config/my_new_model.json
+```
+
+So adding a model = adding a config file; no script changes needed. The
+same list is what the GUI shows as **Model Config** (Tab 2).
+
 **Convenience wrappers** — double-click or run from terminal without arguments:
 
 | File                     | Equivalent command         | Backend        |
@@ -79,12 +90,13 @@ start_server.cmd int4
 | `run_server_int4.cmd`    | `start_server.cmd int4`    | Nunchaku INT4  |
 | `run_server_longcat.cmd` | `start_server.cmd longcat` | LongCat Q4_K_M |
 
-`run_server_qwen21.cmd` is a **separate, standalone launcher** for
-`qwen21-viggle` — it does not take an argument (`start_server.cmd
-qwen21-viggle` is not a thing), it always launches with
-`config/qwen21_viggle.json` (the only config available for this backend).
+`run_server_qwen21.cmd` is a **standalone launcher** for `qwen21-viggle` —
+it does not take an argument and always launches with
+`config/qwen21_viggle.json`. The same config can be selected through
+`start_server.cmd` too, by its file name:
+`start_server.cmd qwen21_viggle`.
 
-> **GUI shortcut**: From the desktop GUI, go to Tab 2 (Colorization), pick a Model + Precision, and click **Run Server** — the GUI starts the server itself, with live output in the **Server Log** tab and auto-connect once it's ready (see [What's New, 2026-09-30](whats-new.md)). Tick **External console** first to instead open a plain terminal window with the correct `.cmd` file/arguments for the selected Model Name (`run_server_qwen21.cmd` when `qwen21-viggle` is selected, `start_server.cmd` with the right arguments otherwise).
+> **GUI shortcut**: From the desktop GUI, go to Tab 2 (Colorization), pick a **Model Config**, and click **Run Server** — the GUI starts the server itself, with live output in the **Server Log** tab and auto-connect once it's ready (see [What's New, 2026-09-30](whats-new.md)). Tick **External console** first to instead open a plain terminal window running `start_server.cmd <config-name>` for the selected config.
 
 ---
 

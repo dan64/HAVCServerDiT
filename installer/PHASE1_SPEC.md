@@ -171,10 +171,11 @@ Invocazione standard dal manager:
     `comfy_bridge_v0.30.zip`): comfy_bridge locale per staging/offline; il
     passo `comfy-bridge` usa anche la copia in `--assets-dir` (dal manifest)
     e in mancanza scarica dall'URL pinnato (sha256). Il seed/wiring dei
-    settings GUI (`model_name`/`model_precision`) è di `--default-model`;
-  - `--default-model <nome>` (**implementato nel bootstrap il 05-10**): nome
-    GUI del modello di default per il seed/wiring dei settings
-    (`longcat-gguf` seeda anche `model_precision` = `q3`); il manager lo
+    settings GUI (`model_config`) è di `--default-model`;
+  - `--default-model <nome>` (**implementato nel bootstrap il 05-10**):
+    modello di default per il seed/wiring dei settings GUI, come
+    `model_config` (`qwen21-viggle` → `qwen21_viggle`; `longcat-gguf` →
+    `longcat_gguf_q3`; 07-10); il manager lo
     passa a install/update/ripara — `qwen21-viggle`, oppure `longcat-gguf`
     quando il preflight rileva RAM < 32 GB;
   - `--update-configs` / `--update-gui-settings` (**06-10**): sostituiscono

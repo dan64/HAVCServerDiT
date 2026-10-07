@@ -301,7 +301,7 @@ The GUI has seven tabs plus a persistent status bar at the bottom.
 - **Local DiT Server** frame: a shortcut mirroring Tab 2's **Run Server**
   button and status text, so the server can be started/stopped without
   leaving the Dashboard — it's the same button under a different key, using
-  whatever Model Name/Precision (and **External console** checkbox) is
+  whatever **Model Config** (and **External console** checkbox) is
   currently set on Tab 2
 
 ### Tab 1 — Extraction
@@ -350,9 +350,9 @@ for example in the Cluster 2, the reference frame #000145 was selected to repres
 | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **RPC Host / Port**      | Server address (default: `127.0.0.1:8765`)                                                                                                                     |
 | **Connect button + LED** | Tests the RPC connection with a ping                                                                                                                           |
-| **Model / Precision**    | Pipeline configuration. Precision selects the GGUF quant level (`q3`–`q8`) or Nunchaku variant (`fp4`/`int4`). LongCat GGUF available via `longcat-gguf` model. Selecting **qwen21-viggle** auto-disables Precision (unused — model paths come from `config/qwen21_viggle.json`) |
-| **Run Server**           | Starts/stops the server for the selected Model + Precision as a process managed by the GUI, with its full output streamed live into the **Server Log** tab (Dashboard) — the button becomes **Stop Server** while running, and the status text next to it tracks *Starting server...* → *running on ...* → *stopped*. The GUI **connects automatically** once the server reports it's ready |
-| **External console**     | Reverts **Run Server** to its previous behavior: launches `start_server.cmd` (nunchaku/gguf/longcat) or `run_server_qwen21.cmd` (qwen21-viggle) in its own visible terminal window instead, with no control or logging from the GUI |
+| **Model Config**         | Pipeline configuration: lists every `.json` file in the `config/` folder (shown without the extension). The selected file *is* the model — its `model_name` and paths decide backend/quantization. Adding a model only means adding a new config file there; no code changes needed |
+| **Run Server**           | Starts/stops the server for the selected Model Config as a process managed by the GUI, with its full output streamed live into the **Server Log** tab (Dashboard) — the button becomes **Stop Server** while running, and the status text next to it tracks *Starting server...* → *running on ...* → *stopped*. The GUI **connects automatically** once the server reports it's ready |
+| **External console**     | Reverts **Run Server** to its previous behavior: launches `start_server.cmd <config-name>` in its own visible terminal window instead, with no control or logging from the GUI |
 | **Colorization Steps**   | Diffusion steps per frame (lower = faster). LongCat recommends 8 steps, Qwen 2 steps, qwen21-viggle 6 steps (its LoRA's native step count — `2`/`4`/`8` also available, experimental) |
 | **Fast Pipeline**        | Enables **paired inference**: two frames colorized in one forward pass (~2× faster, temporally consistent). Supported by nunchaku-qwen and qwen21-viggle; gguf-qwen/longcat-gguf fall back to per-image processing |
 | **Enhance Prompt**       | **qwen21-viggle only**: rewrites the prompt via Qwen3-VL before colorizing (image-aware, adds ~15-20s/frame) — no effect on other backends. Try a direct anti-hedging prompt first, see [Suggested Inference Steps](usage.md#-suggested-inference-steps) |
@@ -643,7 +643,7 @@ startup and includes:
 
 - Tool paths (VapourSynth, x265, MKVToolNix)
 - Script directory and script filenames
-- Model configuration (name, precision, rank, steps)
+- Model configuration (`model_config`: the selected file in `config/`)
 - Extraction parameters
 - Selection parameters (similarity_threshold, select_window, Dry Run, Debug HTML, Move Files)
 - Encoding parameters (CRF, FPS, encoder choice)

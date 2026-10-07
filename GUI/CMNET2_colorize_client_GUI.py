@@ -189,6 +189,7 @@ def load_all_configs():
         "fixc_backbone":     "dinov3",
         # --- encode ---
         "mkv_path":       r"",
+        "mux_all_streams": False,
         "hf_cache":       "",
         "prompt":         "Add colors to this black-and-white image, not to hedge about what colors might be present. For any subject, garment, object, or setting whose color is a matter of common knowledge or strong convention, assign the expected color directly and confidently. Colorize this image using natural colors. Strictly preserve all shapes, edges and background details.",
         "shutdown_on_complete": False,
@@ -319,16 +320,31 @@ def get_eta_string(current_step, total_steps, start_time):
         return f"{h}h {m}m {s}s"
 
 
-def create_video_mkv(mkv_exe, video_h265_path, fps: str, log_fn=print):
+def create_video_mkv(mkv_exe, video_h265_path, fps: str, log_fn=print,
+                     source_video=None, mux_all_streams=False):
     if video_h265_path == "":
         return None
     h265_path = Path(video_h265_path)
     output_file = h265_path.with_suffix(".mkv")
     if not os.path.isfile(video_h265_path):
         return None
+    # "Mux all streams": also copy audio, subtitle and chapter tracks from
+    # the original source video. mkvmerge options apply to the file that
+    # follows them, so --no-video (drop the source's video track; the
+    # freshly encoded elementary stream wins) and --no-buttons must be
+    # placed right before the source path. Chapters are picked up from the
+    # source at their original timecodes (verified with mkvmerge v92).
+    extra = ""
+    if mux_all_streams:
+        if source_video and os.path.isfile(source_video):
+            extra = (f' --no-video --no-buttons --no-global-tags'
+                     f' "{source_video}"')
+        else:
+            log_fn(f"⚠️ Mux all streams: source video not found, "
+                   f"muxing video only: {source_video}")
     try:
         cmd = (f'"{mkv_exe}" -o "{output_file}" '
-               f'--default-duration 0:{fps}fps "{h265_path}" ')
+               f'--default-duration 0:{fps}fps "{h265_path}"{extra} ')
         log_fn("----------------------------------------------------------------")
         log_fn(f"[MKV] {cmd.strip()}")
         log_fn("----------------------------------------------------------------")
@@ -1154,7 +1170,9 @@ def orchestrator(init_values, window):
         else:
             update_status(window, "Status: OK", "success")
             log_message(f"[COMPLETED] Encoding: {orig_video_path} @ {fps_val} fps")
-            create_video_mkv(values["-MKV_PATH-"], out_video_file, fps_val, log_message)
+            create_video_mkv(values["-MKV_PATH-"], out_video_file, fps_val,
+                             log_message, orig_video_path,
+                             values.get("-MUX_ALL_STREAMS-", False))
         return out_video_file
 
     # ---- STEP 3a-bis: ENCODE x264 ----
@@ -1237,7 +1255,9 @@ def orchestrator(init_values, window):
         else:
             update_status(window, "Status: OK", "success")
             log_message(f"[COMPLETED] Encoding: {orig_video_path} @ {fps_val} fps")
-            create_video_mkv(values["-MKV_PATH-"], out_video_file, fps_val, log_message)
+            create_video_mkv(values["-MKV_PATH-"], out_video_file, fps_val,
+                             log_message, orig_video_path,
+                             values.get("-MUX_ALL_STREAMS-", False))
         return out_video_file
 
     # ---- STEP 3b: ENCODE NVEnc ----
@@ -1298,7 +1318,9 @@ def orchestrator(init_values, window):
         else:
             update_status(window, "Status: OK", "success")
             log_message(f"[COMPLETED] Encoding: {orig_video_path} @ {fps_val} fps")
-            create_video_mkv(values["-MKV_PATH-"], out_video_file, fps_val, log_message)
+            create_video_mkv(values["-MKV_PATH-"], out_video_file, fps_val,
+                             log_message, orig_video_path,
+                             values.get("-MUX_ALL_STREAMS-", False))
         return out_video_file
 
     # ---- STEP 4: MERGE ----
@@ -1348,7 +1370,9 @@ def orchestrator(init_values, window):
         )
         full_cmd = f"{vsp_cmd} | {nvenc_cmd}"
         run_command(full_cmd, total_frames, task_name="MERGE")
-        create_video_mkv(values["-MKV_PATH-"], out_merge, info["fps"], log_message)
+        create_video_mkv(values["-MKV_PATH-"], out_merge, info["fps"],
+                         log_message, orig_video_path,
+                         values.get("-MUX_ALL_STREAMS-", False))
 
     # ---- ORCHESTRATOR MAIN LOOP ----
     try:
@@ -1803,6 +1827,9 @@ tab4_layout = [
     [sg.Text("Encode/Merge Settings", font=("Any", 14, "bold"))],
     [sg.Text("MKVmerge Path:"),
      sg.Input(cfg["mkv_path"], key="-MKV_PATH-", expand_x=True), sg.FileBrowse()],
+    [sg.Checkbox("Mux all streams", key="-MUX_ALL_STREAMS-",
+                 default=cfg.get("mux_all_streams", False),
+                 tooltip="The final mkvmerge also copies audio, subtitle and chapter tracks from the source video")],
     [sg.Text("x265 Path:"),
      sg.Input(cfg["x265_path"], key="-X265-", expand_x=True), sg.FileBrowse()],
     [sg.Text("Encode VPY:"),
@@ -2408,7 +2435,9 @@ def _fixv_recolor_thread(values, window):
             _log(f"[COMPLETED] Recolor: {orig_video_path} @ {fps_detected} fps")
             # Create MKV and delete .h265
             out_mkv_path = Path(out_video_file).with_suffix(".mkv")
-            create_video_mkv(values["-MKV_PATH-"], out_video_file, fps_detected, _log)
+            create_video_mkv(values["-MKV_PATH-"], out_video_file, fps_detected,
+                             _log, orig_video_path,
+                             values.get("-MUX_ALL_STREAMS-", False))
             if out_mkv_path.exists() and out_mkv_path.stat().st_size > 0:
                 _log(f"MKV created: {out_mkv_path}")
             else:
@@ -3242,6 +3271,7 @@ while True:
             "merge_weight":          values["-MERGE_WEIGHT-"],
             "vbr_quality":           values["-VBR_QUALITY-"],
             "use_sharp":             values["-USE_SHARP-"],
+            "mux_all_streams":       values["-MUX_ALL_STREAMS-"],
             # RPC
             "rpc_host":              values["-RPC_HOST-"],
             "rpc_port":              int(values["-RPC_PORT-"]),

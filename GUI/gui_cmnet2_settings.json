@@ -65,6 +65,7 @@
     "vbr_quality": "24.50",
     "encoder": "x265",
     "use_sharp": true,
+    "mux_all_streams": false,
     "rpc_host": "127.0.0.1",
     "rpc_port": 8765,
     "window_w": 926,

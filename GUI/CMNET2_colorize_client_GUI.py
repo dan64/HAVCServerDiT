@@ -1665,6 +1665,9 @@ def _fix_colorize_worker(values, window, seed, pil_in=None):
                 shm_in.close()
                 shm_in.unlink()
         else:
+            # PNG<->PIL helpers from the vscmnet2 package (the same pair the
+            # RPC engine uses over the wire); delayed import, like vscmnet2.
+            from vscmnet2.vsslib.vsimage_engine import _pil_to_bytes, _bytes_to_pil
             data = _pil_to_bytes(pil_in)
             res = rpc._proxy_slow.colorize_frame(data, prompt, 0, steps, seed, skip_bw, enhance_prompt)
             out = _bytes_to_pil(res.get("data", data)) if res.get("ok") else pil_in

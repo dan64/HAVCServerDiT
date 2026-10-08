@@ -627,6 +627,15 @@ def update_status(window, message, type="info"):
         "error":   "red",
         "success": "#005500",
     }
+    # Worker threads must not touch Tk widgets directly: while the main thread
+    # is busy outside tkinter's event loop (e.g. the vs_info probe running
+    # inside an event handler), a direct widget call raises
+    # RuntimeError("main thread is not in main loop") and kills the worker
+    # (seen in the recolor thread).  Route thread updates through the
+    # window's thread-safe event queue; the main loop applies them.
+    if threading.current_thread() is not threading.main_thread():
+        window.write_event_value("-STATUS_UPDATE-", (message, type))
+        return
     window["-STATUS-"].update(message, text_color=colors.get(type, "black"))
 
 
@@ -1617,7 +1626,7 @@ def _fix_colorize_worker(values, window, seed, pil_in=None):
         elapsed = time.time() - t0
 
         # Batch mode: store output in memory (saved to disk only on Overwrite/Save As)
-        batch_on = window["-FIX_BATCH-"].get()
+        batch_on = values["-FIX_BATCH-"]
         if batch_on:
             orig_path = state.get("fix_original_path", "")
             state["fix_batch_outputs"].append((orig_path, out.copy()))
@@ -2266,7 +2275,7 @@ def _fixc_colorize_worker(values, window):
         elapsed = time.time() - t0
 
         # Batch mode: store output in memory
-        batch_on = window["-FIXC_BATCH-"].get()
+        batch_on = values["-FIXC_BATCH-"]
         if batch_on:
             orig_path = state.get("fixc_target_original_path", "")
             state["fixc_batch_outputs"].append((orig_path, out.copy()))
@@ -2516,6 +2525,11 @@ while True:
             except Exception:
                 pass
         break
+
+    # ---- Status updates posted by worker threads (see update_status) ----
+    if event == "-STATUS_UPDATE-":
+        msg, kind = values[event]
+        update_status(window, msg, kind)
 
     # ---- Fix Image tab ----
     if event == "-FIX_LOAD-":

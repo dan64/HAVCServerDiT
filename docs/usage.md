@@ -1,5 +1,12 @@
 # Usage
 
+> **Note** — In an installation created by the installer, the server is normally
+> started and managed **automatically by the GUI**: the **Run Server** button
+> (Tab 2) launches it, streams its output into the **Server Log** tab and
+> connects the client as soon as it is ready (see the [GUI guide](gui.md)).
+> This page documents how to run and manage the server **manually** — for
+> custom setups, a server on a different machine, or debugging.
+
 ## Start the server (no preload : pipeline loaded later via RPC)
 
 ```bash
@@ -107,7 +114,7 @@ it does not take an argument and always launches with
 | Qwen (nunchaku fp4/int4) | **2**             | Good results with 2 steps when using lightning LoRA                                    |
 | Qwen (gguf q3–q8)        | **2**             | Default in config files; 4 steps possible but slower                                   |
 | LongCat (longcat-gguf)   | **8**             | Calibrated for 8 steps; best quality at 8 steps; 4 steps possible but colors are faded |
-| Qwen-Image-2.1 (qwen21-viggle) | **6**       | LoRA's native step count. `2`/`4`/`8` are experimental alternate schedules — `2` in particular trades a little brightness accuracy for ~25% less time, worth trying |
+| Qwen-Image-2.1 (qwen21-viggle) | **6**       | LoRA step schedules: `2`/`4`/`6`/`8` — `6` (the LoRA's native step count) gives the most accurate colors, `2` is the fastest |
 
 > **Prompt tip (qwen21-viggle)**: on subjects with a strong color convention
 > (e.g. a well-known costume), the model can leave the color ambiguous and

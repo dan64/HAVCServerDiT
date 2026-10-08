@@ -1,5 +1,16 @@
 # What's New
 
+### 2026-10-08 — Dashboard: pick the video with "Input Video" (GUI)
+
+The Dashboard has a new **Input Video** field — drag & drop the video onto
+it, or click **Browse...**. Choosing a file automatically fills the
+**Video Directory** and **Select Video** fields in the Extraction tab,
+so starting a job no longer requires the folder → dropdown round trip
+first. It works both ways: selecting a video in **Select Video** fills
+the Dashboard field back, and the **Video Technical Details** panel now
+refreshes on that selection too. The picked path is saved with the rest
+of the GUI settings.
+
 ### 2026-10-08 — Model Config: pick the model from the `config/` folder (GUI)
 
 Tab 2 (**Colorization**) no longer has separate **Model Name** and **Precision**

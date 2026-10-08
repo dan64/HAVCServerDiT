@@ -222,6 +222,7 @@ def load_all_configs():
         "extract_script":   "extract_refs_edge.vpy",
         "encode_script":    "encode_cmnet2.vpy",
         "base_dir":         r"",
+        "input_video":      r"",
         # --- model ---
         "model_config":           "",   # resolved from config/ (see below)
         "steps":                  "2",
@@ -454,6 +455,32 @@ def update_video_info(window, info):
     window["-INF_FRAMES-"].update(info.get('frames', '?'))
     window["-INF_FORMAT-"].update(info.get('format', '?'))
     window["-FPS-"].update(info.get('fps', '24000/1001'))
+
+
+def _apply_input_video(window, values, path):
+    """Dashboard "Input Video" -> Extraction tab: fill "Video Directory"
+    and "Select Video" from a dropped/browsed file, then load its info."""
+    if not path:
+        return
+    path = os.path.normpath(str(path).strip().strip('"'))
+    if not os.path.isfile(path):
+        window["-LOG_BOX-"].print(f"⚠️ Input Video: file not found: {path}")
+        return
+    folder, name = os.path.dirname(path), os.path.basename(path)
+    window["-INPUT_VIDEO-"].update(path)
+    window["-BASE_DIR-"].update(folder)
+    window["-VIDEO_DROPDOWN-"].update(values=scan_videos(folder), value=name)
+    info = get_video_info(
+        values["-VSPIPE-"], path, values["-SCRIPT_DIR-"], log_gui_only)
+    if info:
+        state["total_frames"] = info["frames"]
+        update_video_info(window, info)
+
+
+def _mirror_input_video(window, base_dir, video_name):
+    """Extraction "Select Video" -> Dashboard "Input Video" (kept in sync)."""
+    if video_name:
+        window["-INPUT_VIDEO-"].update(os.path.join(base_dir, video_name))
 
 
 # ---------------------------------------------------------------------------
@@ -1655,6 +1682,10 @@ def _start_batch_image(values, window, seed):
 # ---------------------------------------------------------------------------
 tab1_layout = [
     [sg.Text("Pipeline Controller", font=("Any", 16, "bold"))],
+    [sg.Text("Input Video:"),
+     sg.Input(cfg["input_video"], key="-INPUT_VIDEO-", expand_x=True),
+     sg.Button("Browse...", key="-INPUT_VIDEO_BROWSE-"),
+     sg.Text("(drag & drop)", font=("Any", 8))],
     [sg.Frame("Tasks to Execute", [
         [sg.Checkbox("1. Extract Reference Frames",    key="-DO_STEP1-", default=cfg["do_step1"])],
         [sg.Checkbox("2. Select Reference Frames",     key="-DO_STEP2-", default=cfg["do_step2"])],
@@ -1726,7 +1757,8 @@ tab2_layout = [
      sg.Input(cfg["base_dir"], key="-BASE_DIR-", enable_events=True, expand_x=True),
      sg.FolderBrowse()],
     [sg.Text("Select Video:"),
-     sg.Combo(scan_videos(cfg["base_dir"]), key="-VIDEO_DROPDOWN-", expand_x=True),
+     sg.Combo(scan_videos(cfg["base_dir"]), key="-VIDEO_DROPDOWN-", expand_x=True,
+              enable_events=True),
      sg.Button("Refresh")],
     [sg.Frame("Video Technical Details", [
         [sg.Column([
@@ -2127,6 +2159,26 @@ def _handle_drop_fixc_target(event):
     except Exception:
         pass
 
+# ---- Drag‑and‑drop for the Dashboard "Input Video" field ----
+def _handle_drop_input_video(event):
+    """Callback for tkinterDnD drop on the Dashboard Input Video field."""
+    try:
+        data = event.data
+        if isinstance(data, str):
+            first = data.splitlines()[0] if data else ""
+        elif isinstance(data, (list, tuple)):
+            first = data[0] if data else ""
+        else:
+            first = str(data)
+        # strip braces that tk adds around paths with spaces
+        if first.startswith("{") and first.endswith("}"):
+            first = first[1:-1]
+        if first:
+            window["-INPUT_VIDEO-"].update(first)
+            window.write_event_value("-INPUT_VIDEO_SET-", first)
+    except Exception:
+        pass
+
 try:
     from tkinterdnd2 import TkinterDnD, DND_FILES
     TkinterDnD.require(window.TKroot)
@@ -2145,6 +2197,9 @@ try:
     # Fix Colors tab — Target
     window["-FIXC_TARGET_PATH-"].widget.drop_target_register(DND_FILES)
     window["-FIXC_TARGET_PATH-"].widget.dnd_bind("<<Drop>>", _handle_drop_fixc_target)
+    # Dashboard — Input Video
+    window["-INPUT_VIDEO-"].widget.drop_target_register(DND_FILES)
+    window["-INPUT_VIDEO-"].widget.dnd_bind("<<Drop>>", _handle_drop_input_video)
     print("[DnD] tkinterDnD initialized", flush=True)
 except Exception as _dnd_e:
     print(f"[DnD] not available: {_dnd_e}", flush=True)
@@ -3132,6 +3187,19 @@ while True:
             window["-ENCODE_VPY-"].update(values=ev)
             window["-FIXV_ENCODE_VPY-"].update(values=ev)
 
+    # ---- Dashboard "Input Video" (drag & drop / Browse) ----
+    if event == "-INPUT_VIDEO_BROWSE-":
+        picked = sg.popup_get_file(
+            "Select the video to colorize",
+            file_types=(("Video files", "*.mkv *.mp4 *.avi *.mov"),
+                        ("All files", "*.*")),
+            initial_folder=values["-BASE_DIR-"] or None)
+        if picked:
+            _apply_input_video(window, values, picked)
+
+    if event == "-INPUT_VIDEO_SET-":        # dropped on the field (DnD callback)
+        _apply_input_video(window, values, values["-INPUT_VIDEO_SET-"])
+
     if event in ("Refresh", "-BASE_DIR-"):
         vids = scan_videos(values["-BASE_DIR-"])
         selected_video = (values["-VIDEO_DROPDOWN-"]
@@ -3139,6 +3207,8 @@ while True:
                           else (vids[0] if vids else ""))
         window["-VIDEO_DROPDOWN-"].update(
             values=vids, value=selected_video)
+        if selected_video:
+            _mirror_input_video(window, values["-BASE_DIR-"], selected_video)
         if vids:
             video_path = os.path.join(values["-BASE_DIR-"], selected_video)
             info = get_video_info(
@@ -3149,6 +3219,7 @@ while True:
 
     if event == "-VIDEO_DROPDOWN-" and values["-VIDEO_DROPDOWN-"]:
         video_path = os.path.join(values["-BASE_DIR-"], values["-VIDEO_DROPDOWN-"])
+        _mirror_input_video(window, values["-BASE_DIR-"], values["-VIDEO_DROPDOWN-"])
         info = get_video_info(
             values["-VSPIPE-"], video_path, values["-SCRIPT_DIR-"], log_gui_only)
         if info:
@@ -3166,6 +3237,7 @@ while True:
             "select_script":         values["-SELECT_VPY-"],
             "encode_script":         values["-ENCODE_VPY-"],
             "base_dir":              values["-BASE_DIR-"],
+            "input_video":           values["-INPUT_VIDEO-"],
             "model_config":          values["-MODEL_CONFIG-"],
             "steps":                 values["-STEPS-"],
             "fast_pipe":             values["-FAST_PIPE-"],

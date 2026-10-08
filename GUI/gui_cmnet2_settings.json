@@ -5,6 +5,7 @@
     "extract_script": "extract_refs_edge.vpy",
     "encode_script": "encode_cmnet2.vpy",
     "base_dir": "C:/HAVCServerDiT/GUI/samples",
+    "input_video": "",
     "model_config": "qwen21_viggle",
     "steps": "2",
     "fast_pipe": true,

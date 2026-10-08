@@ -284,6 +284,10 @@ The GUI has seven tabs plus a persistent status bar at the bottom.
 
 ![GUI Dashboard](https://github.com/dan64/HAVCServerDiT/blob/main/GUI/assets/gui_page1.jpg)
 
+- **Input Video**: the video for the pipeline — drag & drop it on the field,
+  or click **Browse...**. Choosing a file fills **Video Directory** and
+  **Select Video** on Tab 1 (Extraction) automatically; selecting a video
+  there fills this field back
 - **Task checkboxes**: enable/disable each pipeline step
 - **START PIPELINE**: runs the selected steps sequentially. If **3. Colorize
   Frames (AI)** is enabled and the client isn't connected to the DiT server
@@ -319,8 +323,8 @@ The GUI has seven tabs plus a persistent status bar at the bottom.
 | **similarity_threshold / select_window**       | Selection parameters, see [Step 2: Select Reference Frames](#step-2-select-reference-frames) |
 | **Dry Run / Debug HTML / Move Files**          | Selection options, see below                                                        |
 | **Duplicate first frame**                      | Copies the second extracted frame to `ref_000000.jpg` (useful for frame 0 coverage) |
-| **Video Directory**                            | Folder containing the video to process                                              |
-| **Select Video**                               | Dropdown populated from the video directory                                         |
+| **Video Directory**                            | Folder containing the video to process — filled automatically when a video is chosen in the Dashboard's **Input Video** field |
+| **Select Video**                               | Dropdown populated from the video directory — selecting an entry here fills the Dashboard's **Input Video** field back |
 
 After selecting a video, the **Video Technical Details** panel shows
 resolution, FPS, frame count, and pixel format.

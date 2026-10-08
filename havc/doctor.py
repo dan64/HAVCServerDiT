@@ -198,7 +198,7 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
         prog="havc-doctor",
         description="Verify the HAVC environment (packages vs lockfile, nunchaku patch, CUDA).",
-        epilog="Specifica: installer/PHASE0_SPEC.md",
+        epilog="Specification: installer/PHASE0_SPEC.md",
     )
     parser.add_argument("--json", action="store_true", help="one-line JSON output")
     parser.add_argument("--fast", action="store_true", help="skip the CUDA/GPU checks (slow)")

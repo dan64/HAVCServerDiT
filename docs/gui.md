@@ -369,6 +369,7 @@ as frames are processed.
 | Setting             | Description                                                            |
 | ------------------- | ---------------------------------------------------------------------- |
 | **MKVmerge Path**   | Path to `mkvmerge.exe`                                                 |
+| **Mux all streams** | When checked, the final `mkvmerge` also copies the audio, subtitle and chapter tracks from the source video into the output `.mkv` (chapters keep their original timecodes); the source's video track is excluded — the encoded video always wins. Applies to all encodes, the **Merge** step and the **Fix Video** recolor. Off by default |
 | **x265 Path**       | Path to `x265.exe` (also used to locate NVEncC and x264, see setup §5) |
 | **Encode VPY**      | VapourSynth script for encoding                                        |
 | **CRF**             | Encoder quality for `x265`/`x264` (lower = better, typical: 18–24)     |

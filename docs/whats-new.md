@@ -1,5 +1,68 @@
 # What's New
 
+### 2026-10-08 — Model Config: pick the model from the `config/` folder (GUI)
+
+Tab 2 (**Colorization**) no longer has separate **Model Name** and **Precision**
+fields: a single **Model Config** dropdown (in the **Model Technical Details**
+frame) lists every `.json` file found in the `config/` folder, shown by file
+name. The selected file *is* the model — its `model_name` and paths decide
+backend and quantization — so adding a new model now only means dropping a
+config file in there: no code or GUI changes needed.
+
+**Run Server** (and the Dashboard shortcut) start the server for the selected
+config; the launch scripts accept the same names, so
+`start_server.cmd <config-name>` starts any file in `config/` directly — the
+historical short aliases (`q3`, `fp4`, `longcat`, …) still work, and a config
+file *wins* on name collisions (see
+[Windows Launch Script](usage.md#-windows-launch-script)).
+
+Existing settings files are migrated automatically on next load (the saved
+`model_name` / `model_precision` values are folded into `model_config`); no
+manual action is needed. See [GUI — Tab 2, Colorization](gui.md#tab-2--colorization)
+and [Pipeline Configuration](configuration.md).
+
+### 2026-10-08 — qwen21-viggle: merged-LoRA variants (soft/sharp × int8/q4) and GGUF UNet support
+
+The [Viggle repository](https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo)
+also publishes checkpoints that **already contain the Viggle-Turbo LoRA**.
+Four new configs ship them — two model generations (**v0.3**, `soft_*`, and
+**v0.2.1**, `sharp_*`) and two formats, **int8 ConvRot** (`.safetensors`,
+~6.75 GB) and **GGUF `Q4_K_M`** (~4 GB, the `*_q4` files) — all selectable
+through the new **Model Config** dropdown:
+
+- `qwen21_viggle-soft_int8` / `qwen21_viggle-soft_q4`
+- `qwen21_viggle-sharp_int8` / `qwen21_viggle-sharp_q4`
+
+The qwen21-viggle backend now also loads a **`.gguf` UNet** through the same
+ComfyUI-GGUF recipe used by the other GGUF backends, and the new optional
+`unet_hf_name` key lets auto-download find checkpoints that upstream keep
+outside the regular `diffusion_models/` layout (e.g. at the repository root).
+No LoRA is applied at runtime — the merged weights are loaded as they are.
+
+> Field notes (author's tests, RTX 5070 Ti): prefer **int8**_convrot_ — best
+> output quality and the fastest of the tested variants. The GGUF `Q4_K_M`
+> quants download smaller but did not reduce VRAM nor run faster, with
+> quality below int8; use them when the download size matters.
+
+See [Pipeline Configuration → Merged-LoRA variants](configuration.md).
+
+### 2026-10-07 — "Mux all streams" option (GUI)
+
+A new **Mux all streams** checkbox in the **Encode/Merge** tab makes the
+final `mkvmerge` step copy **all the remaining tracks of the source video**
+— audio, subtitles and chapters — into the output `.mkv`, alongside the
+freshly encoded video. The source's *video* track is excluded (the encoded
+one always wins) and chapters are carried over at their original timecodes.
+
+It applies to every final mux the tool produces: the **x265** / **x264** /
+**Nvenc** encodes, the **Merge** step, and the **Fix Video** recolor output.
+It is **off** by default — exactly the previous behavior — and saved with
+the rest of the GUI settings (`mux_all_streams`). If the source video can't
+be found when the mux runs, a warning is logged and the output stays
+video-only.
+
+See [GUI — Tab 3, Encode / Merge](gui.md#tab-3--encode--merge).
+
 ### 2026-10-04 — new version vs-cmnet2 v1.2.1
 
 **vs-cmnet2:** fixed bug in vs-cmnet2 not allowing _vs_cmnet2_recolor()_ to properly load the reference frames. Due to the bug, the recolored clip had washed out colors in the recolored range. 

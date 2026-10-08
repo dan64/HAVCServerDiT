@@ -182,3 +182,7 @@ manager/.vs/
 
 # Private working memory (agents/sessions) - never publish
 /AGENTS.md
+
+# Private installer specifications (Italian) - never publish
+/installer/PHASE0_SPEC.md
+/installer/PHASE1_SPEC.md

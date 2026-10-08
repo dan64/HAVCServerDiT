@@ -276,7 +276,7 @@ The GUI Tab 2 (Colorization) supports this backend: selecting
 **qwen21-viggle** from Model Name auto-disables the (unused) Precision
 combo and reads model paths from `config/qwen21_viggle.json`. **Run
 Server** manages the equivalent of `run_server_qwen21.cmd` directly (see
-[What's New, 2026-09-30](#2026-10-02--run-server-managed-by-the-gui-with-a-live-server-log-gui)) — or launches that same `.cmd` file
+[What's New, 2026-10-02](#2026-10-02--run-server-managed-by-the-gui-with-a-live-server-log-gui)) — or launches that same `.cmd` file
 in its own console when the **External console** checkbox is ticked.
 An **Enhance Prompt** checkbox is available in Tab 2 and Tab 4 (Fix Image).
 
@@ -340,7 +340,7 @@ Launch via `run_server_longcat.cmd` (Q4_K_M) or `start_server.cmd longcat` (Q4),
 
 The GUI Tab 2 (Colorization) now includes a **Run Server** button that manages
 the server for the selected Model Name + Precision directly — see
-[What's New, 2026-09-30](#2026-10-02--run-server-managed-by-the-gui-with-a-live-server-log-gui) for how it's started/stopped/logged, and
+[What's New, 2026-10-02](#2026-10-02--run-server-managed-by-the-gui-with-a-live-server-log-gui) for how it's started/stopped/logged, and
 the **External console** checkbox for opening a plain terminal window instead.
 This replaces the need to manually find and run the right `.cmd` file.
 

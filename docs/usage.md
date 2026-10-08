@@ -96,7 +96,7 @@ it does not take an argument and always launches with
 `start_server.cmd` too, by its file name:
 `start_server.cmd qwen21_viggle`.
 
-> **GUI shortcut**: From the desktop GUI, go to Tab 2 (Colorization), pick a **Model Config**, and click **Run Server** — the GUI starts the server itself, with live output in the **Server Log** tab and auto-connect once it's ready (see [What's New, 2026-09-30](whats-new.md)). Tick **External console** first to instead open a plain terminal window running `start_server.cmd <config-name>` for the selected config.
+> **GUI shortcut**: From the desktop GUI, go to Tab 2 (Colorization), pick a **Model Config**, and click **Run Server** — the GUI starts the server itself, with live output in the **Server Log** tab and auto-connect once it's ready (see [What's New, 2026-10-02](whats-new.md)). Tick **External console** first to instead open a plain terminal window running `start_server.cmd <config-name>` for the selected config.
 
 ---
 

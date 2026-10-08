@@ -287,7 +287,8 @@ The GUI has seven tabs plus a persistent status bar at the bottom.
 - **Input Video**: the video for the pipeline — drag & drop it on the field,
   or click **Browse...**. Choosing a file fills **Video Directory** and
   **Select Video** on Tab 1 (Extraction) automatically; selecting a video
-  there fills this field back
+  there fills this field back. The path is remembered between sessions
+  (the saved video is re-selected on startup)
 - **Task checkboxes**: enable/disable each pipeline step
 - **START PIPELINE**: runs the selected steps sequentially. If **3. Colorize
   Frames (AI)** is enabled and the client isn't connected to the DiT server

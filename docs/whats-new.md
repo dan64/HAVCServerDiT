@@ -9,7 +9,8 @@ so starting a job no longer requires the folder → dropdown round trip
 first. It works both ways: selecting a video in **Select Video** fills
 the Dashboard field back, and the **Video Technical Details** panel now
 refreshes on that selection too. The picked path is saved with the rest
-of the GUI settings.
+of the GUI settings and restored on startup: if the remembered video is
+still in place, the **Select Video** selection is restored with it.
 
 ### 2026-10-08 — Model Config: pick the model from the `config/` folder (GUI)
 

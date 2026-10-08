@@ -483,6 +483,22 @@ def _mirror_input_video(window, base_dir, video_name):
         window["-INPUT_VIDEO-"].update(os.path.join(base_dir, video_name))
 
 
+def _restore_input_video(window, saved_path):
+    """Startup sync: the Dashboard "Input Video" field is restored from the
+    saved settings; if that video is still there, select it in the Extraction
+    "Select Video" combo as well (and align "Video Directory"), so the two
+    fields start up consistent."""
+    if not saved_path:
+        return
+    path = os.path.normpath(str(saved_path).strip().strip('"'))
+    if not os.path.isfile(path):
+        return
+    folder, name = os.path.dirname(path), os.path.basename(path)
+    window["-INPUT_VIDEO-"].update(path)
+    window["-BASE_DIR-"].update(folder)
+    window["-VIDEO_DROPDOWN-"].update(values=scan_videos(folder), value=name)
+
+
 # ---------------------------------------------------------------------------
 # GLOBAL STATE
 # ---------------------------------------------------------------------------
@@ -2203,6 +2219,11 @@ try:
     print("[DnD] tkinterDnD initialized", flush=True)
 except Exception as _dnd_e:
     print(f"[DnD] not available: {_dnd_e}", flush=True)
+
+# Startup: keep the Dashboard "Input Video" field and the Extraction
+# selection consistent — if the video remembered from the last session is
+# still in place, select it in "Select Video" too.
+_restore_input_video(window, cfg.get("input_video", ""))
 
 # ---------------------------------------------------------------------------
 # FIX COLORS — Colorize worker (local CMNET2, non-RPC)

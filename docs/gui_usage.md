@@ -302,7 +302,11 @@ The GUI has seven tabs plus a persistent status bar at the bottom.
   x265/NVEnc, and the RPC client) and **Server Log** (live output from the
   RPC server itself, when started from **Run Server**, see
   [Tab 2 — Colorization](#tab-2--colorization))
-- **Shutdown PC when finished**: triggers `shutdown /s /t 60` after completion
+- **Shutdown PC when finished**: triggers `shutdown /s /t 60` after completion;
+  closing the app before it fires cancels the pending shutdown (`shutdown /a`)
+- **Closing the app**: the window **X** asks for confirmation (the dialog notes
+  when a job is running, the GUI-managed server is up, or a shutdown is
+  pending); the explicit **Exit** button closes directly
 - **Local DiT Server** frame: a shortcut mirroring Tab 2's **Run Server**
   button and status text, so the server can be started/stopped without
   leaving the Dashboard — it's the same button under a different key, using

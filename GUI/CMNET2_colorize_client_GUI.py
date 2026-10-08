@@ -511,6 +511,8 @@ state = {
     "pending_run_values": None,  # values snapshot from -RUN-, waiting on the
                                   # DiT server it auto-started to come online
     "is_running":      False,
+    "shutdown_scheduled": False,  # PC shutdown scheduled at pipeline end
+                                  # (aborted when the app is closed)
     "total_frames":    -1,
     "fix_prompts":     [],
     "fix_batch_paths": [],         # list of full paths for batch processing
@@ -2572,15 +2574,39 @@ def _confirm_close():
     server_on = bool(proc is not None and proc.poll() is None)
     job_on = bool(state.get("current_process") or state.get("fixv_is_running")
                   or state.get("is_running"))
+    shutdown_on = bool(state.get("shutdown_scheduled"))
     text = "Close HAVC?"
-    if job_on or server_on:
+    if job_on or server_on or shutdown_on:
         lines = []
         if job_on:
             lines.append("A running job will be stopped.")
         if server_on:
             lines.append("The managed server will be shut down.")
+        if shutdown_on:
+            lines.append("The scheduled shutdown will be cancelled.")
         text += "\n\n" + "\n".join(lines)
     return sg.popup_yes_no(text, title="Confirm exit") == "Yes"
+
+
+def _cancel_pending_shutdown():
+    """Closing the app aborts a shutdown scheduled by the pipeline.
+
+    -FINISHED- runs `shutdown /s /t 60` when "Shutdown PC when finished"
+    is checked; Windows keeps that request in the session.  Closing the
+    app means "stop everything", so the pending shutdown is aborted
+    explicitly -- otherwise the PC would power off ~60s later with no way
+    back from inside the app.  Returns True when something was cancelled.
+    """
+    if not state.get("shutdown_scheduled"):
+        return False
+    state["shutdown_scheduled"] = False
+    try:
+        subprocess.run(["shutdown", "/a"], capture_output=True,
+                       creationflags=(subprocess.CREATE_NO_WINDOW
+                                      if os.name == "nt" else 0))
+    except Exception:
+        pass
+    return True
 
 
 # ===========================================================================
@@ -2593,6 +2619,9 @@ while True:
         # click into this event instead of destroying the window).
         if event == sg.WIN_CLOSE_ATTEMPTED_EVENT and not _confirm_close():
             continue
+        if _cancel_pending_shutdown():
+            window["-LOG_BOX-"].print(
+                "Scheduled shutdown cancelled.", text_color="orange")
         if state["current_process"]:
             state["current_process"].terminate()
         handle = state.get("server_handle")
@@ -3508,6 +3537,7 @@ while True:
             if window["-SHUTDOWN-"].get():
                 window["-LOG_BOX-"].print(
                     "Shutdown initiated (60s)...", text_color="red")
+                state["shutdown_scheduled"] = True
                 os.system("shutdown /s /t 60")
         else:
             window["-LOG_BOX-"].print(

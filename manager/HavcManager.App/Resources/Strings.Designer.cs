@@ -110,7 +110,7 @@ public static class Strings
 
     public static string UninstallConfirmButton => ResourceManager.GetString("UninstallConfirmButton")!;
 
-    public static string UninstallDeleteModelsCheck => ResourceManager.GetString("UninstallDeleteModelsCheck")!;
+    public static string UninstallDeleteUserFilesCheck => ResourceManager.GetString("UninstallDeleteUserFilesCheck")!;
 
     public static string UninstallDialogText => ResourceManager.GetString("UninstallDialogText")!;
 

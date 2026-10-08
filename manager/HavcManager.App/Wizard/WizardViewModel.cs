@@ -874,7 +874,7 @@ public sealed class WizardViewModel : INotifyPropertyChanged
             ShellIntegration.OpenUrl(url);
     }
 
-    public async Task UninstallAsync(bool deleteModels)
+    public async Task UninstallAsync(bool deleteUserFiles)
     {
         string installDir = Existing?.InstallDir ?? InstallDir;
 
@@ -905,17 +905,17 @@ public sealed class WizardViewModel : INotifyPropertyChanged
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
                 tempCopy,
                 $"--uninstall-run \"{installDir}\""
-                + (deleteModels ? " --uninstall-delete-models" : "")));
+                + (deleteUserFiles ? " --uninstall-delete-user-files" : "")));
             Application.Current.Shutdown();
             return;
         }
 
         try
         {
-            // Model files live inside the install folder (<install>\comfy_bridge\models):
-            // everything else goes, the models survive unless the user asked
-            // to delete them too.
-            InstallTreeCleanup.Delete(installDir, keepComfyModels: !deleteModels);
+            // The user files live inside the install folder (<install>\comfy_bridge\models
+            // and <install>\gui\gui_cmnet2_settings.json): everything else goes,
+            // they survive unless the user asked to delete them too.
+            InstallTreeCleanup.Delete(installDir, keepUserFiles: !deleteUserFiles);
         }
         catch (Exception ex)
         {

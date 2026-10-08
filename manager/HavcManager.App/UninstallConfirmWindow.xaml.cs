@@ -8,7 +8,7 @@ public partial class UninstallConfirmWindow : Window
 {
     public UninstallConfirmWindow() => InitializeComponent();
 
-    public bool DeleteModels => DeleteModelsCheck.IsChecked == true;
+    public bool DeleteUserFiles => DeleteUserFilesCheck.IsChecked == true;
 
     private void OnRemoveClick(object sender, RoutedEventArgs e) => DialogResult = true;
 }
@@ -20,6 +20,6 @@ internal static class UninstallFlow
     {
         var dialog = new UninstallConfirmWindow { Owner = owner };
         if (dialog.ShowDialog() == true)
-            await vm.UninstallAsync(dialog.DeleteModels);
+            await vm.UninstallAsync(dialog.DeleteUserFiles);
     }
 }

@@ -141,7 +141,7 @@ No = keep your settings</value>
     <value>Log</value>
   </data>
   <data name="ModelsHint" xml:space="preserve">
-    <value>Models are stored inside the install folder (comfy_bridge\models). Updates reuse them; uninstalling keeps them unless you ask to delete them.</value>
+    <value>Models (comfy_bridge\models) and the saved GUI settings (gui\gui_cmnet2_settings.json) are stored inside the install folder. Updates reuse them; uninstalling keeps them unless you ask to delete them.</value>
   </data>
   <data name="OpenFolderButton" xml:space="preserve">
     <value>Open folder</value>
@@ -212,11 +212,11 @@ No = keep your settings</value>
   <data name="UninstallConfirmButton" xml:space="preserve">
     <value>Remove</value>
   </data>
-  <data name="UninstallDeleteModelsCheck" xml:space="preserve">
-    <value>Also delete the model files (they will need to be downloaded again).</value>
+  <data name="UninstallDeleteUserFilesCheck" xml:space="preserve">
+    <value>Also delete the model files and the saved settings (the models will need to be downloaded again).</value>
   </data>
   <data name="UninstallDialogText" xml:space="preserve">
-    <value>Remove HAVC from this PC? Shortcuts and registry entries will be removed.</value>
+    <value>Remove HAVC from this PC? Shortcuts and registry entries will be removed. The model files and the saved settings are kept by default.</value>
   </data>
   <data name="UninstallDialogTitle" xml:space="preserve">
     <value>Uninstall HAVC</value>
@@ -273,7 +273,7 @@ No = keep your settings</value>
     <value>Project releases on GitHub</value>
   </data>
   <data name="RebuildRequiredMessage" xml:space="preserve">
-    <value>This update needs a new environment (Python or lockfile change). Install HAVC in a new folder, then uninstall the old installation.</value>
+    <value>This update needs a fresh environment (Python or lockfile change). Uninstall HAVC keeping the user files (models and settings — the default option), then run the installer again in the same folder: they are reused and everything else is rebuilt.</value>
   </data>
   <data name="RepairButton" xml:space="preserve">
     <value>Repair</value>

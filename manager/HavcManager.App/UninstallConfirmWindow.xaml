@@ -8,8 +8,8 @@
         ShowInTaskbar="False" WindowStartupLocation="CenterOwner">
     <StackPanel Margin="20">
         <TextBlock Text="{x:Static res:Strings.UninstallDialogText}" TextWrapping="Wrap"/>
-        <CheckBox x:Name="DeleteModelsCheck" Margin="0,14,0,0">
-            <TextBlock Text="{x:Static res:Strings.UninstallDeleteModelsCheck}" TextWrapping="Wrap"/>
+        <CheckBox x:Name="DeleteUserFilesCheck" Margin="0,14,0,0">
+            <TextBlock Text="{x:Static res:Strings.UninstallDeleteUserFilesCheck}" TextWrapping="Wrap"/>
         </CheckBox>
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
             <Button Content="{x:Static res:Strings.Cancel}" IsCancel="True"

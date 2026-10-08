@@ -34,5 +34,5 @@ Check the connection first. As fallbacks: keep a `release.json` next to the exe 
 **An update brought no new files, and Repair did not either**
 *Repair* restores the currently installed version from the cached wheel — it never upgrades. New or changed files arrive with an *update* ("Check for updates").
 
-**The uninstaller asks about the models folder**
-The default keeps `<install>\comfy_bridge\models` (tens of GB): reinstalling into the same folder reuses them without re-downloading.
+**The uninstaller asks about the user files**
+The default keeps the model files (`<install>\comfy_bridge\models`, tens of GB) and the saved GUI settings (`<install>\gui\gui_cmnet2_settings.json`): reinstalling into the same folder reuses them without re-downloading. Tick the option in the dialog to delete them too.

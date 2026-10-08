@@ -6,24 +6,30 @@ namespace HavcManager.Core.Tests;
 public class InstallTreeCleanupTests
 {
     [Fact]
-    public void Delete_keeps_comfy_models_when_requested()
+    public void Delete_keeps_the_user_files_when_requested()
     {
         string dir = TestPaths.NewTempDir();
         try
         {
             File.WriteAllText(Path.Combine(dir, "HAVCManager.exe"), "x");
-            string keep = Path.Combine(dir, "comfy_bridge", "models", "unet");
-            Directory.CreateDirectory(keep);
-            File.WriteAllText(Path.Combine(keep, "model.safetensors"), "data");
+            string keepModels = Path.Combine(dir, "comfy_bridge", "models", "unet");
+            Directory.CreateDirectory(keepModels);
+            File.WriteAllText(Path.Combine(keepModels, "model.safetensors"), "data");
             Directory.CreateDirectory(Path.Combine(dir, "comfy_bridge", "comfy"));
             File.WriteAllText(Path.Combine(dir, "comfy_bridge", "folder_paths.py"), "code");
+            string guiDir = Path.Combine(dir, "gui");
+            Directory.CreateDirectory(Path.Combine(guiDir, "scripts"));
+            File.WriteAllText(Path.Combine(guiDir, "scripts", "encode.vpy"), "script");
+            File.WriteAllText(Path.Combine(guiDir, "gui_cmnet2_settings.json"), "{}");
 
-            InstallTreeCleanup.Delete(dir, keepComfyModels: true);
+            InstallTreeCleanup.Delete(dir, keepUserFiles: true);
 
             Assert.False(File.Exists(Path.Combine(dir, "HAVCManager.exe")));
             Assert.False(File.Exists(Path.Combine(dir, "comfy_bridge", "folder_paths.py")));
             Assert.False(Directory.Exists(Path.Combine(dir, "comfy_bridge", "comfy")));
-            Assert.True(File.Exists(Path.Combine(keep, "model.safetensors")));
+            Assert.True(File.Exists(Path.Combine(keepModels, "model.safetensors")));
+            Assert.False(Directory.Exists(Path.Combine(guiDir, "scripts")));
+            Assert.True(File.Exists(Path.Combine(guiDir, "gui_cmnet2_settings.json")));
         }
         finally
         {
@@ -32,16 +38,18 @@ public class InstallTreeCleanupTests
     }
 
     [Fact]
-    public void Delete_removes_everything_when_models_are_not_kept()
+    public void Delete_removes_everything_when_the_user_files_are_not_kept()
     {
         string dir = TestPaths.NewTempDir();
         try
         {
             Directory.CreateDirectory(Path.Combine(dir, "comfy_bridge", "models"));
             File.WriteAllText(Path.Combine(dir, "comfy_bridge", "models", "m.bin"), "data");
+            Directory.CreateDirectory(Path.Combine(dir, "gui"));
+            File.WriteAllText(Path.Combine(dir, "gui", "gui_cmnet2_settings.json"), "{}");
             File.WriteAllText(Path.Combine(dir, "file.txt"), "x");
 
-            InstallTreeCleanup.Delete(dir, keepComfyModels: false);
+            InstallTreeCleanup.Delete(dir, keepUserFiles: false);
 
             Assert.False(Directory.Exists(dir));
         }
@@ -55,14 +63,14 @@ public class InstallTreeCleanupTests
     public void Delete_is_a_noop_when_the_folder_is_gone()
     {
         string dir = Path.Combine(Path.GetTempPath(), $"havc-missing-{Guid.NewGuid():N}");
-        InstallTreeCleanup.Delete(dir, keepComfyModels: true);
+        InstallTreeCleanup.Delete(dir, keepUserFiles: true);
         Assert.False(Directory.Exists(dir));
     }
 
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public void Delete_handles_the_venv_junction(bool keepComfyModels)
+    public void Delete_handles_the_venv_junction(bool keepUserFiles)
     {
         // The bootstrap creates `<install>\.venv` as a junction to `venv`
         // (the dev-layout path the HAVC GUI probes for its managed server).
@@ -75,15 +83,18 @@ public class InstallTreeCleanupTests
             File.WriteAllText(Path.Combine(dir, "venv", "Scripts", "python.exe"), "x");
             Directory.CreateDirectory(Path.Combine(dir, "comfy_bridge", "models"));
             File.WriteAllText(Path.Combine(dir, "comfy_bridge", "models", "m.bin"), "data");
+            Directory.CreateDirectory(Path.Combine(dir, "gui"));
+            File.WriteAllText(Path.Combine(dir, "gui", "gui_cmnet2_settings.json"), "{}");
             string link = Path.Combine(dir, ".venv");
             CreateJunction(link, Path.Combine(dir, "venv"));
             Assert.True(File.Exists(Path.Combine(link, "Scripts", "python.exe")));
 
-            InstallTreeCleanup.Delete(dir, keepComfyModels);
+            InstallTreeCleanup.Delete(dir, keepUserFiles);
 
-            if (keepComfyModels)
+            if (keepUserFiles)
             {
                 Assert.True(File.Exists(Path.Combine(dir, "comfy_bridge", "models", "m.bin")));
+                Assert.True(File.Exists(Path.Combine(dir, "gui", "gui_cmnet2_settings.json")));
                 Assert.False(Directory.Exists(Path.Combine(dir, "venv")));
                 Assert.DoesNotContain(
                     Directory.GetFileSystemEntries(dir),

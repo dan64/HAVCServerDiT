@@ -8,13 +8,14 @@ namespace HavcManager.App.Windows;
 /// Self-removal worker (PHASE1_SPEC §6.5): the manager copies itself to %TEMP%
 /// and re-launches with --uninstall-run &lt;dir&gt;; this worker waits for the
 /// original process to release the files, deletes the install folder (keeping
-/// the model files unless asked otherwise) and removes its own temporary copy.
+/// the user files — model weights and GUI settings — unless asked otherwise)
+/// and removes its own temporary copy.
 /// </summary>
 internal static class UninstallWorker
 {
-    public static void Run(string installDir, bool keepComfyModels)
+    public static void Run(string installDir, bool keepUserFiles)
     {
-        InstallTreeCleanup.Delete(installDir, keepComfyModels);
+        InstallTreeCleanup.Delete(installDir, keepUserFiles);
 
         string? self = Environment.ProcessPath;
         if (self is not null)

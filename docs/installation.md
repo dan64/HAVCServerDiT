@@ -18,8 +18,10 @@ on first use.
   or offline use you can keep a `release.json` next to the exe, or pass
   `--release-tag vX`.
 - Default install folder: `%LOCALAPPDATA%\HAVCServerDiT` (per-user, no admin).
-  Model files live in `<install>\comfy_bridge\models` and are preserved by
-  update/repair and by the uninstaller (which asks before deleting them).
+  Model files (`<install>\comfy_bridge\models`) and the saved GUI settings
+  (`<install>\gui\gui_cmnet2_settings.json`) live in the install folder and
+  are preserved by update/repair and by the uninstaller (which asks before
+  deleting them).
 - The manager (installed copy or the setup exe) offers *Open GUI*,
   *Start server*, *Check for updates*, *Repair* and *Uninstall*. Installed
   layouts also ship the launcher scripts — see

@@ -37,7 +37,7 @@ public partial class App : Application
 
         if (options.UninstallRunDir is { } installDir)
         {
-            UninstallWorker.Run(installDir, keepComfyModels: !options.UninstallRunDeleteModels);
+            UninstallWorker.Run(installDir, keepUserFiles: !options.UninstallRunDeleteUserFiles);
             Shutdown();
             return;
         }

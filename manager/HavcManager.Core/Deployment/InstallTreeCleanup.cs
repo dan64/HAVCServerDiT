@@ -3,18 +3,21 @@ using System.IO;
 namespace HavcManager.Core.Deployment;
 
 /// <summary>
-/// Removal of an install folder (PHASE1_SPEC §6.5, 2026-10-05): everything
-/// goes — except `<install>\comfy_bridge\models`, which is preserved unless
-/// the user explicitly asks to delete the model files. The models live inside
-/// the install folder (they are what the runtime reads); a reinstall to the
-/// same path reuses them without re-downloading.
+/// Removal of an install folder (PHASE1_SPEC §6.5, 2026-10-05; user files
+/// 2026-10-08): everything goes — except the *user files*, which are
+/// preserved unless the user explicitly asks to delete them:
+/// `<install>\comfy_bridge\models` (the model weights: they live inside the
+/// install folder because that is what the runtime reads, and a reinstall to
+/// the same path reuses them without re-downloading) and
+/// `<install>\gui\gui_cmnet2_settings.json` (the GUI settings the user
+/// configured — a reinstall resumes from them).
 /// </summary>
 public static class InstallTreeCleanup
 {
     private const int Retries = 40;
     private static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(500);
 
-    public static void Delete(string installDir, bool keepComfyModels)
+    public static void Delete(string installDir, bool keepUserFiles)
     {
         if (!Directory.Exists(installDir))
             return;
@@ -22,7 +25,7 @@ public static class InstallTreeCleanup
         {
             try
             {
-                DeleteCore(installDir, keepComfyModels);
+                DeleteCore(installDir, keepUserFiles);
                 return;
             }
             catch (IOException) when (attempt < Retries)
@@ -36,31 +39,43 @@ public static class InstallTreeCleanup
         }
     }
 
-    private static void DeleteCore(string installDir, bool keepComfyModels)
+    private static void DeleteCore(string installDir, bool keepUserFiles)
     {
-        if (!keepComfyModels)
+        if (!keepUserFiles)
         {
             Directory.Delete(installDir, recursive: true);
             return;
         }
 
         string comfyDir = Path.Combine(installDir, "comfy_bridge");
-        string keepDir = Path.Combine(comfyDir, "models");
+        string guiDir = Path.Combine(installDir, "gui");
+        string keepModels = Path.Combine(installDir, "comfy_bridge", "models");
+        string keepSettings = Path.Combine(installDir, "gui", "gui_cmnet2_settings.json");
         foreach (string entry in Directory.GetFileSystemEntries(installDir))
         {
-            if (string.Equals(Path.GetFullPath(entry), Path.GetFullPath(comfyDir), StringComparison.OrdinalIgnoreCase))
+            string full = Path.GetFullPath(entry);
+            if (string.Equals(full, Path.GetFullPath(comfyDir), StringComparison.OrdinalIgnoreCase))
             {
-                foreach (string child in Directory.GetFileSystemEntries(comfyDir))
-                {
-                    if (string.Equals(Path.GetFullPath(child), Path.GetFullPath(keepDir), StringComparison.OrdinalIgnoreCase))
-                        continue;
-                    DeleteEntry(child);
-                }
+                DeleteChildrenExcept(comfyDir, keepModels);
+            }
+            else if (string.Equals(full, Path.GetFullPath(guiDir), StringComparison.OrdinalIgnoreCase))
+            {
+                DeleteChildrenExcept(guiDir, keepSettings);
             }
             else
             {
                 DeleteEntry(entry);
             }
+        }
+    }
+
+    private static void DeleteChildrenExcept(string dir, string keep)
+    {
+        foreach (string child in Directory.GetFileSystemEntries(dir))
+        {
+            if (string.Equals(Path.GetFullPath(child), Path.GetFullPath(keep), StringComparison.OrdinalIgnoreCase))
+                continue;
+            DeleteEntry(child);
         }
     }
 

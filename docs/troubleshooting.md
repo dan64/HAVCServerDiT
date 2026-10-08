@@ -18,6 +18,9 @@ Supported values for `model_name` are `"nunchaku-qwen"` (FP4/INT4), `"gguf-qwen"
 Subsequent runs load from the local cache.
 **GGUF**: only the VAE and tokenizer (~320 MB) are downloaded from HuggingFace; the UNet and CLIP are loaded directly from the local `.gguf` files. Set `cache_dir` in the config to control where the cache is stored.
 
+**Colors look faded or grayish**
+Increase the number of **Colorization Steps** and/or disable **Fast Pipeline**, then re-run. See [Suggested Inference Steps](usage.md#-suggested-inference-steps) for the recommended per-model values.
+
 ---
 
 ## Installation and updates

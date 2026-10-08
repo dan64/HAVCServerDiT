@@ -1,4 +1,4 @@
-# HAVC Client — GUI
+# GUI Usage
 
 A FreeSimpleGUI-based desktop client that connects to the [HAVC DiT Server](../README.md)
 and orchestrates a full video colorization pipeline: extraction → AI colorization → encoding → merge.

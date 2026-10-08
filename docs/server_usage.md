@@ -1,4 +1,4 @@
-# Usage
+# Server Usage
 
 > **Note** — In an installation created by the installer, the server is normally
 > started and managed **automatically by the GUI**: the **Run Server** button

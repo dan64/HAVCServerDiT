@@ -30,6 +30,7 @@ import shutil
 import xmlrpc.client
 import uuid
 import random
+import queue
 import numpy as np
 from pathlib import Path
 from send2trash import send2trash
@@ -640,6 +641,51 @@ def update_status(window, message, type="info"):
 
 
 # ---------------------------------------------------------------------------
+# THREAD-SAFE LIVE WIDGET READS
+# ---------------------------------------------------------------------------
+# values[] is the snapshot from the last window.read(): a field edited while
+# a worker runs is not reflected there.  window[key].get() reads the live
+# state, but only from the main thread: called from a worker it can raise
+# RuntimeError("main thread is not in main loop") whenever the main thread
+# is outside tkinter's event loop (an event handler, a modal dialog).
+# gui_get() keeps the live semantics and is safe from any thread: on the
+# main thread it reads the widget directly; from a worker it posts
+# -GUI_READ- and the main loop performs the read on its behalf, falling
+# back to the values[] snapshot only if no reply arrives in time.
+_gui_read_replies = {}
+_GUI_READ_TIMEOUT = 5.0
+
+
+def gui_get(window, values, key, default=None):
+    if threading.current_thread() is threading.main_thread():
+        try:
+            return window[key].get()
+        except Exception:
+            return (values or {}).get(key, default)
+    reply = queue.Queue(maxsize=1)
+    token = uuid.uuid4().hex
+    _gui_read_replies[token] = reply
+    try:
+        window.write_event_value("-GUI_READ-", (token, key))
+        return reply.get(timeout=_GUI_READ_TIMEOUT)
+    except Exception:
+        return (values or {}).get(key, default)
+    finally:
+        _gui_read_replies.pop(token, None)
+
+
+def _serve_gui_read(window, token, key):
+    """Main loop side of gui_get(): read the widget for a waiting worker."""
+    reply = _gui_read_replies.get(token)
+    if reply is None:
+        return
+    try:
+        reply.put_nowait(window[key].get())
+    except Exception:
+        pass
+
+
+# ---------------------------------------------------------------------------
 # RPC CONNECTION HELPER
 # ---------------------------------------------------------------------------
 _RPC_MAX_RETRIES = 5   # attempts before giving up
@@ -853,7 +899,7 @@ def orchestrator(init_values, window):
                     f"[EXTRACT] Exported {num_extract} reference images, "
                     f"approx. 1 every {round(total_frames / num_extract)} frames")
 
-        if ret == 0 and window["-DUPE_FIRST_FRAME-"].get():
+        if ret == 0 and gui_get(window, values, "-DUPE_FIRST_FRAME-", False):
             ref_dir_path = Path(ref_dir)
             ref_files = sorted(ref_dir_path.glob("ref_000*.jpg"))
             if len(ref_files) < 3:
@@ -957,7 +1003,7 @@ def orchestrator(init_values, window):
             if state["stop_requested"]:
                 rpc.request_stop()
                 break
-            if not window["-DO_STEP3-"].get():
+            if not gui_get(window, values, "-DO_STEP3-", False):
                 log_message("[COLORIZE] Task skipped by user.")
                 break
 
@@ -1073,7 +1119,7 @@ def orchestrator(init_values, window):
             if state["stop_requested"]:
                 rpc.request_stop()
                 break
-            if not window["-DO_STEP3-"].get():
+            if not gui_get(window, values, "-DO_STEP3-", False):
                 log_message("[COLORIZE] Task skipped by user.")
                 break
 
@@ -1147,13 +1193,13 @@ def orchestrator(init_values, window):
         sfx = "_dt-color.h265" if "cmnet2" in video_base_path else "_cmnet2_dt-color.h265"
         out_video_file = os.path.join(values["-BASE_DIR-"], video_base_path + sfx)
 
-        crf_val    = window["-CRF-"].get().strip() or "20.0"
+        crf_val    = (gui_get(window, values, "-CRF-", "") or "").strip() or "20.0"
         fps_val    = values["-FPS-"].strip() or "24000/1001"
-        render_speed = window["-RENDER_SPEED-"].get().strip() or "auto"
-        memory_frames = window["-MEMORY_FRAMES-"].get().strip() or "20"
-        backbone = window["-BACKBONE-"].get().strip() or "dinov3"
-        proximity_bias = "True" if (window["-PROXIMITY_BIAS-"].get() and backbone == "dinov3") else ""
-        proximity_alpha = window["-PROXIMITY_ALPHA-"].get().strip() or "0.50"
+        render_speed = (gui_get(window, values, "-RENDER_SPEED-", "") or "").strip() or "auto"
+        memory_frames = (gui_get(window, values, "-MEMORY_FRAMES-", "") or "").strip() or "20"
+        backbone = (gui_get(window, values, "-BACKBONE-", "") or "").strip() or "dinov3"
+        proximity_bias = "True" if (gui_get(window, values, "-PROXIMITY_BIAS-", False) and backbone == "dinov3") else ""
+        proximity_alpha = (gui_get(window, values, "-PROXIMITY_ALPHA-", "") or "").strip() or "0.50"
         encode_vpy = os.path.join(values["-SCRIPT_DIR-"], values["-ENCODE_VPY-"])
 
         vsp_cmd = (f'"{values["-VSPIPE-"]}" "{encode_vpy}" - '
@@ -1230,13 +1276,13 @@ def orchestrator(init_values, window):
         sfx = "_dt-color.h264" if "cmnet2" in video_base_path else "_cmnet2_dt-color.h264"
         out_video_file = os.path.join(values["-BASE_DIR-"], video_base_path + sfx)
 
-        crf_val    = window["-CRF-"].get().strip() or "20.0"
+        crf_val    = (gui_get(window, values, "-CRF-", "") or "").strip() or "20.0"
         fps_val    = values["-FPS-"].strip() or "24000/1001"
-        render_speed = window["-RENDER_SPEED-"].get().strip() or "auto"
-        memory_frames = window["-MEMORY_FRAMES-"].get().strip() or "20"
-        backbone = window["-BACKBONE-"].get().strip() or "dinov3"
-        proximity_bias = "True" if (window["-PROXIMITY_BIAS-"].get() and backbone == "dinov3") else ""
-        proximity_alpha = window["-PROXIMITY_ALPHA-"].get().strip() or "0.50"
+        render_speed = (gui_get(window, values, "-RENDER_SPEED-", "") or "").strip() or "auto"
+        memory_frames = (gui_get(window, values, "-MEMORY_FRAMES-", "") or "").strip() or "20"
+        backbone = (gui_get(window, values, "-BACKBONE-", "") or "").strip() or "dinov3"
+        proximity_bias = "True" if (gui_get(window, values, "-PROXIMITY_BIAS-", False) and backbone == "dinov3") else ""
+        proximity_alpha = (gui_get(window, values, "-PROXIMITY_ALPHA-", "") or "").strip() or "0.50"
         encode_vpy = os.path.join(values["-SCRIPT_DIR-"], values["-ENCODE_VPY-"])
         x264_exe = os.path.join(
             Path(values["-X265-"]).parent.parent / "x264", "x264.exe")
@@ -1324,11 +1370,11 @@ def orchestrator(init_values, window):
         out_video_file = os.path.join(values["-BASE_DIR-"], video_base_path + sfx)
 
         fps_val    = values["-FPS-"].strip() or "24000/1001"
-        render_speed = window["-RENDER_SPEED-"].get().strip() or "auto"
-        memory_frames = window["-MEMORY_FRAMES-"].get().strip() or "20"
-        backbone = window["-BACKBONE-"].get().strip() or "dinov3"
-        proximity_bias = "True" if (window["-PROXIMITY_BIAS-"].get() and backbone == "dinov3") else ""
-        proximity_alpha = window["-PROXIMITY_ALPHA-"].get().strip() or "0.50"
+        render_speed = (gui_get(window, values, "-RENDER_SPEED-", "") or "").strip() or "auto"
+        memory_frames = (gui_get(window, values, "-MEMORY_FRAMES-", "") or "").strip() or "20"
+        backbone = (gui_get(window, values, "-BACKBONE-", "") or "").strip() or "dinov3"
+        proximity_bias = "True" if (gui_get(window, values, "-PROXIMITY_BIAS-", False) and backbone == "dinov3") else ""
+        proximity_alpha = (gui_get(window, values, "-PROXIMITY_ALPHA-", "") or "").strip() or "0.50"
         encode_vpy = os.path.join(values["-SCRIPT_DIR-"], values["-ENCODE_VPY-"])
 
         vsp_cmd = (f'"{values["-VSPIPE-"]}" "{encode_vpy}" - '
@@ -1337,7 +1383,7 @@ def orchestrator(init_values, window):
                    f'-a "Backbone={backbone}" -a "EnableProximityBias={proximity_bias}" '
                    f'-a "ProximityBiasAlpha={proximity_alpha}" -a "BitDepth=10" '
                    f'--outputindex 0 -c y4m')
-        sharp_filter = window["-USE_SHARP-"].get()
+        sharp_filter = gui_get(window, values, "-USE_SHARP-", False)
         sharp = "--vpp-unsharp --vpp-edgelevel" if sharp_filter else ""
         res = f"{info['width']}x{info['height']}"
         nvenc_exe = os.path.join(Path(values["-X265-"]).parent.parent / "NVEncC" , "NVEncC64.exe")
@@ -1351,7 +1397,7 @@ def orchestrator(init_values, window):
         nvenc_cmd = (
             f'"{nvenc_exe}" --y4m -i - --input-res {res} '
             f'--fps {info["fps"]} --codec h265 --vbr 0 '
-            f'--vbr-quality {window["-VBR_QUALITY-"].get()} '
+            f'--vbr-quality {gui_get(window, values, "-VBR_QUALITY-", "")} '
             f'{nvenc_opt} {sharp} --output "{out_video_file}"'
         )
         full_cmd = f"{vsp_cmd} | {nvenc_cmd}"
@@ -1385,7 +1431,7 @@ def orchestrator(init_values, window):
             f'"{values["-VSPIPE-"]}" "{merge_vpy}" - '
             f'-a "VideoPath1={orig_video_path}" '
             f'-a "VideoPath2={last_encoded_file}" '
-            f'-a "Weight={window["-MERGE_WEIGHT-"].get()}" '
+            f'-a "Weight={gui_get(window, values, "-MERGE_WEIGHT-", "")}" '
             f'--outputindex 0 -c y4m'
         )
 
@@ -1400,7 +1446,7 @@ def orchestrator(init_values, window):
         out_merge = str(
             Path(last_encoded_file).with_name(
                 Path(last_encoded_file).stem + "_merged.h265"))
-        sharp = "--vpp-unsharp --vpp-edgelevel" if window["-USE_SHARP-"].get() else ""
+        sharp = "--vpp-unsharp --vpp-edgelevel" if gui_get(window, values, "-USE_SHARP-", False) else ""
         res   = f"{info['width']}x{info['height']}"
         nvenc_exe = os.path.join(Path(values["-X265-"]).parent.parent / "NVEncC" , "NVEncC64.exe")
         nvenc_opt = (
@@ -1413,7 +1459,7 @@ def orchestrator(init_values, window):
         nvenc_cmd = (
             f'"{nvenc_exe}" --y4m -i - --input-res {res} '
             f'--fps {info["fps"]} --codec h265 --vbr 0 '
-            f'--vbr-quality {window["-VBR_QUALITY-"].get()} '
+            f'--vbr-quality {gui_get(window, values, "-VBR_QUALITY-", "")} '
             f'{nvenc_opt} {sharp} --output "{out_merge}"'
         )
         full_cmd = f"{vsp_cmd} | {nvenc_cmd}"
@@ -1447,20 +1493,20 @@ def orchestrator(init_values, window):
             log_message(f">>> STARTING TASK: {task}")
 
             if task == "EXTRACT":
-                if not window["-DO_STEP1-"].get():
+                if not gui_get(window, init_values, "-DO_STEP1-", False):
                     log_message("⚠️ Extraction task cancelled")
                 else:
                     do_extraction(init_values, window, orig_video_path)
 
             elif task == "SELECT":
-                if not window["-DO_STEP2-"].get():
+                if not gui_get(window, init_values, "-DO_STEP2-", False):
                     log_message("⚠️ Selection task cancelled")
                 else:
                     do_select_references(init_values, window, orig_video_path)
 
             elif task == "COLORIZE":
-                fast_pipeline = bool(window["-FAST_PIPE-"].get())
-                if not window["-DO_STEP3-"].get():
+                fast_pipeline = bool(gui_get(window, init_values, "-FAST_PIPE-", False))
+                if not gui_get(window, init_values, "-DO_STEP3-", False):
                     log_message("⚠️ Colorization task cancelled")
                 else:
                     if fast_pipeline:
@@ -1469,10 +1515,10 @@ def orchestrator(init_values, window):
                         do_colorize(init_values, window)
 
             elif task == "ENCODE":
-                if not window["-DO_STEP4-"].get():
+                if not gui_get(window, init_values, "-DO_STEP4-", False):
                     log_message("⚠️ Encoding task cancelled")
                 else:
-                    selected_encoder = window["-ENCODER-"].get()
+                    selected_encoder = gui_get(window, init_values, "-ENCODER-", "")
                     if selected_encoder == "x265":
                         last_encoded_file = do_encode_x265(
                             init_values, window, orig_video_path)
@@ -1484,7 +1530,7 @@ def orchestrator(init_values, window):
                             init_values, window, orig_video_path)
 
             elif task == "MERGE":
-                if not window["-DO_STEP5-"].get():
+                if not gui_get(window, init_values, "-DO_STEP5-", False):
                     log_message("⚠️ Merge task cancelled")
                 else:
                     do_video_merge(
@@ -1625,11 +1671,8 @@ def _fix_colorize_worker(values, window, seed, pil_in=None):
 
         elapsed = time.time() - t0
 
-        # Batch mode: store output in memory (saved to disk only on Overwrite/Save As)
-        batch_on = values["-FIX_BATCH-"]
-        if batch_on:
-            orig_path = state.get("fix_original_path", "")
-            state["fix_batch_outputs"].append((orig_path, out.copy()))
+        # Batch bookkeeping is handled by the -FIX_DONE- event on the main
+        # thread (live checkbox read; no widget calls from this worker).
 
         window.write_event_value("-FIX_DONE-", (out, elapsed, seed, prompt))  
     except Exception as e:  
@@ -2274,11 +2317,8 @@ def _fixc_colorize_worker(values, window):
         out = pil_cmnet2_colorize(ref_img, target_img, project_dir=_project_dir, backbone=backbone)
         elapsed = time.time() - t0
 
-        # Batch mode: store output in memory
-        batch_on = values["-FIXC_BATCH-"]
-        if batch_on:
-            orig_path = state.get("fixc_target_original_path", "")
-            state["fixc_batch_outputs"].append((orig_path, out.copy()))
+        # Batch bookkeeping is handled by the -FIXC_DONE- event on the main
+        # thread (live checkbox read; no widget calls from this worker).
 
         window.write_event_value("-LOG-", f"[Fix Colors] Done ({elapsed:.1f}s)")
         window.write_event_value("-FIXC_DONE-", (out, elapsed))
@@ -2531,6 +2571,11 @@ while True:
         msg, kind = values[event]
         update_status(window, msg, kind)
 
+    # ---- Live widget reads requested by worker threads (see gui_get) ----
+    if event == "-GUI_READ-":
+        token, key = values[event]
+        _serve_gui_read(window, token, key)
+
     # ---- Fix Image tab ----
     if event == "-FIX_LOAD-":
         name = values["-FIX_PATH-"]  # this is the basename from the combo
@@ -2722,10 +2767,15 @@ while True:
         cfg["fix_prompts"] = state["fix_prompts"]
         save_all_configs(cfg)
 
-        # Batch mode: advance to next image
+        # Batch bookkeeping (memory store + advance) happens here, on the
+        # main thread, with a LIVE checkbox read: the box can be toggled
+        # while the worker runs, and a values[] snapshot would carry the
+        # state from the start of the run.
         batch_on = window["-FIX_BATCH-"].get()
         batch_idx = state.get("fix_batch_index", -1)
         if batch_on and batch_idx >= 0:
+            orig_path = state.get("fix_original_path", "")
+            state["fix_batch_outputs"].append((orig_path, out.copy()))
             total = len(state["fix_batch_paths"])
             window["-FIX_STATUS-"].update(f"✅ {batch_idx+1}/{total} ({elapsed:.1f}s, seed={seed})")
             state["fix_batch_index"] += 1
@@ -2962,10 +3012,15 @@ while True:
         _preview.save(buf, format="PNG")
         window["-FIXC_OUT_IMG-"].update(data=buf.getvalue())
 
-        # Batch mode: advance to next image
+        # Batch bookkeeping (memory store + advance) happens here, on the
+        # main thread, with a LIVE checkbox read: the box can be toggled
+        # while the worker runs, and a values[] snapshot would carry the
+        # state from the start of the run.
         batch_on = window["-FIXC_BATCH-"].get()
         batch_idx = state.get("fixc_batch_index", -1)
         if batch_on and batch_idx >= 0:
+            orig_path = state.get("fixc_target_original_path", "")
+            state["fixc_batch_outputs"].append((orig_path, out.copy()))
             total = len(state["fixc_batch_paths"])
             window["-FIXC_STATUS-"].update(f"✅ {batch_idx+1}/{total} ({elapsed:.1f}s)")
             state["fixc_batch_index"] += 1

@@ -131,7 +131,7 @@ uses GGUF+mmproj (see [What's New](whats-new.md)):
 > `steps: 6` here only documents the LoRA's native
 > step count for anyone reading the file; the actual number of steps used
 > at inference time is the `steps` argument passed per-call to the
-> colorization RPC methods (see [Suggested Inference Steps](usage.md#-suggested-inference-steps)
+> colorization RPC methods (see [Suggested Inference Steps](server_usage.md#-suggested-inference-steps)
 > and [RPC API Reference](rpc-api.md)), same as every other backend.
 
 > **Merged-LoRA checkpoints** (e.g. the `v0.2.1-6step-*` / `v0.3-6step-*`

@@ -29,7 +29,7 @@ HAVC-Server.cmd        # console server — pick the model at the prompt
 start_server.cmd q3    # console server with a backend/quantization or a config name
 ```
 
-CLI arguments, the full launch-script reference and the suggested inference steps: [docs/usage.md](docs/usage.md).
+CLI arguments, the full launch-script reference and the suggested inference steps: [docs/server_usage.md](docs/server_usage.md).
 
 ## 📋 Requirements
 
@@ -54,10 +54,10 @@ CLI arguments, the full launch-script reference and the suggested inference step
 
 - [Installation](docs/installation.md) — installer, manual setup, updating, project layout
 - [Backends & requirements](docs/backends.md) — choosing the right backend
-- [Usage](docs/usage.md) — server startup, launch scripts, CLI arguments, suggested steps
+- [Server usage](docs/server_usage.md) — server startup, launch scripts, CLI arguments, suggested steps
 - [Pipeline configuration](docs/configuration.md) — config files and key reference
 - [RPC API](docs/rpc-api.md) — XML-RPC API, example clients, shared-memory transport
-- [GUI guide](docs/gui.md) — the desktop client
+- [GUI usage](docs/gui_usage.md) — the desktop client
 - [Troubleshooting](docs/troubleshooting.md)
 - [What's New](docs/whats-new.md) — changelog
 

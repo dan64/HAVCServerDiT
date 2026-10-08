@@ -355,7 +355,7 @@ for example in the Cluster 2, the reference frame #000145 was selected to repres
 | **External console**     | Reverts **Run Server** to its previous behavior: launches `start_server.cmd <config-name>` in its own visible terminal window instead, with no control or logging from the GUI |
 | **Colorization Steps**   | Diffusion steps per frame (lower = faster). LongCat recommends 8 steps, Qwen 2 steps, qwen21-viggle 6 steps (its LoRA's native step count; step schedules `2`/`4`/`6`/`8` — `6` gives the most accurate colors, `2` is the fastest) |
 | **Fast Pipeline**        | Enables **paired inference**: two frames colorized in one forward pass (~2× faster, temporally consistent). Supported by nunchaku-qwen and qwen21-viggle; gguf-qwen/longcat-gguf fall back to per-image processing |
-| **Enhance Prompt**       | **qwen21-viggle only**: rewrites the prompt via Qwen3-VL before colorizing (image-aware, adds ~15-20s/frame) — no effect on other backends. Try a direct anti-hedging prompt first, see [Suggested Inference Steps](usage.md#-suggested-inference-steps) |
+| **Enhance Prompt**       | **qwen21-viggle only**: rewrites the prompt via Qwen3-VL before colorizing (image-aware, adds ~15-20s/frame) — no effect on other backends. Try a direct anti-hedging prompt first, see [Suggested Inference Steps](server_usage.md#-suggested-inference-steps) |
 | **Prompt**               | Text prompt sent to the model                                                                                                                                  |
 | **Cache Directory**      | HuggingFace cache (leave empty for default)                                                                                                                    |
 

@@ -19,7 +19,7 @@ Subsequent runs load from the local cache.
 **GGUF**: only the VAE and tokenizer (~320 MB) are downloaded from HuggingFace; the UNet and CLIP are loaded directly from the local `.gguf` files. Set `cache_dir` in the config to control where the cache is stored.
 
 **Colors look faded or grayish**
-Increase the number of **Colorization Steps** and/or disable **Fast Pipeline**, then re-run — **LongCat** in particular is calibrated for 8 steps, and at 4 steps the colors are faded. See [Suggested Inference Steps](usage.md#-suggested-inference-steps) for the recommended per-model values.
+Increase the number of **Colorization Steps** and/or disable **Fast Pipeline**, then re-run — **LongCat** in particular is calibrated for 8 steps, and at 4 steps the colors are faded. See [Suggested Inference Steps](server_usage.md#-suggested-inference-steps) for the recommended per-model values.
 
 ---
 

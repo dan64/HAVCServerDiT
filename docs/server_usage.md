@@ -3,7 +3,7 @@
 > **Note** — In an installation created by the installer, the server is normally
 > started and managed **automatically by the GUI**: the **Run Server** button
 > (Tab 2) launches it, streams its output into the **Server Log** tab and
-> connects the client as soon as it is ready (see the [GUI guide](gui.md)).
+> connects the client as soon as it is ready (see the [GUI guide](gui_usage.md)).
 > This page documents how to run and manage the server **manually** — for
 > custom setups, a server on a different machine, or debugging.
 

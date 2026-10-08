@@ -23,7 +23,7 @@ on first use.
 - The manager (installed copy or the setup exe) offers *Open GUI*,
   *Start server*, *Check for updates*, *Repair* and *Uninstall*. Installed
   layouts also ship the launcher scripts — see
-  [Windows launch script](usage.md#-windows-launch-script).
+  [Windows launch script](server_usage.md#-windows-launch-script).
 
 ## Manual installation
 

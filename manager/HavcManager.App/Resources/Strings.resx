@@ -141,7 +141,7 @@ No = keep your settings</value>
     <value>Log</value>
   </data>
   <data name="ModelsHint" xml:space="preserve">
-    <value>Models (comfy_bridge\models) and the saved GUI settings (gui\gui_cmnet2_settings.json) are stored inside the install folder. Updates reuse them; uninstalling keeps them unless you ask to delete them.</value>
+    <value>Models (comfy_bridge\models), the saved GUI settings (gui\gui_cmnet2_settings.json) and the pipeline configurations (config\) are stored inside the install folder. Updates reuse them; uninstalling keeps them unless you ask to delete them.</value>
   </data>
   <data name="OpenFolderButton" xml:space="preserve">
     <value>Open folder</value>
@@ -213,10 +213,10 @@ No = keep your settings</value>
     <value>Remove</value>
   </data>
   <data name="UninstallDeleteUserFilesCheck" xml:space="preserve">
-    <value>Also delete the model files and the saved settings (the models will need to be downloaded again).</value>
+    <value>Also delete the model files, the saved settings and the pipeline configurations (the models will need to be downloaded again).</value>
   </data>
   <data name="UninstallDialogText" xml:space="preserve">
-    <value>Remove HAVC from this PC? Shortcuts and registry entries will be removed. The model files and the saved settings are kept by default.</value>
+    <value>Remove HAVC from this PC? Shortcuts and registry entries will be removed. The model files, the saved settings and the pipeline configurations are kept by default.</value>
   </data>
   <data name="UninstallDialogTitle" xml:space="preserve">
     <value>Uninstall HAVC</value>
@@ -273,7 +273,7 @@ No = keep your settings</value>
     <value>Project releases on GitHub</value>
   </data>
   <data name="RebuildRequiredMessage" xml:space="preserve">
-    <value>This update needs a fresh environment (Python or lockfile change). Uninstall HAVC keeping the user files (models and settings — the default option), then run the installer again in the same folder: they are reused and everything else is rebuilt.</value>
+    <value>This update needs a fresh environment (Python or lockfile change). Uninstall HAVC keeping the user files (models, settings and configurations — the default option), then run the installer again in the same folder: they are reused and everything else is rebuilt.</value>
   </data>
   <data name="RepairButton" xml:space="preserve">
     <value>Repair</value>

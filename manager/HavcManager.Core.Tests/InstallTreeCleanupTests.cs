@@ -21,6 +21,10 @@ public class InstallTreeCleanupTests
             Directory.CreateDirectory(Path.Combine(guiDir, "scripts"));
             File.WriteAllText(Path.Combine(guiDir, "scripts", "encode.vpy"), "script");
             File.WriteAllText(Path.Combine(guiDir, "gui_cmnet2_settings.json"), "{}");
+            string configDir = Path.Combine(dir, "config");
+            Directory.CreateDirectory(configDir);
+            File.WriteAllText(Path.Combine(configDir, "qwen_gguf_q4.json"), "{}");
+            File.WriteAllText(Path.Combine(configDir, "my_custom_model.json"), "{}");
 
             InstallTreeCleanup.Delete(dir, keepUserFiles: true);
 
@@ -30,6 +34,8 @@ public class InstallTreeCleanupTests
             Assert.True(File.Exists(Path.Combine(keepModels, "model.safetensors")));
             Assert.False(Directory.Exists(Path.Combine(guiDir, "scripts")));
             Assert.True(File.Exists(Path.Combine(guiDir, "gui_cmnet2_settings.json")));
+            Assert.True(File.Exists(Path.Combine(configDir, "qwen_gguf_q4.json")));
+            Assert.True(File.Exists(Path.Combine(configDir, "my_custom_model.json")));
         }
         finally
         {
@@ -47,6 +53,8 @@ public class InstallTreeCleanupTests
             File.WriteAllText(Path.Combine(dir, "comfy_bridge", "models", "m.bin"), "data");
             Directory.CreateDirectory(Path.Combine(dir, "gui"));
             File.WriteAllText(Path.Combine(dir, "gui", "gui_cmnet2_settings.json"), "{}");
+            Directory.CreateDirectory(Path.Combine(dir, "config"));
+            File.WriteAllText(Path.Combine(dir, "config", "qwen_gguf_q4.json"), "{}");
             File.WriteAllText(Path.Combine(dir, "file.txt"), "x");
 
             InstallTreeCleanup.Delete(dir, keepUserFiles: false);
@@ -85,6 +93,8 @@ public class InstallTreeCleanupTests
             File.WriteAllText(Path.Combine(dir, "comfy_bridge", "models", "m.bin"), "data");
             Directory.CreateDirectory(Path.Combine(dir, "gui"));
             File.WriteAllText(Path.Combine(dir, "gui", "gui_cmnet2_settings.json"), "{}");
+            Directory.CreateDirectory(Path.Combine(dir, "config"));
+            File.WriteAllText(Path.Combine(dir, "config", "qwen_gguf_q4.json"), "{}");
             string link = Path.Combine(dir, ".venv");
             CreateJunction(link, Path.Combine(dir, "venv"));
             Assert.True(File.Exists(Path.Combine(link, "Scripts", "python.exe")));
@@ -95,6 +105,7 @@ public class InstallTreeCleanupTests
             {
                 Assert.True(File.Exists(Path.Combine(dir, "comfy_bridge", "models", "m.bin")));
                 Assert.True(File.Exists(Path.Combine(dir, "gui", "gui_cmnet2_settings.json")));
+                Assert.True(File.Exists(Path.Combine(dir, "config", "qwen_gguf_q4.json")));
                 Assert.False(Directory.Exists(Path.Combine(dir, "venv")));
                 Assert.DoesNotContain(
                     Directory.GetFileSystemEntries(dir),

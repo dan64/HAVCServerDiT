@@ -8,9 +8,12 @@ namespace HavcManager.Core.Deployment;
 /// preserved unless the user explicitly asks to delete them:
 /// `<install>\comfy_bridge\models` (the model weights: they live inside the
 /// install folder because that is what the runtime reads, and a reinstall to
-/// the same path reuses them without re-downloading) and
+/// the same path reuses them without re-downloading),
 /// `<install>\gui\gui_cmnet2_settings.json` (the GUI settings the user
-/// configured — a reinstall resumes from them).
+/// configured — a reinstall resumes from them) and `<install>\config` (the
+/// pipeline configuration files, including configs the user added or edited —
+/// a reinstall compares them against the packaged ones and asks before
+/// replacing any).
 /// </summary>
 public static class InstallTreeCleanup
 {
@@ -49,6 +52,7 @@ public static class InstallTreeCleanup
 
         string comfyDir = Path.Combine(installDir, "comfy_bridge");
         string guiDir = Path.Combine(installDir, "gui");
+        string configDir = Path.Combine(installDir, "config");
         string keepModels = Path.Combine(installDir, "comfy_bridge", "models");
         string keepSettings = Path.Combine(installDir, "gui", "gui_cmnet2_settings.json");
         foreach (string entry in Directory.GetFileSystemEntries(installDir))
@@ -61,6 +65,10 @@ public static class InstallTreeCleanup
             else if (string.Equals(full, Path.GetFullPath(guiDir), StringComparison.OrdinalIgnoreCase))
             {
                 DeleteChildrenExcept(guiDir, keepSettings);
+            }
+            else if (string.Equals(full, Path.GetFullPath(configDir), StringComparison.OrdinalIgnoreCase))
+            {
+                // <install>\config — pipeline configurations, kept whole.
             }
             else
             {

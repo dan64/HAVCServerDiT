@@ -171,6 +171,13 @@ temp/
 *.gguf
 *.safetensors
 
+# Bundled external tools (downloaded by the installer; the repo keeps only placeholders)
+GUI/tools/*
+!GUI/tools/.gitkeep
+!GUI/tools/*/
+GUI/tools/*/*
+!GUI/tools/*/.gitkeep
+
 # .NET / Visual Studio (HAVC Manager)
 manager/**/bin/
 manager/**/obj/
@@ -179,9 +186,13 @@ manager/.vs/
 
 # Agent session files
 .codewhale/
+.commandcode/
+.deepseek/
+.pi/
 
-# Private working memory (agents/sessions) - never publish
+# Private local documents - never publish
 /AGENTS.md
+/MANUAL_INSTALLER.md
 
 # Private installer specifications (Italian) - never publish
 /installer/PHASE0_SPEC.md

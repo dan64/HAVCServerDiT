@@ -2134,7 +2134,8 @@ layout = [
 ]
 
 window = sg.Window("HAVC DiT Server GUI", layout, finalize=True,
-                   resizable=True, size=(cfg["window_w"], cfg["window_h"]))
+                   resizable=True, size=(cfg["window_w"], cfg["window_h"]),
+                   enable_close_attempted_event=True)
 
 # ---- Drag‑and‑drop for Fix Image tab ----
 def _handle_drop(event):
@@ -2553,12 +2554,45 @@ def _fixv_recolor_thread(values, window):
         state["fixv_is_running"] = False
         state["current_process"] = None
 
+# ---------------------------------------------------------------------------
+# CLOSE CONFIRMATION (window X)
+# ---------------------------------------------------------------------------
+def _confirm_close():
+    """Ask for confirmation before closing from the window X.
+
+    enable_close_attempted_event=True makes the X return
+    -WINDOW CLOSE ATTEMPTED- instead of destroying the window: the event
+    loop runs this dialog and proceeds with the normal shutdown only when
+    the user confirms.  When something is running the text says it
+    explicitly, because closing stops it.  The "Exit" button keeps closing
+    directly (it is already a deliberate gesture).
+    """
+    handle = state.get("server_handle") or {}
+    proc = handle.get("proc")
+    server_on = bool(proc is not None and proc.poll() is None)
+    job_on = bool(state.get("current_process") or state.get("fixv_is_running")
+                  or state.get("is_running"))
+    text = "Close HAVC?"
+    if job_on or server_on:
+        lines = []
+        if job_on:
+            lines.append("A running job will be stopped.")
+        if server_on:
+            lines.append("The managed server will be shut down.")
+        text += "\n\n" + "\n".join(lines)
+    return sg.popup_yes_no(text, title="Confirm exit") == "Yes"
+
+
 # ===========================================================================
 # EVENT LOOP
 # ===========================================================================
 while True:
     event, values = window.read()
-    if event in (sg.WIN_CLOSED, "Exit"):
+    if event in (sg.WIN_CLOSED, sg.WIN_CLOSE_ATTEMPTED_EVENT, "Exit"):
+        # X: confirm first (enable_close_attempted_event=True turned the
+        # click into this event instead of destroying the window).
+        if event == sg.WIN_CLOSE_ATTEMPTED_EVENT and not _confirm_close():
+            continue
         if state["current_process"]:
             state["current_process"].terminate()
         handle = state.get("server_handle")

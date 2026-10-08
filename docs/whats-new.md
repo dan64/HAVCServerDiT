@@ -1,5 +1,22 @@
 # What's New
 
+### 2026-10-08 — Closing the app asks for confirmation; a pending shutdown is cancelled (GUI)
+
+Clicking the window **X** now asks before closing, and the dialog spells out
+what is at stake: a running job will be stopped, the GUI-managed server will
+be shut down, and/or a scheduled shutdown will be cancelled. The explicit
+**Exit** button keeps closing directly.
+
+**Shutdown PC when finished** schedules `shutdown /s /t 60` at the end of a
+pipeline; if you close the app before it fires, that pending shutdown is now
+**cancelled** (`shutdown /a`) — previously it stayed queued and the PC would
+power off even after the app was closed.
+
+Also fixed (regression from 2.3.0): dropping a file in **Input Video** while
+an encoding/recolor was running could kill the running job with a `main
+thread is not in main loop` error; widget updates and reads from the worker
+threads now travel through the window's own event queue.
+
 ### 2026-10-08 — Dashboard: pick the video with "Input Video" (GUI)
 
 The Dashboard has a new **Input Video** field — drag & drop the video onto

@@ -15,11 +15,6 @@ from comfy.ldm.lightricks.model import TimestepEmbedding
 from comfy.ldm.modules.attention import ComfyAttention, optimized_attention
 from comfy.ldm.wan.model_animate2 import PoseBranchCache
 
-try:  # optional dev profiling hooks (HAVC_VIGGLE_PROFILE=1; see VIGGLE_FAST.md)
-    from comfy_bridge import viggle_profile
-except Exception:  # the bridge package is absent in trimmed checkouts
-    viggle_profile = None
-
 
 class ZeroCenteredRMSNorm(nn.Module):
     # stored weight is scale - 1, applied in fp32
@@ -247,15 +242,10 @@ class QwenImage21Transformer2DModel(nn.Module):
     def select_prefix_cache(self, key, cache_bytes, device, options):
         # returns (cache with the slot to read or fill selected, whether the slot is filled), or (None, False) to recompute
         if options.get("device") == "off":
-            if viggle_profile is not None:
-                viggle_profile.mark_cache("off", dtype=options.get("dtype", "default"))
             return None, False
         cache = self.prefix_cache
         if cache is not None and cache.select(key, create=False):
-            filled = cache.filled(len(self.transformer_blocks))
-            if viggle_profile is not None:
-                viggle_profile.mark_cache("reuse" if filled else "resume", store=cache.store_device, dtype=cache.dtype)
-            return cache, filled
+            return cache, cache.filled(len(self.transformer_blocks))
         dtype = options.get("dtype", "default")
         cache_bytes //= {"int8": 2, "int4": 4}.get(dtype, 1)
         if cache is None:
@@ -267,20 +257,14 @@ class QwenImage21Transformer2DModel(nn.Module):
                 elif comfy.model_management.ensure_pin_budget(cache_bytes, evict_active=False):
                     store = torch.device("cpu")
                 else:
-                    if viggle_profile is not None:
-                        viggle_profile.mark_cache("recompute", dtype=dtype)
                     return None, False
             else:
                 store = device if store == "gpu" else torch.device("cpu")
             cache = self.prefix_cache = PoseBranchCache(store_device=store, dtype=dtype)
         if not (self.current_patcher.get_free_memory(device) > 2 * cache_bytes if cache.store_device == device else comfy.model_management.ensure_pin_budget(cache_bytes, evict_active=False)):
             # no room for this slot: recompute rather than evict the other cond's slot every step
-            if viggle_profile is not None:
-                viggle_profile.mark_cache("recompute", store=cache.store_device, dtype=cache.dtype)
             return None, False
         cache.select(key)
-        if viggle_profile is not None:
-            viggle_profile.mark_cache("fill", store=cache.store_device, dtype=cache.dtype, size=cache_bytes)
         return cache, False
 
     def build_sequence(self, x, context, ref_latents, image_slots):

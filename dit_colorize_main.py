@@ -651,7 +651,7 @@ def encode_frame_te(pipe, img_path, te_dir, stem, prompt, resolution: int = 1024
 
     res = comfy_bridge.encode_viggle_conditioning(
         pipe, img_in, prompt, resolution=resolution,
-        enhance_prompt=enhance_prompt, label=f"te:{stem}")
+        enhance_prompt=enhance_prompt)
     comfy_bridge.save_viggle_conditioning(
         te_path, res["conditioning"], res["latent"],
         prompt=res["prompt"], prompt_original=prompt,
@@ -698,10 +698,9 @@ def colorize_frame_from_te(pipe, te_dir, stem, out_path, steps: int = 2, seed: i
                 "msg": "no conditioning cached"}
 
     t0 = time.perf_counter()
-    loaded = comfy_bridge.load_viggle_conditioning(te_path, label=f"load:{stem}")
+    loaded = comfy_bridge.load_viggle_conditioning(te_path)
     colorized_lowres = comfy_bridge.colorize_viggle_from_conditioning(
-        pipe, loaded["conditioning"], loaded["latent"], steps=steps, seed=seed,
-        label=f"infer:{stem}")
+        pipe, loaded["conditioning"], loaded["latent"], steps=steps, seed=seed)
     meta = loaded["meta"]
     try:
         orig_size = (int(meta.get("orig_width")), int(meta.get("orig_height")))

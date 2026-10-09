@@ -8,7 +8,6 @@ from PIL import Image
 
 # Bootstrap: make comfy_bridge importable as top-level
 from . import _bootstrap
-from . import viggle_profile
 
 # Silence verbose backend logs
 logging.getLogger("comfy_kitchen").setLevel(logging.WARNING)
@@ -507,33 +506,29 @@ def _viggle_sample_decode(pipeline, conditioning, latent_dict, steps, seed):
         logger.warning("colorize_viggle: no sigma schedule defined for steps=%s, falling back to 6 (native)", steps)
         sigma_nodes = _VIGGLE_SIGMA_NODES_6
 
-    with viggle_profile.phase("setup"):
-        cached_model = get_value_at_index(
-            QwenImage21Cache().EXECUTE_NORMALIZED(model=pipeline["model"], device="auto", dtype="default"), 0)
-        guider = get_value_at_index(
-            BasicGuider().EXECUTE_NORMALIZED(model=cached_model, conditioning=conditioning), 0)
-        noise = get_value_at_index(RandomNoise().EXECUTE_NORMALIZED(noise_seed=seed), 0)
-        sampler = get_value_at_index(KSamplerSelect().EXECUTE_NORMALIZED(sampler_name="euler"), 0)
-        sigmas = get_value_at_index(
-            ViggleTurboSigmas().get_sigmas(nodes=sigma_nodes, latent=latent_dict), 0)
+    cached_model = get_value_at_index(
+        QwenImage21Cache().EXECUTE_NORMALIZED(model=pipeline["model"], device="auto", dtype="default"), 0)
+    guider = get_value_at_index(
+        BasicGuider().EXECUTE_NORMALIZED(model=cached_model, conditioning=conditioning), 0)
+    noise = get_value_at_index(RandomNoise().EXECUTE_NORMALIZED(noise_seed=seed), 0)
+    sampler = get_value_at_index(KSamplerSelect().EXECUTE_NORMALIZED(sampler_name="euler"), 0)
+    sigmas = get_value_at_index(
+        ViggleTurboSigmas().get_sigmas(nodes=sigma_nodes, latent=latent_dict), 0)
 
-    with viggle_profile.phase("sampling"):
-        sampled = SamplerCustomAdvanced().EXECUTE_NORMALIZED(
-            noise=noise, guider=guider, sampler=sampler, sigmas=sigmas, latent_image=latent_dict)
-        latent_samples = get_value_at_index(sampled, 0)
+    sampled = SamplerCustomAdvanced().EXECUTE_NORMALIZED(
+        noise=noise, guider=guider, sampler=sampler, sigmas=sigmas, latent_image=latent_dict)
+    latent_samples = get_value_at_index(sampled, 0)
 
-    with viggle_profile.phase("decode"):
-        img_decoded = cn.VAEDecode().decode(samples=latent_samples, vae=pipeline["vae"])
-        img_t = get_value_at_index(img_decoded, 0)
+    img_decoded = cn.VAEDecode().decode(samples=latent_samples, vae=pipeline["vae"])
+    img_t = get_value_at_index(img_decoded, 0)
 
-    with viggle_profile.phase("post"):
-        if img_t.ndim == 4:
-            img_np = img_t[0].cpu().float().numpy()
-        else:
-            img_np = img_t.cpu().float().numpy()
-        img_np = np.clip(img_np, 0, 1)
-        img_np = img_np[..., :3]  # the Qwen-Image-2.1 VAE decode has an extra 4th channel, drop it (RGB only)
-        return Image.fromarray((img_np * 255).astype(np.uint8))
+    if img_t.ndim == 4:
+        img_np = img_t[0].cpu().float().numpy()
+    else:
+        img_np = img_t.cpu().float().numpy()
+    img_np = np.clip(img_np, 0, 1)
+    img_np = img_np[..., :3]  # the Qwen-Image-2.1 VAE decode has an extra 4th channel, drop it (RGB only)
+    return Image.fromarray((img_np * 255).astype(np.uint8))
 
 
 def _viggle_encode_positive(pipeline, img_tensor, prompt, resolution):
@@ -584,33 +579,27 @@ def colorize_viggle(pipeline, image, prompt, steps=6, seed=42, enhance_prompt=Fa
     the LoRA's native step count. A `steps` value with no matching schedule
     falls back to the 6-step schedule.
     """
-    viggle_profile.start_run(steps=steps, resolution=resolution)
-
     with torch.inference_mode():
-        with viggle_profile.phase("prep"):
-            img_np = np.array(image.convert("RGB")).astype(np.float32) / 255.0
-            img_tensor = torch.from_numpy(img_np).unsqueeze(0)
+        img_np = np.array(image.convert("RGB")).astype(np.float32) / 255.0
+        img_tensor = torch.from_numpy(img_np).unsqueeze(0)
 
         if enhance_prompt:
-            with viggle_profile.phase("enhance"):
-                try:
-                    prompt = _viggle_enhance_prompt(pipeline["clip"], img_tensor, prompt, seed=seed)
-                except Exception:
-                    logger.exception("colorize_viggle: prompt enhancement failed, using the original prompt")
+            try:
+                prompt = _viggle_enhance_prompt(pipeline["clip"], img_tensor, prompt, seed=seed)
+            except Exception:
+                logger.exception("colorize_viggle: prompt enhancement failed, using the original prompt")
 
         # positive branch only: the node's negative pass was never consumed
         # downstream (BasicGuider/Guider_Basic injects the "positive" cond
         # alone -- CFG-off, distilled/turbo mode), so it is skipped entirely.
-        with viggle_profile.phase("encode"):
-            positive, latent_dict = _viggle_encode_positive(pipeline, img_tensor, prompt, resolution)
+        positive, latent_dict = _viggle_encode_positive(pipeline, img_tensor, prompt, resolution)
 
         result = _viggle_sample_decode(pipeline, positive, latent_dict, steps, seed)
 
-    viggle_profile.end_run()
     return result
 
 
-def encode_viggle_conditioning(pipeline, image, prompt, resolution=1024, enhance_prompt=False, seed=42, label=None):
+def encode_viggle_conditioning(pipeline, image, prompt, resolution=1024, enhance_prompt=False, seed=42):
     """Compute the viggle text-encoder conditioning for one image (phase A of
     the split-colorize flow): the positive conditioning + the empty latent,
     exactly as TextEncodeQwenImage21.execute() produces them.
@@ -622,34 +611,26 @@ def encode_viggle_conditioning(pipeline, image, prompt, resolution=1024, enhance
     colorize_viggle), so the negative output was never read. Returns
     {"conditioning": ..., "latent": ..., "prompt": effective_prompt}.
     """
-    viggle_profile.start_run(label=label, resolution=resolution)
-
     with torch.inference_mode():
-        with viggle_profile.phase("prep"):
-            img_np = np.array(image.convert("RGB")).astype(np.float32) / 255.0
-            img_tensor = torch.from_numpy(img_np).unsqueeze(0)
+        img_np = np.array(image.convert("RGB")).astype(np.float32) / 255.0
+        img_tensor = torch.from_numpy(img_np).unsqueeze(0)
 
         if enhance_prompt:
-            with viggle_profile.phase("enhance"):
-                try:
-                    prompt = _viggle_enhance_prompt(pipeline["clip"], img_tensor, prompt, seed=seed)
-                except Exception:
-                    logger.exception("encode_viggle_conditioning: prompt enhancement failed, using the original prompt")
+            try:
+                prompt = _viggle_enhance_prompt(pipeline["clip"], img_tensor, prompt, seed=seed)
+            except Exception:
+                logger.exception("encode_viggle_conditioning: prompt enhancement failed, using the original prompt")
 
-        with viggle_profile.phase("encode"):
-            positive, latent_dict = _viggle_encode_positive(pipeline, img_tensor, prompt, resolution)
+        positive, latent_dict = _viggle_encode_positive(pipeline, img_tensor, prompt, resolution)
 
-    viggle_profile.end_run()
     return {"conditioning": positive, "latent": latent_dict, "prompt": prompt}
 
 
-def colorize_viggle_from_conditioning(pipeline, conditioning, latent_dict, steps=6, seed=42, label=None):
+def colorize_viggle_from_conditioning(pipeline, conditioning, latent_dict, steps=6, seed=42):
     """Sample + decode one image from a precomputed viggle conditioning (phase
     B of the split-colorize flow). Returns the colorized PIL image."""
-    viggle_profile.start_run(label=label, steps=steps)
     with torch.inference_mode():
         result = _viggle_sample_decode(pipeline, conditioning, latent_dict, steps, seed)
-    viggle_profile.end_run()
     return result
 
 
@@ -689,35 +670,29 @@ def save_viggle_conditioning(path, conditioning, latent_dict, prompt="", prompt_
     return metadata
 
 
-def load_viggle_conditioning(path, label=None):
+def load_viggle_conditioning(path):
     """Load a conditioning saved by save_viggle_conditioning().
 
     Returns {"conditioning", "latent", "meta"}: the conditioning rebuilt in
     the same structure the live path hands to the sampler, with the empty
-    latent rebuilt from the reference latent's shape. `label` is the profiler
-    run label.
+    latent rebuilt from the reference latent's shape.
     """
     import comfy.model_management
     from safetensors import safe_open
 
-    viggle_profile.start_run(label=label)
+    with safe_open(path, framework="pt", device="cpu") as f:
+        tensors = {k: f.get_tensor(k) for k in f.keys()}
+        meta = dict(f.metadata() or {})
 
-    with viggle_profile.phase("load"):
-        with safe_open(path, framework="pt", device="cpu") as f:
-            tensors = {k: f.get_tensor(k) for k in f.keys()}
-            meta = dict(f.metadata() or {})
+    device = comfy.model_management.get_torch_device()
+    context = tensors["context"].to(device)
+    reference_latent = tensors["reference_latent"].to(device)
+    slots = json.loads(meta.get("image_slots", "[]"))
+    conditioning = [[context, {
+        "pooled_output": None,
+        "image_slots": slots,
+        "reference_latents": [reference_latent],
+    }]]
+    latent_dict = {"samples": torch.zeros_like(reference_latent)}
 
-    with viggle_profile.phase("build"):
-        device = comfy.model_management.get_torch_device()
-        context = tensors["context"].to(device)
-        reference_latent = tensors["reference_latent"].to(device)
-        slots = json.loads(meta.get("image_slots", "[]"))
-        conditioning = [[context, {
-            "pooled_output": None,
-            "image_slots": slots,
-            "reference_latents": [reference_latent],
-        }]]
-        latent_dict = {"samples": torch.zeros_like(reference_latent)}
-
-    viggle_profile.end_run()
     return {"conditioning": conditioning, "latent": latent_dict, "meta": meta}

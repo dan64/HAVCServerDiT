@@ -199,6 +199,7 @@ class ColorizeService:
     def __init__(self):
         self._pipeline = None
         self._pipeline_model_name = ""
+        self._pipeline_config_name = ""          # config file (stem) the pipeline was loaded from, when known
         self._pipeline_lock = threading.Lock()   # guards pipeline loading
 
     # ------------------------------------------------------------------
@@ -309,6 +310,7 @@ class ColorizeService:
 
                 self._pipeline = pipe
                 self._pipeline_model_name = model_name
+                self._pipeline_config_name = ""
                 logging.info("Pipeline loaded successfully.")
                 return {"ok": True, "msg": "Pipeline loaded successfully"}
 
@@ -342,7 +344,13 @@ class ColorizeService:
             logging.error(str(exc))
             return {"ok": False, "msg": str(exc)}
         logging.info(f"Loading pipeline from config: {path}")
-        return _load_pipeline_from_parsed(self, cfg, cache_dir)
+        result = _load_pipeline_from_parsed(self, cfg, cache_dir)
+        if result.get("ok"):
+            # Remember the config file (stem): the split-colorize cache key must
+            # tell apart configs that share a model_name but load a different
+            # text encoder (e.g. GGUF vs int8 for the same UNet).
+            self._pipeline_config_name = name[:-len(".json")]
+        return result
 
     def is_pipeline_loaded(self) -> bool:
         """Return True if the pipeline is already in memory."""
@@ -356,6 +364,7 @@ class ColorizeService:
         """Release the pipeline from VRAM (useful for debugging / reset)."""
         with self._pipeline_lock:
             self._pipeline = None
+            self._pipeline_config_name = ""
             logging.info("Pipeline unloaded from memory.")
             return {"ok": True, "msg": "Pipeline unloaded"}
 
@@ -445,7 +454,7 @@ class ColorizeService:
                 self._pipeline, str(in_dir), str(out_dir), str(prompt),
                 resolution=int(resolution), img_size=int(img_size),
                 enhance_prompt=bool(enhance_prompt),
-                model_config=self._pipeline_model_name or "")
+                model_config=(self._pipeline_config_name or self._pipeline_model_name or ""))
             logging.info("encode_frames_te: %s encoded, %s skipped, %.2fs",
                          res.get("count"), res.get("skipped"), res.get("elapsed", 0.0))
             return res

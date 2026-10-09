@@ -484,6 +484,65 @@ class ColorizeService:
             logging.exception("colorize_frames_from_te failed")
             return {"ok": False, "count": 0, "skipped": 0, "elapsed": 0.0, "msg": str(e)}
 
+    def encode_frame_te(self, in_path: str, te_dir: str, stem: str, prompt: str,
+                        resolution: int = 1024, img_size: int = 0,
+                        enhance_prompt: bool = False, first: bool = False) -> dict:
+        """Phase A (single frame) of the split colorize: cache the conditioning
+        of one frame under te_dir/<stem>.safetensors; first=True drops the
+        loaded models so the TE + VAE start clean. Already-cached frames are
+        skipped (resume). The GUI drives this frame by frame, in chunks, so
+        progress and cancel stay responsive.
+        """
+        if self._pipeline is None:
+            return {"ok": False, "skipped": False, "elapsed": 0.0, "msg": "Pipeline not loaded"}
+        try:
+            from dit_colorize_main import encode_frame_te as _encode_frame_te
+            res = _encode_frame_te(
+                self._pipeline, str(in_path), str(te_dir), str(stem), str(prompt),
+                resolution=int(resolution), img_size=int(img_size),
+                enhance_prompt=bool(enhance_prompt), first=bool(first),
+                model_config=(self._pipeline_config_name or self._pipeline_model_name or ""))
+            logging.info("encode_frame_te: %s skipped=%s %.2fs",
+                         stem, res.get("skipped"), res.get("elapsed", 0.0))
+            return res
+        except Exception as e:
+            logging.exception("encode_frame_te failed")
+            return {"ok": False, "skipped": False, "elapsed": 0.0, "msg": str(e)}
+
+    def colorize_frame_from_te(self, te_dir: str, stem: str, out_path: str,
+                               steps: int = 2, seed: int = 42, first: bool = False) -> dict:
+        """Phase B (single frame) of the split colorize: sample + decode one
+        cached conditioning into out_path; first=True drops the loaded models
+        so the UNet + VAE start clean. Existing outputs are skipped (resume).
+        """
+        if self._pipeline is None:
+            return {"ok": False, "skipped": False, "elapsed": 0.0, "msg": "Pipeline not loaded"}
+        try:
+            from dit_colorize_main import colorize_frame_from_te as _colorize_frame_from_te
+            res = _colorize_frame_from_te(
+                self._pipeline, str(te_dir), str(stem), str(out_path),
+                steps=int(steps), seed=int(seed), first=bool(first))
+            logging.info("colorize_frame_from_te: %s skipped=%s %.2fs",
+                         stem, res.get("skipped"), res.get("elapsed", 0.0))
+            return res
+        except Exception as e:
+            logging.exception("colorize_frame_from_te failed")
+            return {"ok": False, "skipped": False, "elapsed": 0.0, "msg": str(e)}
+
+    def cleanup_te_cache(self, te_dir: str) -> dict:
+        """Delete the conditioning cache of a colorized chunk (the manifest is
+        reset, keeping its key fields): the split flow only needs the cache
+        while the chunk's frames are being colorized.
+        """
+        try:
+            from dit_colorize_main import cleanup_te_cache as _cleanup_te_cache
+            res = _cleanup_te_cache(str(te_dir))
+            logging.info("cleanup_te_cache: %s file(s) removed", res.get("count"))
+            return res
+        except Exception as e:
+            logging.exception("cleanup_te_cache failed")
+            return {"ok": False, "count": 0, "msg": str(e)}
+
     # ------------------------------------------------------------------
     # Colorization: image pair (fast/paired mode, filesystem-based)
     # ------------------------------------------------------------------

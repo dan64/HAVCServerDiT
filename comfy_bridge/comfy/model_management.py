@@ -37,6 +37,11 @@ import comfy_aimdo.host_buffer
 import comfy_aimdo.vram_buffer
 from comfy.internal_logging import detail
 
+try:  # optional dev profiling hooks (HAVC_VIGGLE_PROFILE=1; see VIGGLE_FAST.md)
+    from comfy_bridge import viggle_profile
+except Exception:  # the bridge package is absent in trimmed checkouts
+    viggle_profile = None
+
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from comfy.model_patcher import ModelPatcher
@@ -939,6 +944,8 @@ def free_memory(memory_required, device, keep_loaded=[], for_dynamic=False, pins
 def load_models_gpu(models, memory_required=0, force_patch_weights=False, minimum_memory_required=None, force_full_load=False):
     cleanup_models_gc()
     global vram_state
+    _profile_t0 = viggle_profile.load_begin() if viggle_profile is not None else None
+    _profile_names = [] if _profile_t0 is not None else None
 
     inference_memory = minimum_inference_memory()
     extra_mem = max(inference_memory, memory_required + extra_reserved_memory())
@@ -976,6 +983,8 @@ def load_models_gpu(models, memory_required=0, force_patch_weights=False, minimu
         else:
             if hasattr(x, "model"):
                 logging.info(f"Requested to load {x.model.__class__.__name__}")
+                if _profile_names is not None:
+                    _profile_names.append(x.model.__class__.__name__)
             models_to_load.append(loaded_model)
 
     for loaded_model in models_to_load:
@@ -1036,6 +1045,8 @@ def load_models_gpu(models, memory_required=0, force_patch_weights=False, minimu
         ram_used = model.loaded_ram_size() if model.is_dynamic() else loaded_model.model_memory() - vram_used
         detail("Model loaded: patcher=%s model=%s ram_mb=%.1f vram_mb=%.1f", model.__class__.__name__, model.model.__class__.__name__, ram_used / (1024 ** 2), vram_used / (1024 ** 2))
         current_loaded_models.insert(0, loaded_model)
+    if _profile_t0 is not None:
+        viggle_profile.load_end(_profile_t0, _profile_names)
     return
 
 def load_model_gpu(model):

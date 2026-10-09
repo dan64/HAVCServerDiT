@@ -8,6 +8,7 @@ from PIL import Image
 
 # Bootstrap: make comfy_bridge importable as top-level
 from . import _bootstrap
+from . import viggle_profile
 
 # Silence verbose backend logs
 logging.getLogger("comfy_kitchen").setLevel(logging.WARNING)
@@ -504,50 +505,61 @@ def colorize_viggle(pipeline, image, prompt, steps=6, seed=42, enhance_prompt=Fa
     import importlib
     ViggleTurboSigmas = importlib.import_module("viggle_turbo").ViggleTurboSigmas
 
+    viggle_profile.start_run(steps=steps, resolution=resolution)
+
     with torch.inference_mode():
-        img_np = np.array(image.convert("RGB")).astype(np.float32) / 255.0
-        img_tensor = torch.from_numpy(img_np).unsqueeze(0)
+        with viggle_profile.phase("prep"):
+            img_np = np.array(image.convert("RGB")).astype(np.float32) / 255.0
+            img_tensor = torch.from_numpy(img_np).unsqueeze(0)
 
         if enhance_prompt:
-            try:
-                prompt = _viggle_enhance_prompt(pipeline["clip"], img_tensor, prompt, seed=seed)
-            except Exception:
-                logger.exception("colorize_viggle: prompt enhancement failed, using the original prompt")
+            with viggle_profile.phase("enhance"):
+                try:
+                    prompt = _viggle_enhance_prompt(pipeline["clip"], img_tensor, prompt, seed=seed)
+                except Exception:
+                    logger.exception("colorize_viggle: prompt enhancement failed, using the original prompt")
 
         # negative_prompt is a required input on this node but is never consumed
         # downstream: BasicGuider/Guider_Basic only injects the "positive" cond
         # (no CFG, distilled/turbo mode).
-        text_out = TextEncodeQwenImage21().EXECUTE_NORMALIZED(
-            clip=pipeline["clip"],
-            prompt=prompt,
-            negative_prompt="",
-            vae=pipeline["vae"],
-            resolution=resolution,
-            images={"image_1": img_tensor},
-        )
-        positive = get_value_at_index(text_out, 0)
-        latent_dict = get_value_at_index(text_out, 2)
+        with viggle_profile.phase("encode"):
+            text_out = TextEncodeQwenImage21().EXECUTE_NORMALIZED(
+                clip=pipeline["clip"],
+                prompt=prompt,
+                negative_prompt="",
+                vae=pipeline["vae"],
+                resolution=resolution,
+                images={"image_1": img_tensor},
+            )
+            positive = get_value_at_index(text_out, 0)
+            latent_dict = get_value_at_index(text_out, 2)
 
-        cached_model = get_value_at_index(
-            QwenImage21Cache().EXECUTE_NORMALIZED(model=pipeline["model"], device="auto", dtype="default"), 0)
-        guider = get_value_at_index(
-            BasicGuider().EXECUTE_NORMALIZED(model=cached_model, conditioning=positive), 0)
-        noise = get_value_at_index(RandomNoise().EXECUTE_NORMALIZED(noise_seed=seed), 0)
-        sampler = get_value_at_index(KSamplerSelect().EXECUTE_NORMALIZED(sampler_name="euler"), 0)
-        sigmas = get_value_at_index(
-            ViggleTurboSigmas().get_sigmas(nodes=sigma_nodes, latent=latent_dict), 0)
+        with viggle_profile.phase("setup"):
+            cached_model = get_value_at_index(
+                QwenImage21Cache().EXECUTE_NORMALIZED(model=pipeline["model"], device="auto", dtype="default"), 0)
+            guider = get_value_at_index(
+                BasicGuider().EXECUTE_NORMALIZED(model=cached_model, conditioning=positive), 0)
+            noise = get_value_at_index(RandomNoise().EXECUTE_NORMALIZED(noise_seed=seed), 0)
+            sampler = get_value_at_index(KSamplerSelect().EXECUTE_NORMALIZED(sampler_name="euler"), 0)
+            sigmas = get_value_at_index(
+                ViggleTurboSigmas().get_sigmas(nodes=sigma_nodes, latent=latent_dict), 0)
 
-        sampled = SamplerCustomAdvanced().EXECUTE_NORMALIZED(
-            noise=noise, guider=guider, sampler=sampler, sigmas=sigmas, latent_image=latent_dict)
-        latent_samples = get_value_at_index(sampled, 0)
+        with viggle_profile.phase("sampling"):
+            sampled = SamplerCustomAdvanced().EXECUTE_NORMALIZED(
+                noise=noise, guider=guider, sampler=sampler, sigmas=sigmas, latent_image=latent_dict)
+            latent_samples = get_value_at_index(sampled, 0)
 
-        img_decoded = cn.VAEDecode().decode(samples=latent_samples, vae=pipeline["vae"])
-        img_t = get_value_at_index(img_decoded, 0)
+        with viggle_profile.phase("decode"):
+            img_decoded = cn.VAEDecode().decode(samples=latent_samples, vae=pipeline["vae"])
+            img_t = get_value_at_index(img_decoded, 0)
 
-    if img_t.ndim == 4:
-        img_np = img_t[0].cpu().float().numpy()
-    else:
-        img_np = img_t.cpu().float().numpy()
-    img_np = np.clip(img_np, 0, 1)
-    img_np = img_np[..., :3]  # the Qwen-Image-2.1 VAE decode has an extra 4th channel, drop it (RGB only)
-    return Image.fromarray((img_np * 255).astype(np.uint8))
+    with viggle_profile.phase("post"):
+        if img_t.ndim == 4:
+            img_np = img_t[0].cpu().float().numpy()
+        else:
+            img_np = img_t.cpu().float().numpy()
+        img_np = np.clip(img_np, 0, 1)
+        img_np = img_np[..., :3]  # the Qwen-Image-2.1 VAE decode has an extra 4th channel, drop it (RGB only)
+        result = Image.fromarray((img_np * 255).astype(np.uint8))
+    viggle_profile.end_run()
+    return result

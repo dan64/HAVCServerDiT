@@ -146,6 +146,24 @@ class CMNET2RpcClient:
         return self._proxy_slow.colorize_single_image(
             str(img_path), str(out_dir), prompt, steps, enhance_prompt)
 
+    # ---- split colorize (qwen21-viggle Fast Pipeline) ----
+    def encode_frame_te(self, in_path, te_dir, stem, prompt, resolution=1024,
+                        img_size=0, enhance_prompt=False, first=False) -> dict:
+        """Phase A, single frame: cache the conditioning of one frame."""
+        return self._proxy_slow.encode_frame_te(
+            str(in_path), str(te_dir), str(stem), prompt, resolution, img_size,
+            bool(enhance_prompt), bool(first))
+
+    def colorize_frame_from_te(self, te_dir, stem, out_path, steps=2, seed=42,
+                               first=False) -> dict:
+        """Phase B, single frame: sample + decode one cached conditioning."""
+        return self._proxy_slow.colorize_frame_from_te(
+            str(te_dir), str(stem), str(out_path), steps, seed, bool(first))
+
+    def cleanup_te_cache(self, te_dir) -> dict:
+        """Drop the conditioning files of a colorized chunk."""
+        return self._proxy_slow.cleanup_te_cache(str(te_dir))
+
 
 # ---------------------------------------------------------------------------
 # CONFIGURATION MANAGEMENT
@@ -1058,7 +1076,193 @@ def orchestrator(init_values, window):
                 f"🎉 Done! {count} images in {tot_time:.2f}s "
                 f"({tot_time / count:.2f}s/image)")
 
-    # ---- STEP 2b: COLORIZE FAST (paired) ----
+    # ---- STEP 2b: COLORIZE FAST (paired / qwen21-viggle split) ----
+    def do_colorize_split(values, window):
+        """Fast Pipeline for the qwen21-viggle family: split colorize in chunks.
+
+        Every chunk runs phase A (TE + VAE resident: the frames are encoded and
+        their conditioning cached under ref_te/) and then phase B (UNet + VAE
+        resident: sample + decode from the cache), dropping the chunk's cache
+        files once its frames are colorized. A cancelled run keeps the cache,
+        so the next run resumes from the first missing frame.
+        """
+        rpc = state.get("rpc_client")
+        if rpc is None:
+            log_message("⚠️ No connection to RPC server.")
+            return
+
+        if not rpc.is_pipeline_loaded():
+            log_message("Loading AI pipeline on server...")
+            result = rpc.load_pipeline_from_config(
+                values["-MODEL_CONFIG-"], values["-CACHE_DIR-"])
+            if not result.get("ok"):
+                log_message(f"⚠️ Unable to load pipeline: {result.get('msg')}")
+                return
+            log_message(f"✅ Pipeline loaded: {result.get('msg')}")
+
+        rpc.clear_stop()
+
+        in_dir  = Path(values["-BASE_DIR-"]) / "ref_tht10"
+        out_dir = Path(values["-BASE_DIR-"]) / "ref_qwen"
+        te_dir  = Path(values["-BASE_DIR-"]) / "ref_te"
+        out_dir.mkdir(exist_ok=True)
+        te_dir.mkdir(exist_ok=True)
+
+        extensions = {".jpg", ".jpeg", ".png", ".bmp", ".tiff"}
+        out_stems  = {f.stem.lower() for f in out_dir.glob("*.jpg")}
+
+        if out_stems:
+            log_message(f"⚠️ {len(out_stems)} images already colorized — will be skipped.")
+
+        image_files = sorted([
+            f for f in in_dir.iterdir()
+            if f.suffix.lower() in extensions
+            and f.stem.lower() not in out_stems
+        ])
+        tot_num_images = len(image_files)
+        if tot_num_images == 0:
+            log_message("ℹ️ No images to colorize.")
+            return
+
+        prompt         = values["-PROMPT-"]
+        steps          = int(values.get("-STEPS-", cfg["steps"]))
+        enhance_prompt = values.get("-ENHANCE_PROMPT-", False)
+        seed           = 42
+        chunk_size     = 200
+
+        chunks = [image_files[i:i + chunk_size]
+                  for i in range(0, tot_num_images, chunk_size)]
+        log_message(f"ℹ️ {tot_num_images} images, {len(chunks)} chunk(s) of max "
+                    f"{chunk_size} — split colorize (TE cache, then infer).")
+
+        total_steps = 2 * tot_num_images   # one cache step + one infer step per frame
+        done_steps  = 0
+        infer_time  = 0.0
+        count       = 0
+        start_time  = time.time()
+        stopped        = False
+        skipped_by_user = False
+
+        def bump(label):
+            nonlocal done_steps
+            done_steps += 1
+            p = int((done_steps / total_steps) * 100)
+            window.write_event_value("-PROGRESS-", (p, f"{p}% {done_steps}/{total_steps}"))
+            eta = get_eta_string(done_steps, total_steps, start_time)
+            update_status(window, f"Status: ETA COLORIZE ({label}): {eta}...", "info")
+
+        try:
+            for chunk_idx, chunk in enumerate(chunks):
+                if state["stop_requested"]:
+                    stopped = True
+                    break
+                if not gui_get(window, values, "-DO_STEP3-", False):
+                    skipped_by_user = True
+                    break
+
+                log_message(f"ℹ️ Chunk {chunk_idx + 1}/{len(chunks)} — phase A: "
+                            f"caching TE conditioning ({len(chunk)} frames)...")
+
+                # phase A: TE + VAE resident, one cache file per frame
+                first = True
+                for img_path in chunk:
+                    if state["stop_requested"]:
+                        stopped = True
+                        break
+                    if not gui_get(window, values, "-DO_STEP3-", False):
+                        skipped_by_user = True
+                        break
+                    try:
+                        window.write_event_value(
+                            "-PREVIEW_BW-", Image.open(img_path).convert("RGB"))
+                        res = rpc.encode_frame_te(str(img_path), str(te_dir),
+                                                  img_path.stem, prompt, 1024, 0,
+                                                  enhance_prompt, first)
+                    except xmlrpc.client.Fault as e:
+                        log_message(f"RPC Fault on {img_path.name}: {e.faultString}")
+                        continue
+                    except Exception as e:
+                        log_message(f"Error on {img_path.name}: {e}")
+                        continue
+                    first = False
+                    if not res.get("ok"):
+                        log_message(f"⚠️ {img_path.name}: {res.get('msg')}")
+                        continue
+                    if res.get("skipped"):
+                        log_message(f"ℹ️ {img_path.name}: skipped (dark or already cached)")
+                    bump("TE")
+
+                if stopped or skipped_by_user:
+                    break
+
+                log_message(f"ℹ️ Chunk {chunk_idx + 1}/{len(chunks)} — phase B: colorizing...")
+
+                # phase B: UNet + VAE resident, sample from the cache
+                first = True
+                for img_path in chunk:
+                    if state["stop_requested"]:
+                        stopped = True
+                        break
+                    if not gui_get(window, values, "-DO_STEP3-", False):
+                        skipped_by_user = True
+                        break
+                    out_img_path = out_dir / (img_path.stem + ".jpg")
+                    try:
+                        res = rpc.colorize_frame_from_te(str(te_dir), img_path.stem,
+                                                         str(out_img_path), steps, seed, first)
+                    except xmlrpc.client.Fault as e:
+                        log_message(f"RPC Fault on {img_path.name}: {e.faultString}")
+                        continue
+                    except Exception as e:
+                        log_message(f"Error on {img_path.name}: {e}")
+                        continue
+                    first = False
+                    if not res.get("ok"):
+                        log_message(f"⚠️ {img_path.name}: {res.get('msg')}")
+                        continue
+                    elapsed = res.get("elapsed", 0.0)
+                    if res.get("skipped"):
+                        log_message(f'ℹ️ {img_path.name}: skipped '
+                                    f"({res.get('msg') or 'already colorized'})")
+                    else:
+                        count += 1
+                        infer_time += elapsed
+                        if elapsed > 0:
+                            log_gui_only(f"✅ Split: {img_path.name} [{elapsed:.2f}s/image]")
+                        if out_img_path.exists():
+                            window.write_event_value(
+                                "-PREVIEW_CLR-", Image.open(out_img_path).convert("RGB"))
+                    bump("INFER")
+
+                if stopped or skipped_by_user:
+                    break
+
+                res = rpc.cleanup_te_cache(str(te_dir))
+                if not res.get("ok"):
+                    log_message(f"⚠️ TE cache cleanup failed: {res.get('msg')}")
+                else:
+                    log_message(f"🧹 Chunk {chunk_idx + 1}/{len(chunks)}: "
+                                f"{res.get('count', 0)} TE cache file(s) removed.")
+        except Exception as e:
+            log_message(f"Error during split colorize: {e}")
+
+        if stopped:
+            rpc.request_stop()
+            update_status(window, "Status: cancelled", "warning")
+            log_message("⚠️ Colorize cancelled — the TE cache is kept for the next run.")
+            return
+        if skipped_by_user:
+            log_message("[COLORIZE] Task skipped by user.")
+            return
+
+        window.write_event_value("-PROGRESS-",
+                                 (100, f"100% {tot_num_images}/{tot_num_images}"))
+        update_status(window, "Status: OK", "info")
+        if count > 0:
+            log_message(
+                f"🎉 Done! {count} images in {infer_time:.2f}s "
+                f"({infer_time / count:.2f}s/image, infer only)")
+
     def do_colorize_fast(values, window):
         rpc = state.get("rpc_client")
         if rpc is None:
@@ -1071,6 +1275,12 @@ def orchestrator(init_values, window):
         # the two merged frames without eating into per-frame detail.
         model_type = (read_model_config(values["-MODEL_CONFIG-"]) or {}).get(
             "model_name", "")
+        if model_type == "qwen21-viggle":
+            # Fast Pipeline on the qwen21-viggle family runs the split flow
+            # (phase A: conditioning cache; phase B: sampling from the cache,
+            # in chunks of 200 frames) instead of the 1280px pair pass.
+            do_colorize_split(values, window)
+            return
         gap_px = 16 if model_type == "qwen21-viggle" else 8
 
         # Load pipeline if not already loaded
@@ -1578,8 +1788,8 @@ sc_ssim_values: list[str] = [f"{x/100:.2f}"  for x in range(0, 100, 5)]
 sc_int_values:  list[str] = [f"{x}" for x in range(5, 55, 5)]
 sc_mult_values: list[str] = [f"{x}" for x in range(0, 26, 1)]
 
-select_ssim_values:   list[str] = [f"{x/100:.2f}" for x in range(80, 101, 1)]
-select_window_values: list[str] = ["0", "10", "20", "30", "40", "50", "75", "100", "150", "200"]
+select_ssim_values:   list[str] = [f"{x/1000:.3f}" for x in range(900, 1000, 5)]
+select_window_values: list[str] = ["0", "5", "10", "15", "20", "25", "30", "40", "50", "75", "100", "150", "200"]
 
 # ---------------------------------------------------------------------------  
 # Fix Image helpers  
@@ -1880,7 +2090,7 @@ tab3_layout = [
           sg.Text("stopped", key="-SERVER_STATUS-", size=(45, 1), expand_x=True)],
         [sg.Text("Colorization Steps:"),
          sg.Combo(steps_values, default_value=cfg["steps"], key="-STEPS-", readonly=True, size=(6,1)),
-         sg.Checkbox("Fast Pipeline", key="-FAST_PIPE-", default=cfg["fast_pipe"])],
+         sg.Checkbox("Fast Pipeline", key="-FAST_PIPE-", default=cfg["fast_pipe"], tooltip="qwen21-viggle: cached-TE split flow; other models: paired 1280px pass")],
     ], expand_x=True)],
     [sg.Text("Prompt:"), sg.Multiline(cfg["prompt"], key="-PROMPT-", expand_x=True, size=(80,4), no_scrollbar=True),
      sg.Checkbox("Enhance Prompt", key="-ENHANCE_PROMPT-", default=cfg.get("enhance_prompt", False))],

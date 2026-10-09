@@ -559,6 +559,178 @@ def process_image_standard(pipe, original, output_path, prompt, img_size: int = 
 
     return t_end - t_start
 
+
+# ----------------------------
+# Split colorize (phase A/B): cached text-encoder conditioning
+# ----------------------------
+
+def encode_frames_te(pipe, in_dir, out_dir, prompt, resolution: int = 1024, img_size: int = 0,
+                     enhance_prompt: bool = False, model_config: str = "") -> dict:
+    """Phase A of the split colorize: precompute + cache the viggle text-encoder
+    conditioning for every image in in_dir, one .safetensors per frame plus a
+    manifest.json in out_dir.
+
+    The input preprocessing mirrors process_image_standard() (dark check,
+    desaturate, optional resize); the conditioning itself comes from
+    comfy_bridge.encode_viggle_conditioning(). The TE + VAE stay resident for
+    the whole batch, so no model movement happens per frame. Frames already
+    cached for the same prompt/settings are skipped: a cancelled run resumes.
+
+    Returns {"ok", "count", "skipped", "elapsed", "msg"}.
+    """
+    import json
+    import logging
+
+    import comfy.model_management
+
+    import comfy_bridge
+
+    logger = logging.getLogger(__name__)
+
+    os.makedirs(out_dir, exist_ok=True)
+    names = sorted(f for f in os.listdir(in_dir)
+                   if os.path.splitext(f)[1].lower() in (".png", ".jpg", ".jpeg"))
+    if not names:
+        return {"ok": False, "count": 0, "skipped": 0, "elapsed": 0.0,
+                "msg": f"no images found in {in_dir}"}
+
+    manifest_path = os.path.join(out_dir, "manifest.json")
+    cached = {}
+    if os.path.isfile(manifest_path):
+        try:
+            with open(manifest_path, encoding="utf-8") as fh:
+                old = json.load(fh)
+        except Exception:
+            old = None
+        if (old and old.get("prompt") == prompt and old.get("resolution") == resolution
+                and old.get("img_size") == img_size
+                and bool(old.get("enhance_prompt")) == bool(enhance_prompt)
+                and old.get("model_config") == model_config):
+            cached = dict(old.get("frames") or {})
+
+    # phase A wants the TE + VAE alone in VRAM: start from a clean slate
+    comfy.model_management.unload_all_models()
+
+    t0 = time.perf_counter()
+    count = skipped = 0
+    entries = {}
+    for name in names:
+        stem = os.path.splitext(name)[0]
+        src = os.path.join(in_dir, name)
+        te_path = os.path.join(out_dir, stem + ".safetensors")
+        mtime = os.path.getmtime(src)
+        prev = cached.get(stem)
+        if prev and prev.get("mtime") == mtime and os.path.isfile(te_path):
+            entries[stem] = prev
+            skipped += 1
+            continue
+
+        original = Image.open(src).convert("RGB")
+        if is_image_dark(original, threshold=9):
+            logger.info("encode_frames_te: too dark, skipped: %s", name)
+            skipped += 1
+            continue
+
+        bw = ImageEnhance.Color(original).enhance(0.0)
+        orig_w, orig_h = original.size
+        img_in = resize_long_side(bw, img_size) if img_size > 0 else bw
+
+        res = comfy_bridge.encode_viggle_conditioning(
+            pipe, img_in, prompt, resolution=resolution,
+            enhance_prompt=enhance_prompt, label=f"te:{stem}")
+        comfy_bridge.save_viggle_conditioning(
+            te_path, res["conditioning"], res["latent"],
+            prompt=res["prompt"], prompt_original=prompt,
+            meta={"orig_width": orig_w, "orig_height": orig_h, "source": name,
+                  "model_config": model_config})
+
+        entries[stem] = {"mtime": mtime, "te": os.path.basename(te_path)}
+        count += 1
+        logger.info("encode_frames_te: %s -> %s", name, os.path.basename(te_path))
+
+    elapsed = time.perf_counter() - t0
+    manifest = {
+        "format": 1,
+        "created": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "model_config": model_config,
+        "prompt": prompt,
+        "resolution": resolution,
+        "img_size": img_size,
+        "enhance_prompt": bool(enhance_prompt),
+        "source_dir": os.path.abspath(in_dir),
+        "frames": entries,
+    }
+    tmp_path = manifest_path + ".tmp"
+    with open(tmp_path, "w", encoding="utf-8") as fh:
+        json.dump(manifest, fh, indent=1, ensure_ascii=False)
+    os.replace(tmp_path, manifest_path)
+    return {"ok": True, "count": count, "skipped": skipped, "elapsed": elapsed, "msg": ""}
+
+
+def colorize_frames_from_te(pipe, te_dir, out_dir, steps: int = 2, seed: int = 42) -> dict:
+    """Phase B of the split colorize: sample + decode every cached conditioning
+    in te_dir (see encode_frames_te), writing one .jpg per frame into out_dir
+    with the same naming and post-processing as the live colorize path
+    (LANCZOS upscale to the original size, PIL default save). The UNet + VAE
+    stay resident for the whole batch and existing outputs are skipped, so a
+    cancelled run resumes.
+
+    Returns {"ok", "count", "skipped", "elapsed", "msg"}.
+    """
+    import json
+    import logging
+
+    import comfy.model_management
+
+    import comfy_bridge
+
+    logger = logging.getLogger(__name__)
+
+    manifest_path = os.path.join(te_dir, "manifest.json")
+    if not os.path.isfile(manifest_path):
+        return {"ok": False, "count": 0, "skipped": 0, "elapsed": 0.0,
+                "msg": f"manifest not found: {manifest_path}"}
+    with open(manifest_path, encoding="utf-8") as fh:
+        manifest = json.load(fh)
+    frames = manifest.get("frames") or {}
+    if not frames:
+        return {"ok": False, "count": 0, "skipped": 0, "elapsed": 0.0,
+                "msg": f"no frames in {manifest_path}"}
+
+    os.makedirs(out_dir, exist_ok=True)
+    # phase B wants the UNet + VAE alone in VRAM: start from a clean slate
+    comfy.model_management.unload_all_models()
+
+    t0 = time.perf_counter()
+    count = skipped = 0
+    for stem in sorted(frames):
+        entry = frames.get(stem) or {}
+        te_path = os.path.join(te_dir, entry.get("te") or (stem + ".safetensors"))
+        out_path = os.path.join(out_dir, stem + ".jpg")
+        if os.path.isfile(out_path):
+            skipped += 1
+            continue
+        if not os.path.isfile(te_path):
+            logger.info("colorize_frames_from_te: missing conditioning, skipped: %s", stem)
+            skipped += 1
+            continue
+
+        loaded = comfy_bridge.load_viggle_conditioning(te_path, label=f"load:{stem}")
+        colorized_lowres = comfy_bridge.colorize_viggle_from_conditioning(
+            pipe, loaded["conditioning"], loaded["latent"], steps=steps, seed=seed,
+            label=f"infer:{stem}")
+        meta = loaded["meta"]
+        orig_size = (int(meta.get("orig_width", colorized_lowres.size[0])),
+                     int(meta.get("orig_height", colorized_lowres.size[1])))
+        colorized_upscaled = upscale_with_lanczos(colorized_lowres, orig_size)
+        colorized_upscaled.save(out_path)
+        count += 1
+        logger.info("colorize_frames_from_te: %s.jpg", stem)
+
+    elapsed = time.perf_counter() - t0
+    return {"ok": True, "count": count, "skipped": skipped, "elapsed": elapsed, "msg": ""}
+
+
 # ----------------------------
 # Pair Processing
 # ----------------------------

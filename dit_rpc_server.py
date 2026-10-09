@@ -423,6 +423,59 @@ class ColorizeService:
             return {"ok": False, "elapsed": 0.0, "skipped": False, "msg": str(e)}
 
     # ------------------------------------------------------------------
+    # Split colorize (phase A/B): batch text-encoder conditioning cache
+    # ------------------------------------------------------------------
+    def encode_frames_te(self, in_dir: str, out_dir: str, prompt: str,
+                         resolution: int = 1024, img_size: int = 0,
+                         enhance_prompt: bool = False) -> dict:
+        """Phase A of the split colorize: precompute and cache the text-encoder
+        conditioning for every image in in_dir (one .safetensors per frame
+        plus manifest.json in out_dir).
+
+        Frames already cached for the same prompt/settings are skipped, so a
+        cancelled run resumes where it stopped; the TE + VAE stay resident for
+        the whole batch.
+        """
+        if self._pipeline is None:
+            return {"ok": False, "count": 0, "skipped": 0, "elapsed": 0.0,
+                    "msg": "Pipeline not loaded"}
+        try:
+            from dit_colorize_main import encode_frames_te as _encode_frames_te
+            res = _encode_frames_te(
+                self._pipeline, str(in_dir), str(out_dir), str(prompt),
+                resolution=int(resolution), img_size=int(img_size),
+                enhance_prompt=bool(enhance_prompt),
+                model_config=self._pipeline_model_name or "")
+            logging.info("encode_frames_te: %s encoded, %s skipped, %.2fs",
+                         res.get("count"), res.get("skipped"), res.get("elapsed", 0.0))
+            return res
+        except Exception as e:
+            logging.exception("encode_frames_te failed")
+            return {"ok": False, "count": 0, "skipped": 0, "elapsed": 0.0, "msg": str(e)}
+
+    def colorize_frames_from_te(self, te_dir: str, out_dir: str,
+                                steps: int = 2, seed: int = 42) -> dict:
+        """Phase B of the split colorize: sample + decode every conditioning
+        cached in te_dir (see encode_frames_te) into out_dir, with the same
+        naming and post-processing as the live colorize path; the UNet + VAE
+        stay resident for the whole batch and existing outputs are skipped.
+        """
+        if self._pipeline is None:
+            return {"ok": False, "count": 0, "skipped": 0, "elapsed": 0.0,
+                    "msg": "Pipeline not loaded"}
+        try:
+            from dit_colorize_main import colorize_frames_from_te as _colorize_frames_from_te
+            res = _colorize_frames_from_te(
+                self._pipeline, str(te_dir), str(out_dir),
+                steps=int(steps), seed=int(seed))
+            logging.info("colorize_frames_from_te: %s colorized, %s skipped, %.2fs",
+                         res.get("count"), res.get("skipped"), res.get("elapsed", 0.0))
+            return res
+        except Exception as e:
+            logging.exception("colorize_frames_from_te failed")
+            return {"ok": False, "count": 0, "skipped": 0, "elapsed": 0.0, "msg": str(e)}
+
+    # ------------------------------------------------------------------
     # Colorization: image pair (fast/paired mode, filesystem-based)
     # ------------------------------------------------------------------
     def colorize_image_pair(

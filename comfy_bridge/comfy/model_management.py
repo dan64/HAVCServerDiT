@@ -980,6 +980,9 @@ def load_models_gpu(models, memory_required=0, force_patch_weights=False, minimu
             loaded = current_loaded_models[loaded_model_index]
             loaded.currently_used = True
             models_to_load.append(loaded)
+            # a partially evicted model coming back in is a real load too: report it
+            if _profile_names is not None and hasattr(getattr(loaded, "model", None), "model"):
+                _profile_names.append(loaded.model.model.__class__.__name__)
         else:
             if hasattr(x, "model"):
                 logging.info(f"Requested to load {x.model.__class__.__name__}")

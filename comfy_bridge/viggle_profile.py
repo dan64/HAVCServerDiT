@@ -201,6 +201,8 @@ class _Run:
             phase_bits.append(f"unaccounted={_fmt_s(other)}")
         if phase_bits:
             parts.append("| " + " ".join(phase_bits))
+        if self.loads:
+            parts.append("| loads " + " ".join(f"{_fmt_s(secs)} {name}" for _, name, secs in self.loads))
         if "other" in loads:  # loads that never fell inside a phase (should not happen)
             l_total, l_names = loads["other"]
             parts.append("| other-load=" + _fmt_s(l_total) + " " + ",".join(l_names[:3]))
@@ -266,6 +268,7 @@ def load_end(token, names):
     """Record a completed load (empty names -> nothing to report)."""
     if token is None or not names:
         return
+    names = list(dict.fromkeys(names))
     label = names[0] if len(names) == 1 else "+".join(names)
     _RUN.mark_load(label, _now() - token)
 

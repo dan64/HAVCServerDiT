@@ -1207,6 +1207,14 @@ def orchestrator(init_values, window):
                         skipped_by_user = True
                         break
                     out_img_path = out_dir / (img_path.stem + ".jpg")
+                    # keep the B&W preview in step with the frame being
+                    # inferenced: the tab shows both panes, and phase B is
+                    # exactly where the colorized pane advances
+                    try:
+                        window.write_event_value(
+                            "-PREVIEW_BW-", Image.open(img_path).convert("RGB"))
+                    except Exception:
+                        pass
                     try:
                         res = rpc.colorize_frame_from_te(str(te_dir), img_path.stem,
                                                          str(out_img_path), steps, seed, first)

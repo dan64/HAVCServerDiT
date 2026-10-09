@@ -2,14 +2,14 @@
     "model_name":          "qwen21-viggle",
     "unet_name":           "models/unet/Qwen-Image-2.1-viggle-turbo-v0.3-6step-Q4_K_M.gguf",
     "unet_hf_name":        "Qwen-Image-2.1-viggle-turbo-v0.3-6step-Q4_K_M.gguf",
-    "clip_name":           "models/clip/Qwen3-VL-8B-Instruct-UD-Q4_K_XL.gguf",
-    "clip_mmproj":         "models/clip/Qwen3-VL-8B-Instruct-mmproj-BF16.gguf",
-    "clip_mmproj_hf_name": "mmproj-BF16.gguf",
+    "clip_name":           "models/text_encoders/qwen3vl_8b_int8_convrot.safetensors",
+    "clip_mmproj":         "",
+    "clip_mmproj_hf_name": "",
     "vae_name":            "qwen_image_2.1_vae_bf16.safetensors",
     "lora_path":           "",
     "steps":               6,
     "hf_unet":             "Viggle/Qwen-Image-2.1-viggle-turbo",
-    "hf_clip":             "unsloth/Qwen3-VL-8B-Instruct-GGUF",
+    "hf_clip":             "Comfy-Org/Qwen-Image-2.1",
     "hf_vae":              "Comfy-Org/Qwen-Image-2.1",
     "hf_lora":             ""
 }

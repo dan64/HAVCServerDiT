@@ -1,5 +1,37 @@
 # What's New
 
+### 2026-10-09 — qwen21-viggle: about 2× faster colorization (Fast Pipeline split; int8 text encoder)
+
+**Fast Pipeline** (the checkbox on Tab 2) now runs a *cached-TE split* for the
+qwen21-viggle family: each frame's text-encoder conditioning is computed once
+and cached under `ref_te/`, then the sampling runs with the UNet resident.
+Frames are processed in **chunks of 200**: each chunk caches its conditioning,
+samples from it, and drops the cache when done — so a cancelled run resumes
+from the first missing frame. Field test on a 708-frame project: **~3.0 s per
+frame against ~6.1 s** of the previous path.
+
+The **standard** colorize path is faster too: the viggle call no longer
+computes the negative text-encoder pass, which the sampler never used
+(CFG-off) — about 1 s/frame.
+
+All five qwen21-viggle configs now use the **int8 ConvRot text encoder**
+(`qwen3vl_8b_int8_convrot`) instead of the GGUF pair: a single pass per frame,
+faster and (in side-by-side tests) cleaner output. The model file is
+downloaded on first use. If the manager asks to **Update configs**, accept it
+to pick up the new text encoder.
+
+### 2026-10-09 — Colorize: reruns only colorize the missing frames (GUI)
+
+Both colorize modes now skip the frames whose output already exists in
+`ref_qwen/`: starting the task again after an interruption — or after adding
+new extracted frames — colorizes only what is missing, and the log says how
+many frames were skipped. Together with the split flow's cached conditioning,
+a cancelled Fast Pipeline run picks up exactly where it stopped.
+
+Also fixed: during the Fast Pipeline infer phase the **B&W preview** now keeps
+updating with the frame being colorized (previously it stayed on the last
+frame of the caching phase).
+
 ### 2026-10-08 — Closing the app asks for confirmation; a pending shutdown is cancelled (GUI)
 
 Clicking the window **X** now asks before closing, and the dialog spells out

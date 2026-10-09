@@ -13,7 +13,7 @@ The zip is published as a release asset and extracted by `havc-install` step
 preserved on update).
 
 Usage:
-    python installer/build_comfy_zip.py [--version v0.31] [--out dist/comfy_bridge_v0.31.zip]
+    python installer/build_comfy_zip.py [--version v0.32] [--out dist/comfy_bridge_v0.32.zip]
 """
 
 from __future__ import annotations
@@ -27,8 +27,8 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 # ComfyUI version contained in the vendored tree (release naming, e.g. the
-# published asset is `comfy_bridge_v0.31.zip`).
-DEFAULT_VERSION = "v0.31"
+# published asset is `comfy_bridge_v0.32.zip`).
+DEFAULT_VERSION = "v0.32"
 
 ROOT_DIR = "comfy_bridge"
 SKIP_DIRS = {"__pycache__", ".mypy_cache", ".pytest_cache"}

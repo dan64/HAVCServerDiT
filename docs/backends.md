@@ -2,13 +2,13 @@
 
 Four backends, one API — pick the one that fits your hardware.
 
-> ¹ Measured with **Fast Pipeline** (paired inference, two frames per forward pass) at the backend's fastest recommended step count. ² `gguf-qwen`/`longcat-gguf` don't support paired inference (fall back to per-image processing, see [What's New](whats-new.md)) — their figure is a genuine single-image time, not directly comparable to the Fast Pipeline figures above.
+> ¹ Measured with **Fast Pipeline** — for `qwen21-viggle` the cached text-encoder split, for `nunchaku-qwen` paired inference (two frames per forward pass) — at the backend's fastest recommended step count. ² `gguf-qwen`/`longcat-gguf` don't support paired inference (fall back to per-image processing, see [What's New](whats-new.md)) — their figure is a genuine single-image time, not directly comparable to the Fast Pipeline figures above.
 
-> **Recommended**: **nunchaku-qwen** and **qwen21-viggle** are both recommended for production use, nunchaku-qwen at the fastest usable step count (`steps=2`) has an inference speed of about **4 sec/frame** using _Fast Pipeline_, **qwen21-viggle** at fastest usable step count (`steps=2`) has an inference speed of about **8 sec/frame**; using _Fast Pipeline_ the speed improves to about **6 sec/frame** (not 4 — the pair-mode working resolution was deliberately raised for this backend to avoid a color artifact, see the `⚠️ Fast Pipeline` note below). `qwen21-viggle` needs meaningfully less hardware (14GB+ VRAM / 32GB+ RAM vs. 16GB+ VRAM / 64GB+ RAM). `longcat-gguf` remain the choice for VRAM-constrained setups where neither of the above fits, at a real speed cost (see the `⚠️ Experimental` note under GGUF below).
+> **Recommended**: **nunchaku-qwen** and **qwen21-viggle** are both recommended for production use, nunchaku-qwen at the fastest usable step count (`steps=2`) has an inference speed of about **4 sec/frame** using _Fast Pipeline_, **qwen21-viggle** at fastest usable step count (`steps=2`) has an inference speed of about **6 sec/frame**; using _Fast Pipeline_ the speed improves to about **3 sec/frame** (the cached text-encoder split, see the `⚠️ Fast Pipeline` note below). `qwen21-viggle` needs meaningfully less hardware (14GB+ VRAM / 32GB+ RAM vs. 16GB+ VRAM / 64GB+ RAM; with _Fast Pipeline_ it runs in **12 GB** of VRAM). `longcat-gguf` remain the choice for VRAM-constrained setups where neither of the above fits, at a real speed cost (see the `⚠️ Experimental` note under GGUF below).
 >
-> ⚠️ **Fast Pipeline + `qwen21-viggle`**: paired inference uses a higher working resolution for this backend specifically (`1280` vs. `1024` for single images and for the other backends, since [What's New](whats-new.md) 2026-09-27) — this fixes a color artifact previously seen on fine detail near the merge boundary (e.g. a hand rendered in tones close to the surrounding foliage), at the cost of some speed (~6 sec/frame instead of 4). A milder residual effect can still appear on secondary, color-ambiguous details (e.g. a flower's petals taking a noticeably different but still plausible hue between runs) — not a defect on the same order as the original artifact, more of the same color-hedging behavior described elsewhere in this README. The [Viggle-Turbo](https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo) LoRA is still an experimental release, and this residual effect may be a limitation of the LoRA itself. If maximum consistency matters more than speed, disable _Fast Pipeline_ for `qwen21-viggle` (~8 sec/frame, no longer speed-competitive with `nunchaku-qwen`) or spot-check the output before a long batch run.
+> ⚠️ **Fast Pipeline + `qwen21-viggle`** (2.4.0): this backend no longer uses paired inference — _Fast Pipeline_ runs a **cached text-encoder split**: each frame's text-encoder conditioning is computed once and cached, then the sampling runs with the UNet resident, in chunks of 200 frames (~**3 sec/frame**, roughly 2× the standard path). There is no merge boundary, nor the paired-mode resolution trade-off it required. A chunk's cache is deleted once its frames are colorized, and a cancelled run resumes from the first missing frame. In standard (non-Fast) mode the single-frame path runs at about **6 sec/frame**. On secondary, color-ambiguous details (e.g. a flower's petals) a run can still land on a noticeably different but plausible hue — the color-hedging behavior described above, not a defect. The [Viggle-Turbo](https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo) LoRA is still an experimental release: spot-check the output before a long batch run.
 >
-> **Color stability vs. variety**: based on real-world use across thousands of frames, `nunchaku-qwen` tends to show more color variability between similar frames — can look more vivid, but with weaker frame-to-frame consistency — while `qwen21-viggle` is more conservative in its color choices and more stable, likely a consequence of the Viggle-Turbo LoRA's aggressive step-distillation, which tends to narrow the range of plausible outputs toward "safe" choices. For video work, where flickering color between consecutive frames is a visible defect, this makes `qwen21-viggle`'s conservatism a practical advantage rather than just a stylistic difference — worth factoring in alongside the speed/hardware trade-offs above. The same pattern shows up specifically in _Fast Pipeline_ (paired inference): when both frames share an object, `qwen21-viggle` consistently colors it the same way in both halves, while `nunchaku-qwen` is less reliable at this — the exact cause (the LoRA itself vs. something more general about the two pipelines) is not established.
+> **Color stability vs. variety**: based on real-world use across thousands of frames, `nunchaku-qwen` tends to show more color variability between similar frames — can look more vivid, but with weaker frame-to-frame consistency — while `qwen21-viggle` is more conservative in its color choices and more stable, likely a consequence of the Viggle-Turbo LoRA's aggressive step-distillation, which tends to narrow the range of plausible outputs toward "safe" choices. For video work, where flickering color between consecutive frames is a visible defect, this makes `qwen21-viggle`'s conservatism a practical advantage rather than just a stylistic difference — worth factoring in alongside the speed/hardware trade-offs above. The same pattern showed up in paired inference (which `qwen21-viggle` used before 2.4.0 and `nunchaku-qwen` still uses): when both frames of a pair shared an object, `qwen21-viggle` consistently colored it the same way in both halves, while `nunchaku-qwen` is less reliable at this — the exact cause (the LoRA itself vs. something more general about the two pipelines) is not established.
 
 ## Requirements by backend
 
@@ -58,20 +58,21 @@ Choose the backend that matches your hardware:
 > See `config/longcat_gguf_q*.json` — the general rule: lower quant = less VRAM.
 > Launch with `run_server_longcat.cmd` (Q4_K_M) or `start_server.cmd longcat|longcat-q3|...`.
 
-### qwen21-viggle : ~8-11 sec/frame (Qwen-Image-2.1 int8 ConvRot)
+### qwen21-viggle : ~3 sec/frame with Fast Pipeline, ~6 without (Qwen-Image-2.1 int8 ConvRot)
 
 | Requirement | Details                            |
 | ----------- | ----------------------------------- |
-| **GPU**     | NVIDIA RTX 30/40/50  (14 GB+ VRAM) |
+| **GPU**     | NVIDIA RTX 30/40/50  (14 GB+ VRAM; **12 GB+** with Fast Pipeline) |
 | **RAM**     | 32 GB+                             |
 | **CUDA**    | 13.0+                              |
 
 > Native ComfyUI int8 ConvRot weights for the **UNet** (not GGUF — a GGUF
 > UNet was evaluated but is ~2× slower for this model). The **CLIP/text
-> encoder**, unlike the UNet, uses GGUF+mmproj by default (`Qwen3-VL-8B-
-> Instruct-UD`, see [What's New](whats-new.md)) — a `.safetensors` CLIP
-> (`int8_convrot`/`w4a8`) remains a valid, simpler alternative, see
-> [Pipeline Configuration](configuration.md). Requires
+> encoder** is the int8 ConvRot `.safetensors` (`qwen3vl_8b_int8_convrot`,
+> default since 2.4.0 — faster and, in side-by-side tests, visually cleaner
+> than the previous GGUF+mmproj pair; see [What's New](whats-new.md)). The
+> GGUF pair (`Qwen3-VL-8B-Instruct-UD`) remains available by editing the
+> config's `clip_name`/`clip_mmproj`, see [Pipeline Configuration](configuration.md). Requires
 > `comfy-kitchen==0.2.35` and `comfy-aimdo==0.5.5` exactly (pinned, not a
 > minimum — both are compiled packages and an untested newer build is not
 > assumed safe). A fresh `install.cmd` run sets these; an **existing**

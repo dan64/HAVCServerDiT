@@ -8,7 +8,9 @@ and cached under `ref_te/`, then the sampling runs with the UNet resident.
 Frames are processed in **chunks of 200**: each chunk caches its conditioning,
 samples from it, and drops the cache when done — so a cancelled run resumes
 from the first missing frame. Field test on a 708-frame project: **~3.0 s per
-frame against ~6.1 s** of the previous path.
+frame against ~6.1 s** of the previous path. With Fast Pipeline the pipeline
+also fits comfortably in **12 GB of VRAM** (peak usage around 11 GB); without
+it the footprint is unchanged (14 GB+).
 
 The **standard** colorize path is faster too: the viggle call no longer
 computes the negative text-encoder pass, which the sampler never used

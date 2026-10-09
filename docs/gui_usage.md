@@ -587,6 +587,9 @@ Two modes are available:
   instead: two frames are placed side-by-side and colorized in a single
   forward pass.
 
+In both modes, frames already present in `ref_qwen/` are skipped: a rerun
+colorizes only what is missing.
+
 The server's pipeline is loaded on demand (if not already loaded at boot).
 
 ### Step 4: Encode Video

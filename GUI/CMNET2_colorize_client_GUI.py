@@ -1010,11 +1010,19 @@ def orchestrator(init_values, window):
         out_dir = Path(values["-BASE_DIR-"]) / "ref_qwen"
         out_dir.mkdir(exist_ok=True)
 
+        out_stems = {f.stem.lower() for f in out_dir.glob("*.jpg")}
+        if out_stems:
+            log_message(f"⚠️ {len(out_stems)} images already colorized — will be skipped.")
+
         images = sorted([
             f for f in in_dir.iterdir()
             if f.suffix.lower() in ('.png', '.jpg', '.jpeg')
+            and f.stem.lower() not in out_stems
         ])
         total_images = len(images)
+        if total_images == 0:
+            log_message("ℹ️ No images to colorize.")
+            return
         tot_time = 0.0
         count    = 0
         start_time = time.time()

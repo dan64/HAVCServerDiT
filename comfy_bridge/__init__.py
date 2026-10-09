@@ -536,6 +536,46 @@ def _viggle_sample_decode(pipeline, conditioning, latent_dict, steps, seed):
         return Image.fromarray((img_np * 255).astype(np.uint8))
 
 
+def _viggle_encode_positive(pipeline, img_tensor, prompt, resolution):
+    """The positive branch of TextEncodeQwenImage21.execute() for a single
+    reference image: same area-budget resize at `resolution`, same VAE
+    reference encode, same tokenize/encode call -- without the node's negative
+    pass, which the viggle path never consumed (CFG-off, see colorize_viggle).
+
+    Returns (positive_conditioning, latent_dict) exactly as the node does.
+    """
+    import comfy.model_management
+    import comfy.utils
+    import node_helpers
+
+    samples = img_tensor[:1].movedim(-1, 1)
+    if resolution > 0:
+        ratio = samples.shape[3] / samples.shape[2]
+        width = round(math.sqrt(resolution * resolution * ratio) / 32) * 32
+        height = round(math.sqrt(resolution * resolution / ratio) / 32) * 32
+    else:
+        width, height = round(samples.shape[3] / 32) * 32, round(samples.shape[2] / 32) * 32
+    width, height = max(32, width), max(32, height)
+    if (width, height) == (samples.shape[3], samples.shape[2]):
+        s = img_tensor[:1]
+    else:
+        s = comfy.utils.common_upscale(samples, width, height, "lanczos", "disabled").movedim(1, -1)
+    rgb = s[:, :, :, :3]
+    if s.shape[-1] > 3:
+        rgb = rgb * s[:, :, :, 3:] + (1.0 - s[:, :, :, 3:])  # the vision tower sees alpha over white, the vae keeps all four
+
+    # keep_vision=False: the node's behaviour with a vae present; the image
+    # conditions through the reference latents, not the vision tokens.
+    positive = pipeline["clip"].encode_from_tokens_scheduled(
+        pipeline["clip"].tokenize(prompt, images=[rgb], keep_vision=False, prevent_empty_text=True))
+    positive = node_helpers.conditioning_set_values(
+        positive, {"reference_latents": [pipeline["vae"].encode(s)]}, append=True)
+
+    latent_dict = {"samples": torch.zeros(
+        [1, 64, height // 16, width // 16], device=comfy.model_management.intermediate_device())}
+    return positive, latent_dict
+
+
 def colorize_viggle(pipeline, image, prompt, steps=6, seed=42, enhance_prompt=False, resolution=1024):
     """Qwen-Image-2.1 + Viggle-Turbo colorization (CFG-off, Viggle-Turbo sigma schedule).
 
@@ -544,8 +584,6 @@ def colorize_viggle(pipeline, image, prompt, steps=6, seed=42, enhance_prompt=Fa
     the LoRA's native step count. A `steps` value with no matching schedule
     falls back to the 6-step schedule.
     """
-    from comfy_extras.nodes_qwen import TextEncodeQwenImage21
-
     viggle_profile.start_run(steps=steps, resolution=resolution)
 
     with torch.inference_mode():
@@ -560,20 +598,11 @@ def colorize_viggle(pipeline, image, prompt, steps=6, seed=42, enhance_prompt=Fa
                 except Exception:
                     logger.exception("colorize_viggle: prompt enhancement failed, using the original prompt")
 
-        # negative_prompt is a required input on this node but is never consumed
-        # downstream: BasicGuider/Guider_Basic only injects the "positive" cond
-        # (no CFG, distilled/turbo mode).
+        # positive branch only: the node's negative pass was never consumed
+        # downstream (BasicGuider/Guider_Basic injects the "positive" cond
+        # alone -- CFG-off, distilled/turbo mode), so it is skipped entirely.
         with viggle_profile.phase("encode"):
-            text_out = TextEncodeQwenImage21().EXECUTE_NORMALIZED(
-                clip=pipeline["clip"],
-                prompt=prompt,
-                negative_prompt="",
-                vae=pipeline["vae"],
-                resolution=resolution,
-                images={"image_1": img_tensor},
-            )
-            positive = get_value_at_index(text_out, 0)
-            latent_dict = get_value_at_index(text_out, 2)
+            positive, latent_dict = _viggle_encode_positive(pipeline, img_tensor, prompt, resolution)
 
         result = _viggle_sample_decode(pipeline, positive, latent_dict, steps, seed)
 
@@ -593,10 +622,6 @@ def encode_viggle_conditioning(pipeline, image, prompt, resolution=1024, enhance
     colorize_viggle), so the negative output was never read. Returns
     {"conditioning": ..., "latent": ..., "prompt": effective_prompt}.
     """
-    import comfy.model_management
-    import comfy.utils
-    import node_helpers
-
     viggle_profile.start_run(label=label, resolution=resolution)
 
     with torch.inference_mode():
@@ -612,33 +637,7 @@ def encode_viggle_conditioning(pipeline, image, prompt, resolution=1024, enhance
                     logger.exception("encode_viggle_conditioning: prompt enhancement failed, using the original prompt")
 
         with viggle_profile.phase("encode"):
-            # prologue mirrored from TextEncodeQwenImage21.execute() (single
-            # reference image); keep the two blocks in sync.
-            samples = img_tensor[:1].movedim(-1, 1)
-            if resolution > 0:
-                ratio = samples.shape[3] / samples.shape[2]
-                width = round(math.sqrt(resolution * resolution * ratio) / 32) * 32
-                height = round(math.sqrt(resolution * resolution / ratio) / 32) * 32
-            else:
-                width, height = round(samples.shape[3] / 32) * 32, round(samples.shape[2] / 32) * 32
-            width, height = max(32, width), max(32, height)
-            if (width, height) == (samples.shape[3], samples.shape[2]):
-                s = img_tensor[:1]
-            else:
-                s = comfy.utils.common_upscale(samples, width, height, "lanczos", "disabled").movedim(1, -1)
-            rgb = s[:, :, :, :3]
-            if s.shape[-1] > 3:
-                rgb = rgb * s[:, :, :, 3:] + (1.0 - s[:, :, :, 3:])  # the vision tower sees alpha over white, the vae keeps all four
-
-            # keep_vision=False: the node's behaviour with a vae present; the
-            # image conditions through the reference latents, not the vision tokens.
-            positive = pipeline["clip"].encode_from_tokens_scheduled(
-                pipeline["clip"].tokenize(prompt, images=[rgb], keep_vision=False, prevent_empty_text=True))
-            positive = node_helpers.conditioning_set_values(
-                positive, {"reference_latents": [pipeline["vae"].encode(s)]}, append=True)
-
-            latent_dict = {"samples": torch.zeros(
-                [1, 64, height // 16, width // 16], device=comfy.model_management.intermediate_device())}
+            positive, latent_dict = _viggle_encode_positive(pipeline, img_tensor, prompt, resolution)
 
     viggle_profile.end_run()
     return {"conditioning": positive, "latent": latent_dict, "prompt": prompt}

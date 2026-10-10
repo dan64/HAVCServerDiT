@@ -111,78 +111,173 @@ def colorize(pipeline, image, prompt, steps=4, seed=42):
 
 
 def _colorize_impl(pipeline, image, prompt, steps=4, seed=42):
-    import nodes as cn
-    from comfy_extras.nodes_flux import FluxKontextImageScale
-    from comfy_extras.nodes_qwen import TextEncodeQwenImageEdit
-    from comfy_extras.nodes_model_advanced import ModelSamplingAuraFlow
-
     with torch.inference_mode():
-        # PIL → tensor
         with _edit_profile.phase("prep"):
-            img_np = np.array(image.convert("RGB")).astype(np.float32) / 255.0
-            img_tensor = torch.from_numpy(img_np).unsqueeze(0)
+            img_scaled = _edit_prepare(image)
 
-            # FluxKontextImageScale
-            _fks_out = FluxKontextImageScale().EXECUTE_NORMALIZED(image=img_tensor)
-            img_scaled = get_value_at_index(_fks_out, 0)
-            if img_scaled.ndim == 3:
-                img_scaled = img_scaled.unsqueeze(0)  # (H,W,C) → (1,H,W,C)
+        positive, latent_dict = _edit_encode_positive(pipeline, img_scaled, prompt)
 
-        with _edit_profile.phase("vaeenc"):
-            # VAEEncode
-            latent = cn.VAEEncode().encode(
-                pixels=img_scaled, vae=pipeline["vae"])
-            latent_dict = latent[0]
-
-        with _edit_profile.phase("te_pos"):
-            # TextEncodeQwenImageEdit (positive)
-            _pos_raw = TextEncodeQwenImageEdit().EXECUTE_NORMALIZED(
-                prompt=prompt,
-                clip=pipeline["clip"],
-                vae=pipeline["vae"],
-                image=img_scaled,
-            )
-            positive = get_value_at_index(_pos_raw, 0)
-
-        with _edit_profile.phase("te_neg"):
-            # TextEncodeQwenImageEdit (negative)
-            _neg_raw = TextEncodeQwenImageEdit().EXECUTE_NORMALIZED(
-                prompt="black and white, faded colors",
-                clip=pipeline["clip"],
-                vae=pipeline["vae"],
-                image=img_scaled,
-            )
-            negative = get_value_at_index(_neg_raw, 0)
-
-        with _edit_profile.phase("patch"):
-            # ModelSamplingAuraFlow
-            unet_sampled = ModelSamplingAuraFlow().patch_aura(
-                shift=3, model=pipeline["model"])[0]
-
-        with _edit_profile.phase("sampling"):
-            # KSampler
-            sampled = cn.KSampler().sample(
-                seed=seed, steps=steps, cfg=1.0,
-                sampler_name="euler", scheduler="simple", denoise=1.0,
-                model=unet_sampled,
-                positive=positive, negative=negative,
-                latent_image=latent_dict,
-            )
-            latent_samples = sampled[0]
-
-        with _edit_profile.phase("decode"):
-            # VAEDecode
-            img_decoded = cn.VAEDecode().decode(
-                samples=latent_samples, vae=pipeline["vae"])
-            img_t = get_value_at_index(img_decoded, 0)
+        img_t = _edit_sample_decode(pipeline, positive, latent_dict, steps, seed)
 
     with _edit_profile.phase("post"):
-        if img_t.ndim == 4:
-            img_np = img_t[0].cpu().float().numpy()
-        else:
-            img_np = img_t.cpu().float().numpy()
-        img_np = np.clip(img_np, 0, 1)
-        return Image.fromarray((img_np * 255).astype(np.uint8))
+        return _edit_to_pil(img_t)
+
+
+def _edit_prepare(image):
+    """The live path's prologue: RGB float tensor + FluxKontextImageScale
+    (the ~1 Mpx Kontext snap both the VAE and the text encoder see)."""
+    from comfy_extras.nodes_flux import FluxKontextImageScale
+
+    img_np = np.array(image.convert("RGB")).astype(np.float32) / 255.0
+    img_tensor = torch.from_numpy(img_np).unsqueeze(0)
+    _fks_out = FluxKontextImageScale().EXECUTE_NORMALIZED(image=img_tensor)
+    img_scaled = get_value_at_index(_fks_out, 0)
+    if img_scaled.ndim == 3:
+        img_scaled = img_scaled.unsqueeze(0)  # (H,W,C) → (1,H,W,C)
+    return img_scaled
+
+
+def _edit_encode_positive(pipeline, img_scaled, prompt):
+    """VAE encode of the start latent + the positive TextEncodeQwenImageEdit
+    conditioning, in the live path's order. Returns (conditioning, latent).
+
+    The node's negative pass is not computed: KSampler runs at cfg=1.0 and
+    comfy/samplers.py takes the cfg1 fast path (uncond=None), so the negative
+    conditioning is never consumed (~1.5 s/image of a second full text-
+    encoder pass, vision tower included). Same treatment as colorize_viggle();
+    dist/check_edit_bitexact.py verifies that sampling with the positive
+    folded in as the negative reproduces the live output byte-for-byte.
+    """
+    import nodes as cn
+    from comfy_extras.nodes_qwen import TextEncodeQwenImageEdit
+
+    with _edit_profile.phase("vaeenc"):
+        latent = cn.VAEEncode().encode(pixels=img_scaled, vae=pipeline["vae"])
+        latent_dict = latent[0]
+
+    with _edit_profile.phase("te_pos"):
+        _pos_raw = TextEncodeQwenImageEdit().EXECUTE_NORMALIZED(
+            prompt=prompt,
+            clip=pipeline["clip"],
+            vae=pipeline["vae"],
+            image=img_scaled,
+        )
+        positive = get_value_at_index(_pos_raw, 0)
+    return positive, latent_dict
+
+
+def _edit_sample_decode(pipeline, conditioning, latent_dict, steps, seed):
+    """Sampler + VAE decode, exactly as the live path: AuraFlow shift=3,
+    euler/simple, cfg=1.0 (the negative slot carries the same conditioning;
+    the cfg1 fast path never reads it)."""
+    import nodes as cn
+    from comfy_extras.nodes_model_advanced import ModelSamplingAuraFlow
+
+    with _edit_profile.phase("patch"):
+        unet_sampled = ModelSamplingAuraFlow().patch_aura(
+            shift=3, model=pipeline["model"])[0]
+
+    with _edit_profile.phase("sampling"):
+        sampled = cn.KSampler().sample(
+            seed=seed, steps=steps, cfg=1.0,
+            sampler_name="euler", scheduler="simple", denoise=1.0,
+            model=unet_sampled,
+            positive=conditioning, negative=conditioning,
+            latent_image=latent_dict,
+        )
+        latent_samples = sampled[0]
+
+    with _edit_profile.phase("decode"):
+        img_decoded = cn.VAEDecode().decode(
+            samples=latent_samples, vae=pipeline["vae"])
+        img_t = get_value_at_index(img_decoded, 0)
+    return img_t
+
+
+def _edit_to_pil(img_t):
+    if img_t.ndim == 4:
+        img_np = img_t[0].cpu().float().numpy()
+    else:
+        img_np = img_t.cpu().float().numpy()
+    img_np = np.clip(img_np, 0, 1)
+    return Image.fromarray((img_np * 255).astype(np.uint8))
+
+
+def encode_edit_conditioning(pipeline, image, prompt):
+    """Phase A of the split-colorize flow for the Qwen-Image-Edit family:
+    compute the positive conditioning + the start latent of one image and
+    return them for caching (save_edit_conditioning) or direct reuse.
+
+    Mirrors the live path (same Kontext snap, same VAE encode order, same
+    node call); the node's negative pass is skipped as in _colorize_impl().
+    Returns {"conditioning": ..., "latent": ...}.
+    """
+    with torch.inference_mode():
+        with _edit_profile.phase("prep"):
+            img_scaled = _edit_prepare(image)
+        positive, latent_dict = _edit_encode_positive(pipeline, img_scaled, prompt)
+    return {"conditioning": positive, "latent": latent_dict}
+
+
+def colorize_edit_from_conditioning(pipeline, conditioning, latent_dict, steps=4, seed=42):
+    """Phase B of the split-colorize flow: sample + decode one image from a
+    precomputed edit conditioning. Returns the colorized PIL image."""
+    with torch.inference_mode():
+        img_t = _edit_sample_decode(pipeline, conditioning, latent_dict, steps, seed)
+    with _edit_profile.phase("post"):
+        return _edit_to_pil(img_t)
+
+
+def save_edit_conditioning(path, conditioning, latent_dict, prompt="", meta=None):
+    """Save an encode_edit_conditioning() result as one .safetensors file
+    (~21 MB per frame at the ~1 Mpx budget: the edit context is ~1.4k tokens
+    of image+text embeddings, far larger than the viggle one).
+
+    The reference latent and the start latent are both stored: they come from
+    two different VAE encodes and are not interchangeable. Returns the
+    metadata dict written.
+    """
+    from safetensors.torch import save_file
+
+    extra = conditioning[0][1]
+    reference_latents = extra.get("reference_latents") or []
+    if not reference_latents:
+        raise ValueError("save_edit_conditioning: conditioning has no reference_latents")
+    samples = latent_dict["samples"]
+    tensors = {
+        "context": conditioning[0][0].detach().to("cpu").contiguous(),
+        "reference_latent": reference_latents[0].detach().to("cpu").contiguous(),
+        "latent_samples": samples.detach().to("cpu").contiguous(),
+    }
+    metadata = {
+        "format": "1",
+        "kind": "qwen-edit-conditioning",
+        "prompt": str(prompt),
+    }
+    if meta:
+        metadata.update({str(k): str(v) for k, v in meta.items()})
+    save_file(tensors, path, metadata=metadata)
+    return metadata
+
+
+def load_edit_conditioning(path):
+    """Load a conditioning saved by save_edit_conditioning(). Returns
+    {"conditioning", "latent", "meta"} in the same structure the live path
+    hands to the sampler."""
+    import comfy.model_management
+    from safetensors import safe_open
+
+    with safe_open(path, framework="pt", device="cpu") as f:
+        tensors = {k: f.get_tensor(k) for k in f.keys()}
+        meta = dict(f.metadata() or {})
+
+    device = comfy.model_management.get_torch_device()
+    conditioning = [[tensors["context"].to(device), {
+        "pooled_output": None,
+        "reference_latents": [tensors["reference_latent"].to(device)],
+    }]]
+    latent_dict = {"samples": tensors["latent_samples"].to(device)}
+    return {"conditioning": conditioning, "latent": latent_dict, "meta": meta}
 
 
 def load_viggle_pipeline(unet_path, clip_path, vae_name="qwen_image_2.1_vae_bf16.safetensors", lora_path=None, clip_mmproj=None):

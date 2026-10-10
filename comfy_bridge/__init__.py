@@ -272,13 +272,18 @@ def save_edit_conditioning(path, conditioning, latent_dict, prompt="", meta=None
 def load_edit_conditioning(path):
     """Load a conditioning saved by save_edit_conditioning(). Returns
     {"conditioning", "latent", "meta"} in the same structure the live path
-    hands to the sampler."""
+    hands to the sampler. Raises ValueError when the file is not an edit
+    conditioning (a viggle cache file has the same tensor names but a
+    different structure -- see load_viggle_conditioning)."""
     import comfy.model_management
     from safetensors import safe_open
 
     with safe_open(path, framework="pt", device="cpu") as f:
-        tensors = {k: f.get_tensor(k) for k in f.keys()}
         meta = dict(f.metadata() or {})
+        if meta.get("kind") != "qwen-edit-conditioning":
+            raise ValueError(
+                "load_edit_conditioning: not a qwen-edit conditioning file")
+        tensors = {k: f.get_tensor(k) for k in f.keys()}
 
     device = comfy.model_management.get_torch_device()
     conditioning = [[tensors["context"].to(device), {
@@ -798,7 +803,9 @@ def load_viggle_conditioning(path):
 
     Returns {"conditioning", "latent", "meta"}: the conditioning rebuilt in
     the same structure the live path hands to the sampler, with the empty
-    latent rebuilt from the reference latent's shape.
+    latent rebuilt from the reference latent's shape. Raises ValueError when
+    handed an edit conditioning file (same tensor names, different
+    structure).
     """
     import comfy.model_management
     from safetensors import safe_open
@@ -806,6 +813,10 @@ def load_viggle_conditioning(path):
     with safe_open(path, framework="pt", device="cpu") as f:
         tensors = {k: f.get_tensor(k) for k in f.keys()}
         meta = dict(f.metadata() or {})
+
+    if meta.get("kind") == "qwen-edit-conditioning":
+        raise ValueError(
+            "load_viggle_conditioning: this is a qwen-edit conditioning file")
 
     device = comfy.model_management.get_torch_device()
     context = tensors["context"].to(device)

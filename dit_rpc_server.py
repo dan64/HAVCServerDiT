@@ -530,10 +530,63 @@ class ColorizeService:
             logging.exception("colorize_frame_from_te failed")
             return {"ok": False, "skipped": False, "elapsed": 0.0, "msg": str(e)}
 
+    def encode_frame_edit(self, in_path: str, te_dir: str, stem: str, prompt: str,
+                          img_size: int = 0, first: bool = False) -> dict:
+        """Phase A (single frame) of the split colorize for the Qwen-Image-Edit
+        2511 family (gguf-qwen): cache the conditioning of one frame under
+        te_dir/<stem>.safetensors (the edit node's context + reference latent +
+        start latent, ~21 MB/frame); first=True drops the loaded models so the
+        TE + VAE start clean. Already-cached frames are skipped (resume). The
+        GUI drives this frame by frame, in chunks, so progress and cancel stay
+        responsive.
+        """
+        if self._pipeline is None:
+            return {"ok": False, "skipped": False, "elapsed": 0.0, "msg": "Pipeline not loaded"}
+        if self._pipeline_model_name != "gguf-qwen":
+            return {"ok": False, "skipped": False, "elapsed": 0.0,
+                    "msg": "encode_frame_edit requires the qwen-2511 (gguf-qwen) pipeline"}
+        try:
+            from dit_colorize_main import encode_frame_edit as _encode_frame_edit
+            res = _encode_frame_edit(
+                self._pipeline, str(in_path), str(te_dir), str(stem), str(prompt),
+                img_size=int(img_size), first=bool(first),
+                model_config=(self._pipeline_config_name or self._pipeline_model_name or ""))
+            logging.info("encode_frame_edit: %s skipped=%s %.2fs",
+                         stem, res.get("skipped"), res.get("elapsed", 0.0))
+            return res
+        except Exception as e:
+            logging.exception("encode_frame_edit failed")
+            return {"ok": False, "skipped": False, "elapsed": 0.0, "msg": str(e)}
+
+    def colorize_frame_edit_from_te(self, te_dir: str, stem: str, out_path: str,
+                                    steps: int = 4, seed: int = 42,
+                                    first: bool = False) -> dict:
+        """Phase B (single frame) of the split colorize for the Qwen-Image-Edit
+        2511 family (gguf-qwen): sample + decode one cached conditioning into
+        out_path; first=True drops the loaded models so the UNet + VAE start
+        clean. Existing outputs are skipped (resume).
+        """
+        if self._pipeline is None:
+            return {"ok": False, "skipped": False, "elapsed": 0.0, "msg": "Pipeline not loaded"}
+        if self._pipeline_model_name != "gguf-qwen":
+            return {"ok": False, "skipped": False, "elapsed": 0.0,
+                    "msg": "colorize_frame_edit_from_te requires the qwen-2511 (gguf-qwen) pipeline"}
+        try:
+            from dit_colorize_main import colorize_frame_edit_from_te as _colorize_frame_edit_from_te
+            res = _colorize_frame_edit_from_te(
+                self._pipeline, str(te_dir), str(stem), str(out_path),
+                steps=int(steps), seed=int(seed), first=bool(first))
+            logging.info("colorize_frame_edit_from_te: %s skipped=%s %.2fs",
+                         stem, res.get("skipped"), res.get("elapsed", 0.0))
+            return res
+        except Exception as e:
+            logging.exception("colorize_frame_edit_from_te failed")
+            return {"ok": False, "skipped": False, "elapsed": 0.0, "msg": str(e)}
+
     def cleanup_te_cache(self, te_dir: str) -> dict:
         """Delete the conditioning cache of a colorized chunk (the manifest is
         reset, keeping its key fields): the split flow only needs the cache
-        while the chunk's frames are being colorized.
+        while the chunk's frames are being colorized (viggle and edit flows).
         """
         try:
             from dit_colorize_main import cleanup_te_cache as _cleanup_te_cache

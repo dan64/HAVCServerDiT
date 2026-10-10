@@ -800,11 +800,130 @@ def colorize_frames_from_te(pipe, te_dir, out_dir, steps: int = 2, seed: int = 4
     return {"ok": True, "count": count, "skipped": skipped, "elapsed": elapsed, "msg": ""}
 
 
+# ----------------------------
+# Split colorize (phase A/B) for the Qwen-Image-Edit 2511 family (gguf-qwen):
+# the same cached-conditioning scheme as the viggle flow above, but the
+# conditioning is the edit node's (context + reference latent + start latent,
+# ~21 MB/frame) and the working size comes from FluxKontextImageScale instead
+# of a fixed resolution -- see comfy_bridge.encode_edit_conditioning().
+# ----------------------------
+
+def encode_frame_edit(pipe, img_path, te_dir, stem, prompt, img_size: int = 0,
+                      first: bool = False, model_config: str = "") -> dict:
+    """Phase A, single frame (edit family): encode + cache the conditioning of
+    one image under te_dir/<stem>.safetensors. Same contract as
+    encode_frame_te(): first=True drops the loaded models before anything
+    else (so the TE + VAE start from a clean VRAM even when this frame turns
+    out to be cached); frames already cached for the same prompt/settings are
+    skipped (resume). Returns {"ok", "skipped", "elapsed", "msg"}.
+    """
+    import logging
+
+    import comfy.model_management
+
+    import comfy_bridge
+
+    logger = logging.getLogger(__name__)
+
+    if first:
+        # phase A wants the TE + VAE alone in VRAM: start from a clean slate
+        comfy.model_management.unload_all_models()
+
+    os.makedirs(te_dir, exist_ok=True)
+    # resolution is not a parameter of the edit path (FluxKontextImageScale
+    # decides the working size from the image): 0 marks the edit format.
+    key = _te_manifest_key(model_config, prompt, 0, img_size, False)
+    _, cached = _te_manifest_load(te_dir, key)
+
+    src = str(img_path)
+    te_path = os.path.join(te_dir, stem + ".safetensors")
+    mtime = os.path.getmtime(src)
+    prev = cached.get(stem)
+    if prev and prev.get("mtime") == mtime and os.path.isfile(te_path):
+        return {"ok": True, "skipped": True, "elapsed": 0.0, "msg": ""}
+
+    t0 = time.perf_counter()
+    original = Image.open(src).convert("RGB")
+    if is_image_dark(original, threshold=9):
+        logger.info("encode_frame_edit: too dark, skipped: %s", os.path.basename(src))
+        return {"ok": True, "skipped": True, "elapsed": 0.0, "msg": "too dark"}
+
+    bw = ImageEnhance.Color(original).enhance(0.0)
+    orig_w, orig_h = original.size
+    img_in = resize_long_side(bw, img_size) if img_size > 0 else bw
+
+    res = comfy_bridge.encode_edit_conditioning(pipe, img_in, prompt)
+    comfy_bridge.save_edit_conditioning(
+        te_path, res["conditioning"], res["latent"], prompt=prompt,
+        meta={"orig_width": orig_w, "orig_height": orig_h,
+              "source": os.path.basename(src), "model_config": model_config})
+
+    cached[stem] = {"mtime": mtime, "te": os.path.basename(te_path)}
+    _te_manifest_save(te_dir, key, cached)
+    elapsed = time.perf_counter() - t0
+    logger.info("encode_frame_edit: %s", os.path.basename(src))
+    return {"ok": True, "skipped": False, "elapsed": elapsed, "msg": ""}
+
+
+def colorize_frame_edit_from_te(pipe, te_dir, stem, out_path, steps: int = 4,
+                                seed: int = 42, first: bool = False) -> dict:
+    """Phase B, single frame (edit family): sample + decode one cached
+    conditioning into out_path, with the same post-processing as the live
+    path (LANCZOS upscale to the original size, PIL default save). Same
+    contract as colorize_frame_from_te(). Returns
+    {"ok", "skipped", "elapsed", "msg"}.
+    """
+    import logging
+
+    import comfy.model_management
+
+    import comfy_bridge
+
+    logger = logging.getLogger(__name__)
+
+    if first:
+        # phase B wants the UNet + VAE alone in VRAM: start from a clean slate
+        comfy.model_management.unload_all_models()
+
+    out_path = str(out_path)
+    if os.path.isfile(out_path):
+        return {"ok": True, "skipped": True, "elapsed": 0.0, "msg": ""}
+
+    te_path = os.path.join(te_dir, stem + ".safetensors")
+    if not os.path.isfile(te_path):
+        # never encoded (e.g. a dark frame) or the chunk cache was already
+        # dropped: nothing to do here, not an error
+        return {"ok": True, "skipped": True, "elapsed": 0.0,
+                "msg": "no conditioning cached"}
+
+    t0 = time.perf_counter()
+    try:
+        loaded = comfy_bridge.load_edit_conditioning(te_path)
+    except ValueError as exc:
+        # a conditioning of the other family left in this folder (same stem):
+        # skip instead of sampling a mismatched structure
+        logger.warning("colorize_frame_edit_from_te: %s: %s", stem, exc)
+        return {"ok": True, "skipped": True, "elapsed": 0.0, "msg": str(exc)}
+
+    colorized_lowres = comfy_bridge.colorize_edit_from_conditioning(
+        pipe, loaded["conditioning"], loaded["latent"], steps=steps, seed=seed)
+    meta = loaded["meta"]
+    try:
+        orig_size = (int(meta.get("orig_width")), int(meta.get("orig_height")))
+    except (TypeError, ValueError):
+        orig_size = colorized_lowres.size
+    colorized_upscaled = upscale_with_lanczos(colorized_lowres, orig_size)
+    colorized_upscaled.save(out_path)
+    elapsed = time.perf_counter() - t0
+    logger.info("colorize_frame_edit_from_te: %s", stem)
+    return {"ok": True, "skipped": False, "elapsed": elapsed, "msg": ""}
+
+
 def cleanup_te_cache(te_dir) -> dict:
     """Delete the conditioning files of a colorized chunk and reset the
     manifest frames (its key fields stay): the split flow only needs the cache
     while the chunk's frames are being colorized, so the disk stays bounded.
-    Returns {"ok", "count", "msg"}.
+    Shared by the viggle and edit split flows. Returns {"ok", "count", "msg"}.
     """
     te_dir = str(te_dir)
     count = 0

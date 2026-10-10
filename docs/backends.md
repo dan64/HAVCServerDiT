@@ -2,9 +2,9 @@
 
 Four backends, one API — pick the one that fits your hardware.
 
-> ¹ Measured with **Fast Pipeline** — for `qwen21-viggle` the cached text-encoder split, for `nunchaku-qwen` paired inference (two frames per forward pass) — at the backend's fastest recommended step count. ² `gguf-qwen`/`longcat-gguf` don't support paired inference (fall back to per-image processing, see [What's New](whats-new.md)) — their figure is a genuine single-image time, not directly comparable to the Fast Pipeline figures above.
+> ¹ Measured with **Fast Pipeline** — for `qwen21-viggle` and `gguf-qwen` the cached text-encoder split, for `nunchaku-qwen` paired inference (two frames per forward pass) — at the backend's fastest recommended step count, warm-up excluded. ² `longcat-gguf` has no Fast Pipeline path (falls back to per-image processing, see [What's New](whats-new.md)) — its figure is a genuine single-image time, not directly comparable to the Fast Pipeline figures above.
 
-> **Recommended**: **nunchaku-qwen** and **qwen21-viggle** are both recommended for production use, nunchaku-qwen at the fastest usable step count (`steps=2`) has an inference speed of about **4 sec/frame** using _Fast Pipeline_, **qwen21-viggle** at fastest usable step count (`steps=2`) has an inference speed of about **6 sec/frame**; using _Fast Pipeline_ the speed improves to about **3 sec/frame** (the cached text-encoder split, see the `⚠️ Fast Pipeline` note below). `qwen21-viggle` needs meaningfully less hardware (14GB+ VRAM / 32GB+ RAM vs. 16GB+ VRAM / 64GB+ RAM; with _Fast Pipeline_ it runs in **12 GB** of VRAM). `longcat-gguf` remain the choice for VRAM-constrained setups where neither of the above fits, at a real speed cost (see the `⚠️ Experimental` note under GGUF below).
+> **Recommended**: **nunchaku-qwen** and **qwen21-viggle** are both recommended for production use, nunchaku-qwen at the fastest usable step count (`steps=2`) has an inference speed of about **4 sec/frame** using _Fast Pipeline_, **qwen21-viggle** at fastest usable step count (`steps=2`) has an inference speed of about **6 sec/frame**; using _Fast Pipeline_ the speed improves to about **3 sec/frame** (the cached text-encoder split, see the `⚠️ Fast Pipeline` note below). `qwen21-viggle` needs meaningfully less hardware (14GB+ VRAM / 32GB+ RAM vs. 16GB+ VRAM / 64GB+ RAM; with _Fast Pipeline_ it runs in **12 GB** of VRAM). **`gguf-qwen`** (Qwen-Image-Edit 2511) now also supports the cached-TE split: **~7.3 sec/frame** against ~10.5 sec/frame for the standard path (~1.4×, 17-frame test at 2 steps), on a 16 GB+ GPU / 48 GB+ RAM for the recommended `qwen-2511_int8` config (12 GB+ with `qwen-2511_q3`). `longcat-gguf` remain the choice for VRAM-constrained setups where neither of the above fits, at a real speed cost (see the `⚠️ Experimental` note under GGUF below).
 >
 > ⚠️ **Fast Pipeline + `qwen21-viggle`** (2.4.0): this backend no longer uses paired inference — _Fast Pipeline_ runs a **cached text-encoder split**: each frame's text-encoder conditioning is computed once and cached, then the sampling runs with the UNet resident, in chunks of 200 frames (~**3 sec/frame**, roughly 2× the standard path). There is no merge boundary, nor the paired-mode resolution trade-off it required. A chunk's cache is deleted once its frames are colorized, and a cancelled run resumes from the first missing frame. In standard (non-Fast) mode the single-frame path runs at about **6 sec/frame**. On secondary, color-ambiguous details (e.g. a flower's petals) a run can still land on a noticeably different but plausible hue — the color-hedging behavior described above, not a defect. The [Viggle-Turbo](https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo) LoRA is still an experimental release: spot-check the output before a long batch run.
 >
@@ -26,12 +26,12 @@ Choose the backend that matches your hardware:
 > **RTX 30/40-Series (Ampere / Ada)**: use `"model_precision": "int4"`. FP4 requires Blackwell (RTX 50).
 > Requires Nunchaku 1.2.1 and `diffusers==0.37.0.dev0` (wheel published in the release assets).
 
-### qwen-2511 (gguf-qwen) : int8 ConvRot (16 GB+) or Q3_K_S (12 GB+)
+### qwen-2511 (gguf-qwen) : ~7.3 sec/frame with Fast Pipeline, ~10.5 without (int8 ConvRot 16 GB+ / Q3_K_S 12 GB+)
 
 | Requirement | Details                                |
 | ----------- | -------------------------------------- |
 | **GPU**     | NVIDIA RTX 30/40/50  (12 GB+: `qwen-2511_q3`; 16 GB+: `qwen-2511_int8`) |
-| **RAM**     | 32 GB+                                 |
+| **RAM**     | 32 GB+ (`qwen-2511_q3`); 48 GB+ (`qwen-2511_int8` — streams through system RAM) |
 | **CUDA**    | 13.0+ (or CPU-only: slower, zero VRAM) |
 
 > **`qwen-2511_int8`** is the recommended config: the official Comfy-Org int8
@@ -43,6 +43,17 @@ Choose the backend that matches your hardware:
 > character's expression visibly shifted (a smile appeared), and the int8
 > checkpoint was clearly ahead overall. Use it only when VRAM rules out
 > `qwen-2511_int8`.
+>
+> **Fast Pipeline is supported** (cached-TE split, `ref_te_edit/`): the edit
+> conditioning is cached per frame, then the sampling runs with the UNet
+> resident. Measured with `qwen-2511_int8` on an RTX 5070 Ti 16 GB
+> (920×672 frames, 2 steps, warm-up excluded): **7.33 s/frame** steady —
+> 1.33 s conditioning + 6.00 s sampling from the cache — on a 17-frame run
+> (the first frame costs ~14 s more, one-time; at 4 steps the split measures
+> ~11.9 s/frame). The standard single-frame path runs at
+> **~10.4–10.8 s/frame**, so the split is ~1.4× faster here; on 16 GB the
+> UNet is partly streamed from system RAM (peak VRAM ~13.4 GB, ~6.9 GB
+> offloaded; measured process RAM ~40 GB working set / ~50 GB committed).
 > Uses ComfyUI-native code : no ComfyUI GUI installation needed.
 > Both configs live in the `config/` folder.
 

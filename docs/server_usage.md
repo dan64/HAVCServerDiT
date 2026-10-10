@@ -110,7 +110,7 @@ it does not take an argument and always launches with
 | Model Family             | Recommended Steps | Notes                                                                                  |
 | ------------------------ | ----------------- | -------------------------------------------------------------------------------------- |
 | Qwen (nunchaku fp4/int4) | **2**             | Good results with 2 steps when using lightning LoRA                                    |
-| Qwen (gguf q3–q8)        | **2**             | Default in config files; 4 steps possible but slower                                   |
+| Qwen-Image-Edit 2511     | **2**             | `qwen-2511_int8` / `qwen-2511_q3` — GUI default (fastest); the config files ship `steps: 4`, the LoRA's distilled step count |
 | LongCat (longcat-gguf)   | **8**             | Calibrated for 8 steps; best quality at 8 steps; 4 steps possible but colors are faded |
 | Qwen-Image-2.1 (qwen21-viggle) | **6**       | LoRA step schedules: `2`/`4`/`6`/`8` — `6` (the LoRA's native step count) gives the most accurate colors, `2` is the fastest |
 

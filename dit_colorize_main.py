@@ -83,7 +83,8 @@ def load_gguf_pipeline(model_name: str, unet_gguf_path: str, clip_gguf_path: str
                        hf_clip="unsloth/Qwen2.5-VL-7B-Instruct-GGUF",
                        hf_vae="Comfy-Org/Qwen-Image_ComfyUI",
                        hf_lora="lightx2v/Qwen-Image-Edit-2511-Lightning",
-                       clip_mmproj: str = "", clip_mmproj_hf_name: str = ""):
+                       clip_mmproj: str = "", clip_mmproj_hf_name: str = "",
+                       unet_hf_name: str = ""):
     """
     Load a GGUF-quantized Qwen Image Edit pipeline.
 
@@ -98,7 +99,11 @@ def load_gguf_pipeline(model_name: str, unet_gguf_path: str, clip_gguf_path: str
     Parameters
     ----------
     model_name      : "gguf-q3-qwen" or "gguf-q4-qwen"
-    unet_gguf_path  : path to the UNet GGUF file
+    unet_gguf_path : path to the UNet file -- a GGUF quant or a native
+                     safetensors checkpoint (e.g. Comfy-Org int8 ConvRot).
+    unet_hf_name   : optional, the UNet filename as it exists on the hf_unet
+                     repo, when it differs from the local basename (e.g. the
+                     Comfy-Org "split_files/diffusion_models/" layout).
     clip_gguf_path  : path to the CLIP GGUF file
     cache_dir       : HuggingFace cache directory (optional)
     lora_path       : path to the LoRA safetensors file (optional)
@@ -129,7 +134,9 @@ def load_gguf_pipeline(model_name: str, unet_gguf_path: str, clip_gguf_path: str
     _bridge = _bridge_dir
     _vae_local = _os.path.join(_bridge, "models", "vae", vae_name)
     _files = {
-        "unet": (unet_gguf_path, hf_unet, _os.path.basename(unet_gguf_path)),
+        # unet: unet_hf_name overrides the assumed remote path when the file
+        # is not stored at the repo root (e.g. Comfy-Org's split_files/ layout).
+        "unet": (unet_gguf_path, hf_unet, unet_hf_name or _os.path.basename(unet_gguf_path)),
         "clip": (clip_gguf_path, hf_clip, _os.path.basename(clip_gguf_path)),
         "vae":  (_vae_local, hf_vae, "split_files/vae/" + vae_name),
         "lora": (lora_path, hf_lora, _os.path.basename(lora_path)) if lora_path else None,

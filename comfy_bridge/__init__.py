@@ -50,15 +50,24 @@ def load_gguf_pipeline(unet_path, clip_path, vae_name="qwen_image_vae.safetensor
     update_folder_names_and_paths("clip_gguf", [os.path.dirname(clip_path)])
     logging.getLogger().setLevel(_prev_level)
 
-    # UNet
-    logger.info("Loading UNet GGUF: %s", unet_path)
-    ops = GGMLOps()
-    sd, extra = gguf_sd_loader(unet_path)
-    model = comfy.sd.load_diffusion_model_state_dict(sd, model_options={"custom_operations": ops})
-    if model is None:
-        raise RuntimeError(f"Failed to load UNet from {unet_path}")
-    model = GGUFModelPatcher.clone(model)
-    logger.info("UNet loaded (%s)", extra.get("arch_str", "?"))
+    # UNet: GGUF quant (ComfyUI-GGUF recipe, dequantized per-op) or native
+    # safetensors (stock UNETLoader) -- e.g. the Comfy-Org int8 ConvRot
+    # checkpoint for Qwen-Image-Edit 2511.
+    unet_name = os.path.basename(unet_path)
+    if unet_name.lower().endswith(".gguf"):
+        logger.info("Loading UNet GGUF: %s", unet_name)
+        ops = GGMLOps()
+        sd, extra = gguf_sd_loader(unet_path)
+        model = comfy.sd.load_diffusion_model_state_dict(sd, model_options={"custom_operations": ops})
+        if model is None:
+            raise RuntimeError(f"Failed to load UNet from {unet_path}")
+        model = GGUFModelPatcher.clone(model)
+        logger.info("UNet loaded (%s)", extra.get("arch_str", "?"))
+    else:
+        import nodes as cn
+        logger.info("Loading UNet (native safetensors): %s", unet_name)
+        model = get_value_at_index(
+            cn.UNETLoader().load_unet(unet_name=unet_name, weight_dtype="default"), 0)
 
     # CLIP
     logger.info("Loading CLIP GGUF: %s", clip_path)

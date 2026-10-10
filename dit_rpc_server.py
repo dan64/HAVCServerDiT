@@ -272,6 +272,7 @@ class ColorizeService:
                         hf_lora=hf_lora,
                         clip_mmproj=clip_mmproj,
                         clip_mmproj_hf_name=clip_mmproj_hf_name,
+                        unet_hf_name=unet_hf_name,
                     )
                 elif model_name == "longcat-gguf":
                     pipe = load_longcat_pipeline(
@@ -1134,6 +1135,7 @@ def parse_pipeline_config(config_path: str) -> dict:
             "hf_lora": cfg.get("hf_lora", "lightx2v/Qwen-Image-Edit-2511-Lightning"),
             "clip_mmproj": cfg.get("clip_mmproj", ""),
             "clip_mmproj_hf_name": cfg.get("clip_mmproj_hf_name", ""),
+            "unet_hf_name": cfg.get("unet_hf_name", ""),
         }
 
     # New format (qwen21-viggle, native ComfyUI int8 ConvRot weights)

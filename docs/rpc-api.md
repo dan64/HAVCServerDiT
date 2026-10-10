@@ -63,7 +63,8 @@ All methods return a `dict` with at least `{"ok": bool, "msg": str}`.
 >
 > `usm_radius` (all colorization methods above, default `0` = off) applies an
 > **Unsharp Mask** pre-filter to the B&W input before colorization: amount
-> 0.50, threshold 0, radius as given (clamped to 50). It removes the film
+> 0.50, threshold 0, radius as given (the GUI exposes **1–4**, default `2`;
+> the server only clamps to 50 as a safety bound). It removes the film
 > grain that can stop the model from colorizing. The split-flow endpoints
 > take it too — `encode_frame_te(..., usm_radius=0)` and
 > `encode_frame_edit(..., usm_radius=0)` bake the filter into the cached

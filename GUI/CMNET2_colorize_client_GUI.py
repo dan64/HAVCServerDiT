@@ -270,14 +270,14 @@ def load_all_configs():
         "steps":                  "2",
         "fast_pipe":              True,
         "usm":                    False,
-        "usm_radius":             "3",
+        "usm_radius":             "2",
         "enhance_prompt":         False,
         "run_server_external":    False,
         # --- fix image ---
         "fix_steps":              "2",
         "fix_bw":                 True,
         "fix_usm":                False,
-        "fix_usm_radius":         "3",
+        "fix_usm_radius":         "2",
         "fix_batch":              False,
         "fix_enhance_prompt":     False,
         "fix_prompt_max":         "30",
@@ -721,17 +721,19 @@ def gui_get(window, values, key, default=None):
         _gui_read_replies.pop(token, None)
 
 
-def usm_radius_of(values, checkbox_key, radius_key, default=3.0):
+def usm_radius_of(values, checkbox_key, radius_key, default=2.0):
     """Unsharp-mask radius to send to the server: 0.0 when the checkbox is
-    off (the server treats radius <= 0 as disabled). Invalid input falls back
-    to the default."""
+    off (the server treats radius <= 0 as disabled). The radius is defined on
+    a 1-4 range (default 2): invalid input falls back to the default and
+    out-of-range values are clamped. Self-contained on purpose -- the test
+    harnesses exec this source in an empty namespace."""
     if not values.get(checkbox_key, False):
         return 0.0
     try:
         radius = float(str(values.get(radius_key, "") or default).strip().replace(",", "."))
     except (TypeError, ValueError):
         radius = float(default)
-    return radius if radius > 0 else 0.0
+    return min(max(radius, 1.0), 4.0)
 
 
 def _serve_gui_read(window, token, key):
@@ -2044,6 +2046,13 @@ nvenc_cq_values:   list[str] = [f"{x/10:.2f}" for x in range(220, 305, 5)]
 encoder_values:    list[str] = ['x264', 'x265', 'Nvenc']
 memory_values:     list[str] = [f"{x}" for x in range(10, 110, 10)]
 steps_values:      list[str] = ['2', '4', '6', '8']
+usm_radius_values: list[str] = ['1', '2', '3', '4']   # Unsharp Mask radius range
+
+
+def usm_radius_default(value: str) -> str:
+    """Combo default for the Unsharp Mask radius: the saved value when it is
+    in the 1-4 range, else 2."""
+    return value if value in usm_radius_values else "2"
 speed_values:    list[str] = ['auto', 'fast', 'medium', 'slow', 'slower']
 backbone_values: list[str] = ['dinov3', 'dinov2']
 proximity_alpha_values: list[str] = [f"{x/100:.2f}" for x in range(10, 110, 10)]
@@ -2365,9 +2374,10 @@ tab3_layout = [
          sg.Checkbox("Unsharp Mask", key="-USM-", default=cfg.get("usm", False),
                      tooltip="Pre-filter the input before colorization (unsharp mask: amount 0.50, "
                              "threshold 0). Removes the film grain that can stop the model from "
-                             "colorizing; set the radius beside."),
+                             "colorizing; set the radius (1-4) beside."),
          sg.Text("Radius:"),
-         sg.Input(cfg.get("usm_radius", "3"), key="-USM_RADIUS-", size=(4, 1))],
+         sg.Combo(usm_radius_values, default_value=usm_radius_default(cfg.get("usm_radius", "2")),
+                  key="-USM_RADIUS-", readonly=True, size=(4, 1))],
     ], expand_x=True)],
     [sg.Text("Prompt:"), sg.Multiline(cfg["prompt"], key="-PROMPT-", expand_x=True, size=(80,4), no_scrollbar=True),
      sg.Checkbox("Enhance Prompt", key="-ENHANCE_PROMPT-", default=cfg.get("enhance_prompt", False))],
@@ -2449,9 +2459,10 @@ tab5_layout = [
      sg.Checkbox("Unsharp Mask", key="-FIX_USM-", default=cfg.get("fix_usm", False),
                  tooltip="Pre-filter the input before colorization (unsharp mask: amount 0.50, "
                          "threshold 0). Removes the film grain that can stop the model from "
-                         "colorizing; set the radius beside."),
+                         "colorizing; set the radius (1-4) beside."),
      sg.Text("Radius:"),
-     sg.Input(cfg.get("fix_usm_radius", "3"), key="-FIX_USM_RADIUS-", size=(4, 1)),
+     sg.Combo(usm_radius_values, default_value=usm_radius_default(cfg.get("fix_usm_radius", "2")),
+              key="-FIX_USM_RADIUS-", readonly=True, size=(4, 1)),
      sg.Checkbox("Enhance Prompt", key="-FIX_ENHANCE_PROMPT-", default=cfg.get("fix_enhance_prompt", False))],
     [sg.Text("Prompt:"),
      sg.Combo(state["fix_prompts"], default_value=state["fix_prompts"][0],

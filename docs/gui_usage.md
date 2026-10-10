@@ -364,6 +364,7 @@ for example in the Cluster 2, the reference frame #000145 was selected to repres
 | **External console**     | Reverts **Run Server** to its previous behavior: launches `start_server.cmd <config-name>` in its own visible terminal window instead, with no control or logging from the GUI |
 | **Colorization Steps**   | Diffusion steps per frame (lower = faster). LongCat recommends 8 steps, Qwen 2 steps, qwen21-viggle 6 steps (its LoRA's native step count; step schedules `2`/`4`/`6`/`8` — `6` gives the most accurate colors, `2` is the fastest) |
 | **Fast Pipeline**        | Faster colorization mode. qwen21-viggle / qwen-2511 (gguf-qwen): **cached-TE split flow** (conditioning cached per frame in `ref_te/` / `ref_te_edit/`, then sampled — roughly 2× faster on qwen21-viggle, ~1.4× on qwen-2511: 7.3 vs ~10.5 s/frame at 2 steps). nunchaku-qwen: **paired inference**, two frames in one forward pass. longcat-gguf falls back to per-image processing |
+| **Unsharp Mask**         | Pre-filter the input before colorization (unsharp mask: amount 0.50, threshold 0) — removes the film grain that can stop the model from colorizing. Set the **Radius** in the small field beside it (default `3`). Applies in every mode: standard, Fast Pipeline and paired |
 | **Enhance Prompt**       | **qwen21-viggle only**: rewrites the prompt via Qwen3-VL before colorizing (image-aware, adds ~15-20s/frame) — no effect on other backends. Try a direct anti-hedging prompt first, see [Suggested Inference Steps](server_usage.md#-suggested-inference-steps) |
 | **Prompt**               | Text prompt sent to the model                                                                                                                                  |
 | **Cache Directory**      | HuggingFace cache (leave empty for default)                                                                                                                    |
@@ -412,6 +413,7 @@ Supports both SHM (same-host) and PNG-over-RPC (remote server) transport.
 | **Colorization Steps**   | Inference steps (default: 2)                                                  |
 | **Enhance Prompt**       | **qwen21-viggle only**: rewrites the prompt via Qwen3-VL before colorizing — no effect on other backends |
 | **Convert in B&W**       | Convert the input to grayscale before colorization (useful for re‑colorizing) |
+| **Unsharp Mask**         | Pre-filter the input before colorization (unsharp mask: amount 0.50, threshold 0), radius in the field beside (default `3`) — for grainy sources the model would otherwise leave B&W |
 | **Prompt**               | Text prompt for the model (combo with history)                                |
 | **Max / Delete / Clear** | Prompt history management                                                     |
 | **Load Image**           | Load image via the ComboBox, drag‑and‑drop, or Browse                         |

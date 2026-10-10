@@ -67,6 +67,7 @@ try:
         process_single_image,
         is_image_dark,
         resize_long_side,
+        apply_input_usm,
         colorize_image    as _colorize_image,
         upscale_with_lanczos,
         merge_two_images_with_gap,
@@ -84,6 +85,7 @@ except ImportError as _e:
     process_single_image      = None
     is_image_dark             = None
     resize_long_side          = None
+    apply_input_usm           = None
     _colorize_image           = None
     upscale_with_lanczos      = None
     merge_two_images_with_gap = None
@@ -392,6 +394,7 @@ class ColorizeService:
         img_size: int = 0,
         steps: int = 2,
         enhance_prompt: bool = False,
+        usm_radius: float = 0.0,
     ) -> dict:
         """
         Corresponds to process_image() in dit_colorize_main.py.
@@ -405,6 +408,8 @@ class ColorizeService:
         steps     : inference steps (default 2)
         enhance_prompt : rewrite the prompt with Qwen3-VL image-aware rewriting
                          before colorizing (qwen21-viggle only, ignored otherwise)
+        usm_radius : optional unsharp-mask pre-filter radius for the input
+                     (0 = off; amount/threshold are fixed)
 
         Returns
         -------
@@ -423,6 +428,7 @@ class ColorizeService:
                 img_size=img_size,
                 steps=steps,
                 enhance_prompt=enhance_prompt,
+                usm_radius=float(usm_radius or 0.0),
             )
             skipped = (elapsed == 0.0)
             logging.info(f"colorize_image: {Path(in_path).name} -> {elapsed:.2f}s"
@@ -437,7 +443,7 @@ class ColorizeService:
     # ------------------------------------------------------------------
     def encode_frames_te(self, in_dir: str, out_dir: str, prompt: str,
                          resolution: int = 1024, img_size: int = 0,
-                         enhance_prompt: bool = False) -> dict:
+                         enhance_prompt: bool = False, usm_radius: float = 0.0) -> dict:
         """Phase A of the split colorize: precompute and cache the text-encoder
         conditioning for every image in in_dir (one .safetensors per frame
         plus manifest.json in out_dir).
@@ -455,7 +461,8 @@ class ColorizeService:
                 self._pipeline, str(in_dir), str(out_dir), str(prompt),
                 resolution=int(resolution), img_size=int(img_size),
                 enhance_prompt=bool(enhance_prompt),
-                model_config=(self._pipeline_config_name or self._pipeline_model_name or ""))
+                model_config=(self._pipeline_config_name or self._pipeline_model_name or ""),
+                usm_radius=float(usm_radius or 0.0))
             logging.info("encode_frames_te: %s encoded, %s skipped, %.2fs",
                          res.get("count"), res.get("skipped"), res.get("elapsed", 0.0))
             return res
@@ -487,7 +494,8 @@ class ColorizeService:
 
     def encode_frame_te(self, in_path: str, te_dir: str, stem: str, prompt: str,
                         resolution: int = 1024, img_size: int = 0,
-                        enhance_prompt: bool = False, first: bool = False) -> dict:
+                        enhance_prompt: bool = False, first: bool = False,
+                        usm_radius: float = 0.0) -> dict:
         """Phase A (single frame) of the split colorize: cache the conditioning
         of one frame under te_dir/<stem>.safetensors; first=True drops the
         loaded models so the TE + VAE start clean. Already-cached frames are
@@ -502,7 +510,8 @@ class ColorizeService:
                 self._pipeline, str(in_path), str(te_dir), str(stem), str(prompt),
                 resolution=int(resolution), img_size=int(img_size),
                 enhance_prompt=bool(enhance_prompt), first=bool(first),
-                model_config=(self._pipeline_config_name or self._pipeline_model_name or ""))
+                model_config=(self._pipeline_config_name or self._pipeline_model_name or ""),
+                usm_radius=float(usm_radius or 0.0))
             logging.info("encode_frame_te: %s skipped=%s %.2fs",
                          stem, res.get("skipped"), res.get("elapsed", 0.0))
             return res
@@ -531,7 +540,8 @@ class ColorizeService:
             return {"ok": False, "skipped": False, "elapsed": 0.0, "msg": str(e)}
 
     def encode_frame_edit(self, in_path: str, te_dir: str, stem: str, prompt: str,
-                          img_size: int = 0, first: bool = False) -> dict:
+                          img_size: int = 0, first: bool = False,
+                          usm_radius: float = 0.0) -> dict:
         """Phase A (single frame) of the split colorize for the Qwen-Image-Edit
         2511 family (gguf-qwen): cache the conditioning of one frame under
         te_dir/<stem>.safetensors (the edit node's context + reference latent +
@@ -550,7 +560,8 @@ class ColorizeService:
             res = _encode_frame_edit(
                 self._pipeline, str(in_path), str(te_dir), str(stem), str(prompt),
                 img_size=int(img_size), first=bool(first),
-                model_config=(self._pipeline_config_name or self._pipeline_model_name or ""))
+                model_config=(self._pipeline_config_name or self._pipeline_model_name or ""),
+                usm_radius=float(usm_radius or 0.0))
             logging.info("encode_frame_edit: %s skipped=%s %.2fs",
                          stem, res.get("skipped"), res.get("elapsed", 0.0))
             return res
@@ -609,6 +620,7 @@ class ColorizeService:
         gap_px: int = 8,
         steps: int = 2,
         enhance_prompt: bool = False,
+        usm_radius: float = 0.0,
     ) -> dict:
         """
         Corresponds to process_image_pair() in dit_colorize_main.py.
@@ -623,7 +635,7 @@ class ColorizeService:
             return {"ok": False, "elapsed": 0.0, "msg": "Pipeline not loaded"}
         # GGUF does not support paired inference: fall back to single-image processing
         if self._pipeline_model_name in ("gguf-qwen", "longcat-gguf"):
-            return self._colorize_pair_fallback_file(img1_path, img2_path, out_dir, prompt, gap_px, steps, enhance_prompt)
+            return self._colorize_pair_fallback_file(img1_path, img2_path, out_dir, prompt, gap_px, steps, enhance_prompt, usm_radius)
         try:
             elapsed = process_image_pair(
                 pipe=self._pipeline,
@@ -634,6 +646,7 @@ class ColorizeService:
                 gap_px=gap_px,
                 steps=steps,
                 enhance_prompt=enhance_prompt,
+                usm_radius=float(usm_radius or 0.0),
             )
             logging.info(
                 f"colorize_image_pair: {Path(img1_path).name} + "
@@ -644,12 +657,12 @@ class ColorizeService:
             logging.exception("colorize_image_pair failed")
             return {"ok": False, "elapsed": 0.0, "msg": str(e)}
 
-    def _colorize_pair_fallback_file(self, img1_path, img2_path, out_dir, prompt, gap_px, steps, enhance_prompt=False):
+    def _colorize_pair_fallback_file(self, img1_path, img2_path, out_dir, prompt, gap_px, steps, enhance_prompt=False, usm_radius=0.0):
         """GGUF fallback: process two images individually, return combined result."""
         out1 = str(Path(out_dir) / (Path(img1_path).stem + ".jpg"))
         out2 = str(Path(out_dir) / (Path(img2_path).stem + ".jpg"))
-        res1 = self.colorize_image(img1_path, out1, prompt, steps=steps, enhance_prompt=enhance_prompt)
-        res2 = self.colorize_image(img2_path, out2, prompt, steps=steps, enhance_prompt=enhance_prompt)
+        res1 = self.colorize_image(img1_path, out1, prompt, steps=steps, enhance_prompt=enhance_prompt, usm_radius=usm_radius)
+        res2 = self.colorize_image(img2_path, out2, prompt, steps=steps, enhance_prompt=enhance_prompt, usm_radius=usm_radius)
         elapsed = (res1.get("elapsed", 0.0) or 0.0) + (res2.get("elapsed", 0.0) or 0.0)
         ok = res1.get("ok", False) and res2.get("ok", False)
         msg = res1.get("msg", "") or res2.get("msg", "")
@@ -665,6 +678,7 @@ class ColorizeService:
         prompt: str,
         steps: int = 2,
         enhance_prompt: bool = False,
+        usm_radius: float = 0.0,
     ) -> dict:
         """
         Corresponds to process_single_image() in dit_colorize_main.py.
@@ -684,6 +698,7 @@ class ColorizeService:
                 prompt=prompt,
                 steps=steps,
                 enhance_prompt=enhance_prompt,
+                usm_radius=float(usm_radius or 0.0),
             )
             logging.info(
                 f"colorize_single_image: {Path(img_path).name} -> {elapsed:.2f}s"
@@ -705,6 +720,7 @@ class ColorizeService:
         seed: int = 42,
         skip_bw: bool = False,
         enhance_prompt: bool = False,
+        usm_radius: float = 0.0,
     ) -> dict:
         """
         Colorize a single B&W frame passed as raw PNG bytes.
@@ -721,6 +737,8 @@ class ColorizeService:
             Maximum long side before inference. 0 = original size.
         steps    : int
             Inference steps (default 2).
+        usm_radius : float
+            Optional unsharp-mask pre-filter radius (0 = off).
 
         Returns
         -------
@@ -743,6 +761,7 @@ class ColorizeService:
                 img_in = original
             else:
                 img_in = ImageEnhance.Color(original).enhance(0.0)
+            img_in = apply_input_usm(img_in, usm_radius)
             orig_size = original.size
             img_in = resize_long_side(img_in, img_size) if img_size > 0 else img_in
 
@@ -909,6 +928,7 @@ class ColorizeService:
         seed: int = 42,
         skip_bw: bool = False,
         enhance_prompt: bool = False,
+        usm_radius: float = 0.0,
     ) -> dict:
         """
         Shared-memory variant of colorize_frame().
@@ -956,6 +976,7 @@ class ColorizeService:
                     img_in = original
                 else:
                     img_in = ImageEnhance.Color(original).enhance(0.0)
+                img_in = apply_input_usm(img_in, usm_radius)
                 orig_size = original.size
                 img_in = resize_long_side(img_in, img_size) if img_size > 0 else img_in
 

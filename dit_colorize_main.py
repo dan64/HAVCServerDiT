@@ -499,6 +499,35 @@ def is_image_dark(img: Image, threshold: int = 20):
     avg_brightness = stat.mean[0]  # Mean of grayscale channel
     return avg_brightness < threshold
 
+# ---------------------------------------------------------------------------
+# Unsharp-mask input pre-filter (opt-in, used by the colorization paths)
+# ---------------------------------------------------------------------------
+
+# Fixed amount/threshold (Pillow `percent` / `threshold`), mirroring the
+# reference settings validated on sources whose film grain stopped the model
+# from colorizing (GIMP: amount 0.50, threshold 0). Only the radius is a
+# client parameter; radius <= 0 disables the filter.
+USM_AMOUNT = 50
+USM_THRESHOLD = 0
+
+
+def apply_input_usm(img: Image.Image, usm_radius: float = 0.0) -> Image.Image:
+    """Optional Unsharp Mask pre-filter for a colorization input.
+
+    No-op when usm_radius <= 0 (or not numeric); the radius is clamped to 50
+    so a hand-edited client cannot stall the pipeline.
+    """
+    try:
+        radius = float(usm_radius)
+    except (TypeError, ValueError):
+        return img
+    if not radius > 0:
+        return img
+    from PIL import ImageFilter
+    return img.filter(ImageFilter.UnsharpMask(
+        radius=min(radius, 50.0), percent=USM_AMOUNT, threshold=USM_THRESHOLD))
+
+
 def merge_two_images_with_gap(img1: Image.Image, img2: Image.Image, gap_px: int = 16) -> Image.Image:
     """Merge two same-height images with neutral gray gap."""
     w1, h1 = img1.size
@@ -517,7 +546,7 @@ def split_merged_output(colorized_merged: Image.Image, width1: int, gap_px: int 
     right = colorized_merged.crop((width1 + gap_px, 0, total_w, h))
     return left, right
 
-def process_image(input_path, output_path, pipe, prompt: str = None, img_size:int = 0, steps: int = 2, log_fn=None, enhance_prompt: bool = False) -> float:
+def process_image(input_path, output_path, pipe, prompt: str = None, img_size:int = 0, steps: int = 2, log_fn=None, enhance_prompt: bool = False, usm_radius: float = 0.0) -> float:
 
     if output_path.exists():
         if log_fn is not None:
@@ -531,14 +560,14 @@ def process_image(input_path, output_path, pipe, prompt: str = None, img_size:in
             log_fn(f'⚠️ Image: "{input_path}" too dark to be colorized')
         return 0
 
-    t_elapsed = process_image_standard(pipe, original, output_path, prompt, img_size=img_size, steps=steps, enhance_prompt=enhance_prompt)
+    t_elapsed = process_image_standard(pipe, original, output_path, prompt, img_size=img_size, steps=steps, enhance_prompt=enhance_prompt, usm_radius=usm_radius)
 
     if log_fn is not None:
         log_fn(f"✅ colored: {output_path} [{t_elapsed:.2f} sec.]")
 
     return t_elapsed
 
-def process_single_image(pipe, img_path: Path, output_dir: Path, prompt: str, steps: int = 2, enhance_prompt: bool = False) -> float:
+def process_single_image(pipe, img_path: Path, output_dir: Path, prompt: str, steps: int = 2, enhance_prompt: bool = False, usm_radius: float = 0.0) -> float:
     """Fallback for odd-numbered batches."""
     out_path = output_dir / (img_path.stem + ".jpg")
     original = Image.open(img_path).convert("RGB")
@@ -546,11 +575,12 @@ def process_single_image(pipe, img_path: Path, output_dir: Path, prompt: str, st
     if is_image_dark(original, threshold=9):
         return 0
 
-    return process_image_standard(pipe, original, out_path, prompt, steps=steps, enhance_prompt=enhance_prompt)
+    return process_image_standard(pipe, original, out_path, prompt, steps=steps, enhance_prompt=enhance_prompt, usm_radius=usm_radius)
 
-def process_image_standard(pipe, original, output_path, prompt, img_size: int = 1024, steps: int = 2, enhance_prompt: bool = False) -> float:
+def process_image_standard(pipe, original, output_path, prompt, img_size: int = 1024, steps: int = 2, enhance_prompt: bool = False, usm_radius: float = 0.0) -> float:
 
     bw = ImageEnhance.Color(original).enhance(0.0)
+    bw = apply_input_usm(bw, usm_radius)
     orig_size = original.size
 
     if img_size == 0:
@@ -572,7 +602,7 @@ def process_image_standard(pipe, original, output_path, prompt, img_size: int = 
 # Split colorize (phase A/B): cached text-encoder conditioning
 # ----------------------------
 
-def _te_manifest_key(model_config, prompt, resolution, img_size, enhance_prompt):
+def _te_manifest_key(model_config, prompt, resolution, img_size, enhance_prompt, usm_radius: float = 0.0):
     """The cache-key fields: a manifest is only valid when all of them match."""
     return {
         "model_config": model_config,
@@ -580,6 +610,7 @@ def _te_manifest_key(model_config, prompt, resolution, img_size, enhance_prompt)
         "resolution": resolution,
         "img_size": img_size,
         "enhance_prompt": bool(enhance_prompt),
+        "usm_radius": round(float(usm_radius or 0.0), 3),
     }
 
 
@@ -594,6 +625,7 @@ def _te_manifest_load(te_dir, key):
             old = json.load(fh)
     except Exception:
         return None, {}
+    old.setdefault("usm_radius", 0.0)   # pre-USM manifests: filter was off
     if any(old.get(k) != v for k, v in key.items()):
         return None, {}
     return old, dict(old.get("frames") or {})
@@ -611,7 +643,8 @@ def _te_manifest_save(te_dir, key, frames):
 
 def encode_frame_te(pipe, img_path, te_dir, stem, prompt, resolution: int = 1024,
                     img_size: int = 0, enhance_prompt: bool = False,
-                    first: bool = False, model_config: str = "") -> dict:
+                    first: bool = False, model_config: str = "",
+                    usm_radius: float = 0.0) -> dict:
     """Phase A, single frame: encode + cache the viggle conditioning of one
     image under te_dir/<stem>.safetensors. first=True drops every loaded model
     before anything else (so the TE + VAE start from a clean VRAM even when
@@ -636,7 +669,7 @@ def encode_frame_te(pipe, img_path, te_dir, stem, prompt, resolution: int = 1024
         comfy.model_management.unload_all_models()
 
     os.makedirs(te_dir, exist_ok=True)
-    key = _te_manifest_key(model_config, prompt, resolution, img_size, enhance_prompt)
+    key = _te_manifest_key(model_config, prompt, resolution, img_size, enhance_prompt, usm_radius)
     _, cached = _te_manifest_load(te_dir, key)
 
     src = str(img_path)
@@ -653,6 +686,7 @@ def encode_frame_te(pipe, img_path, te_dir, stem, prompt, resolution: int = 1024
         return {"ok": True, "skipped": True, "elapsed": 0.0, "msg": "too dark"}
 
     bw = ImageEnhance.Color(original).enhance(0.0)
+    bw = apply_input_usm(bw, usm_radius)
     orig_w, orig_h = original.size
     img_in = resize_long_side(bw, img_size) if img_size > 0 else bw
 
@@ -721,7 +755,8 @@ def colorize_frame_from_te(pipe, te_dir, stem, out_path, steps: int = 2, seed: i
 
 
 def encode_frames_te(pipe, in_dir, out_dir, prompt, resolution: int = 1024, img_size: int = 0,
-                     enhance_prompt: bool = False, model_config: str = "") -> dict:
+                     enhance_prompt: bool = False, model_config: str = "",
+                     usm_radius: float = 0.0) -> dict:
     """Phase A batch: loop encode_frame_te over the images in in_dir (one
     .safetensors per frame + manifest.json). Kept for whole-batch callers; the
     GUI drives encode_frame_te frame by frame (chunked) so progress and cancel
@@ -745,7 +780,7 @@ def encode_frames_te(pipe, in_dir, out_dir, prompt, resolution: int = 1024, img_
         res = encode_frame_te(pipe, os.path.join(in_dir, name), out_dir, stem,
                               prompt, resolution=resolution, img_size=img_size,
                               enhance_prompt=enhance_prompt, first=(i == 0),
-                              model_config=model_config)
+                              model_config=model_config, usm_radius=usm_radius)
         if not res.get("ok"):
             logger.warning("encode_frames_te: %s: %s", name, res.get("msg"))
             continue
@@ -809,7 +844,8 @@ def colorize_frames_from_te(pipe, te_dir, out_dir, steps: int = 2, seed: int = 4
 # ----------------------------
 
 def encode_frame_edit(pipe, img_path, te_dir, stem, prompt, img_size: int = 0,
-                      first: bool = False, model_config: str = "") -> dict:
+                      first: bool = False, model_config: str = "",
+                      usm_radius: float = 0.0) -> dict:
     """Phase A, single frame (edit family): encode + cache the conditioning of
     one image under te_dir/<stem>.safetensors. Same contract as
     encode_frame_te(): first=True drops the loaded models before anything
@@ -832,7 +868,7 @@ def encode_frame_edit(pipe, img_path, te_dir, stem, prompt, img_size: int = 0,
     os.makedirs(te_dir, exist_ok=True)
     # resolution is not a parameter of the edit path (FluxKontextImageScale
     # decides the working size from the image): 0 marks the edit format.
-    key = _te_manifest_key(model_config, prompt, 0, img_size, False)
+    key = _te_manifest_key(model_config, prompt, 0, img_size, False, usm_radius)
     _, cached = _te_manifest_load(te_dir, key)
 
     src = str(img_path)
@@ -849,6 +885,7 @@ def encode_frame_edit(pipe, img_path, te_dir, stem, prompt, img_size: int = 0,
         return {"ok": True, "skipped": True, "elapsed": 0.0, "msg": "too dark"}
 
     bw = ImageEnhance.Color(original).enhance(0.0)
+    bw = apply_input_usm(bw, usm_radius)
     orig_w, orig_h = original.size
     img_in = resize_long_side(bw, img_size) if img_size > 0 else bw
 
@@ -962,7 +999,7 @@ VIGGLE_PAIR_RESOLUTION = 1280  # working resolution for qwen21-viggle in
                                  # time cost instead of ~105%, validated by
                                  # the user on thousands of real frames.
 
-def process_image_pair(pipe, img1_path: Path, img2_path: Path, output_dir: Path, prompt: str, gap_px=16, steps: int = 2, enhance_prompt: bool = False) -> float:
+def process_image_pair(pipe, img1_path: Path, img2_path: Path, output_dir: Path, prompt: str, gap_px=16, steps: int = 2, enhance_prompt: bool = False, usm_radius: float = 0.0) -> float:
     # Load originals
     orig1 = Image.open(img1_path).convert("RGB")
     orig2 = Image.open(img2_path).convert("RGB")
@@ -981,14 +1018,16 @@ def process_image_pair(pipe, img1_path: Path, img2_path: Path, output_dir: Path,
         return 0
 
     if orig1_dark:
-        return process_image_standard(pipe, orig2, out2, prompt, steps=steps, enhance_prompt=enhance_prompt)
+        return process_image_standard(pipe, orig2, out2, prompt, steps=steps, enhance_prompt=enhance_prompt, usm_radius=usm_radius)
 
     if orig2_dark:
-        return process_image_standard(pipe, orig1, out1, prompt, steps=steps, enhance_prompt=enhance_prompt)
+        return process_image_standard(pipe, orig1, out1, prompt, steps=steps, enhance_prompt=enhance_prompt, usm_radius=usm_radius)
 
-    # Convert to B&W
+    # Convert to B&W (with the optional unsharp-mask pre-filter)
     bw1 = ImageEnhance.Color(orig1).enhance(0.0)
     bw2 = ImageEnhance.Color(orig2).enhance(0.0)
+    bw1 = apply_input_usm(bw1, usm_radius)
+    bw2 = apply_input_usm(bw2, usm_radius)
 
     # Resize to a working resolution - higher for qwen21-viggle in pair-mode
     # (mitigates fine-detail color artifacts near the merge boundary)

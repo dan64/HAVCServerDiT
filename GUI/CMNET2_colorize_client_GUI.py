@@ -133,26 +133,30 @@ class CMNET2RpcClient:
         return bool(self._proxy_fast.clear_stop())
 
     def colorize_image(self, in_path, out_path, prompt,
-                       img_size=0, steps=2, enhance_prompt=False) -> dict:
+                       img_size=0, steps=2, enhance_prompt=False, usm_radius=0.0) -> dict:
         return self._proxy_slow.colorize_image(
-            str(in_path), str(out_path), prompt, img_size, steps, enhance_prompt)
+            str(in_path), str(out_path), prompt, img_size, steps, enhance_prompt,
+            float(usm_radius))
 
     def colorize_image_pair(self, img1_path, img2_path,
-                            out_dir, prompt, gap_px=8, steps=4, enhance_prompt=False) -> dict:
+                            out_dir, prompt, gap_px=8, steps=4, enhance_prompt=False,
+                            usm_radius=0.0) -> dict:
         return self._proxy_slow.colorize_image_pair(
-            str(img1_path), str(img2_path), str(out_dir), prompt, gap_px, steps, enhance_prompt)
+            str(img1_path), str(img2_path), str(out_dir), prompt, gap_px, steps,
+            enhance_prompt, float(usm_radius))
 
-    def colorize_single_image(self, img_path, out_dir, prompt, steps=4, enhance_prompt=False) -> dict:
+    def colorize_single_image(self, img_path, out_dir, prompt, steps=4, enhance_prompt=False,
+                              usm_radius=0.0) -> dict:
         return self._proxy_slow.colorize_single_image(
-            str(img_path), str(out_dir), prompt, steps, enhance_prompt)
+            str(img_path), str(out_dir), prompt, steps, enhance_prompt, float(usm_radius))
 
     # ---- split colorize (qwen21-viggle Fast Pipeline) ----
     def encode_frame_te(self, in_path, te_dir, stem, prompt, resolution=1024,
-                        img_size=0, enhance_prompt=False, first=False) -> dict:
+                        img_size=0, enhance_prompt=False, first=False, usm_radius=0.0) -> dict:
         """Phase A, single frame: cache the conditioning of one frame."""
         return self._proxy_slow.encode_frame_te(
             str(in_path), str(te_dir), str(stem), prompt, resolution, img_size,
-            bool(enhance_prompt), bool(first))
+            bool(enhance_prompt), bool(first), float(usm_radius))
 
     def colorize_frame_from_te(self, te_dir, stem, out_path, steps=2, seed=42,
                                first=False) -> dict:
@@ -166,11 +170,11 @@ class CMNET2RpcClient:
 
     # ---- split colorize (qwen-2511 edit family Fast Pipeline) ----
     def encode_frame_edit(self, in_path, te_dir, stem, prompt, img_size=0,
-                          first=False) -> dict:
+                          first=False, usm_radius=0.0) -> dict:
         """Phase A, single frame: cache the edit conditioning of one frame."""
         return self._proxy_slow.encode_frame_edit(
             str(in_path), str(te_dir), str(stem), prompt, int(img_size),
-            bool(first))
+            bool(first), float(usm_radius))
 
     def colorize_frame_edit_from_te(self, te_dir, stem, out_path, steps=4,
                                     seed=42, first=False) -> dict:
@@ -265,11 +269,15 @@ def load_all_configs():
         "model_config":           "",   # resolved from config/ (see below)
         "steps":                  "2",
         "fast_pipe":              True,
+        "usm":                    False,
+        "usm_radius":             "3",
         "enhance_prompt":         False,
         "run_server_external":    False,
         # --- fix image ---
         "fix_steps":              "2",
         "fix_bw":                 True,
+        "fix_usm":                False,
+        "fix_usm_radius":         "3",
         "fix_batch":              False,
         "fix_enhance_prompt":     False,
         "fix_prompt_max":         "30",
@@ -713,6 +721,19 @@ def gui_get(window, values, key, default=None):
         _gui_read_replies.pop(token, None)
 
 
+def usm_radius_of(values, checkbox_key, radius_key, default=3.0):
+    """Unsharp-mask radius to send to the server: 0.0 when the checkbox is
+    off (the server treats radius <= 0 as disabled). Invalid input falls back
+    to the default."""
+    if not values.get(checkbox_key, False):
+        return 0.0
+    try:
+        radius = float(str(values.get(radius_key, "") or default).strip().replace(",", "."))
+    except (TypeError, ValueError):
+        radius = float(default)
+    return radius if radius > 0 else 0.0
+
+
 def _serve_gui_read(window, token, key):
     """Main loop side of gui_get(): read the widget for a waiting worker."""
     reply = _gui_read_replies.get(token)
@@ -1044,6 +1065,7 @@ def orchestrator(init_values, window):
             return
         tot_time = 0.0
         count    = 0
+        usm_radius = usm_radius_of(values, "-USM-", "-USM_RADIUS-")
         start_time = time.time()
 
         for i, img_path in enumerate(images):
@@ -1072,6 +1094,7 @@ def orchestrator(init_values, window):
                 result = rpc.colorize_image(
                     str(img_path), str(out_img_path),
                     prompt, img_size=0, steps=steps, enhance_prompt=enhance_prompt,
+                    usm_radius=usm_radius,
                 )
                 if not result.get("ok"):
                     log_message(f"⚠️ {img_path.name}: {result.get('msg')}")
@@ -1154,6 +1177,7 @@ def orchestrator(init_values, window):
         prompt         = values["-PROMPT-"]
         steps          = int(values.get("-STEPS-", cfg["steps"]))
         enhance_prompt = values.get("-ENHANCE_PROMPT-", False)
+        usm_radius     = usm_radius_of(values, "-USM-", "-USM_RADIUS-")
         seed           = 42
         chunk_size     = 200
 
@@ -1204,7 +1228,7 @@ def orchestrator(init_values, window):
                             "-PREVIEW_BW-", Image.open(img_path).convert("RGB"))
                         res = rpc.encode_frame_te(str(img_path), str(te_dir),
                                                   img_path.stem, prompt, 1024, 0,
-                                                  enhance_prompt, first)
+                                                  enhance_prompt, first, usm_radius)
                     except xmlrpc.client.Fault as e:
                         log_message(f"RPC Fault on {img_path.name}: {e.faultString}")
                         continue
@@ -1352,6 +1376,7 @@ def orchestrator(init_values, window):
 
         prompt     = values["-PROMPT-"]
         steps      = int(values.get("-STEPS-", cfg["steps"]))
+        usm_radius = usm_radius_of(values, "-USM-", "-USM_RADIUS-")
         seed       = 42
         chunk_size = 100   # ~21 MB of conditioning per frame -> ~2 GB per chunk
 
@@ -1401,7 +1426,8 @@ def orchestrator(init_values, window):
                         window.write_event_value(
                             "-PREVIEW_BW-", Image.open(img_path).convert("RGB"))
                         res = rpc.encode_frame_edit(str(img_path), str(te_dir),
-                                                    img_path.stem, prompt, 0, first)
+                                                    img_path.stem, prompt, 0, first,
+                                                    usm_radius)
                     except xmlrpc.client.Fault as e:
                         log_message(f"RPC Fault on {img_path.name}: {e.faultString}")
                         continue
@@ -1561,6 +1587,7 @@ def orchestrator(init_values, window):
         pairs = [image_files[i:i + 2] for i in range(0, tot_num_images, 2)]
         prompt         = values["-PROMPT-"]
         enhance_prompt = values.get("-ENHANCE_PROMPT-", False)
+        usm_radius     = usm_radius_of(values, "-USM-", "-USM_RADIUS-")
         tot_time   = 0.0
         count      = 0
         n_images   = 0
@@ -1585,7 +1612,8 @@ def orchestrator(init_values, window):
                 if len(pair) == 2:
                     result = rpc.colorize_image_pair(
                         str(pair[0]), str(pair[1]),
-                        str(out_dir), prompt, gap_px=gap_px, steps=steps, enhance_prompt=enhance_prompt
+                        str(out_dir), prompt, gap_px=gap_px, steps=steps, enhance_prompt=enhance_prompt,
+                        usm_radius=usm_radius,
                     )
                     if not result.get("ok"):
                         log_message(f"⚠️ Pair {pair[0].name}+{pair[1].name}: {result.get('msg')}")
@@ -1601,6 +1629,7 @@ def orchestrator(init_values, window):
                     result = rpc.colorize_single_image(
                         str(pair[0]), str(out_dir), prompt,
                         steps=steps, enhance_prompt=enhance_prompt,
+                        usm_radius=usm_radius,
                     )
                     if not result.get("ok"):
                         log_message(f"⚠️ {pair[0].name}: {result.get('msg')}")
@@ -2096,6 +2125,7 @@ def _fix_colorize_worker(values, window, seed, pil_in=None):
             if len(state["fix_prompts"]) > 2:
                 state["fix_prompts"][1:] = sorted(state["fix_prompts"][1:], key=str.lower)
         steps  = int(values["-FIX_STEPS-"])
+        usm_radius = usm_radius_of(values, "-FIX_USM-", "-FIX_USM_RADIUS-")
         host   = values["-RPC_HOST-"].strip()
         # Honor the "Convert in B&W" checkbox
         skip_bw = not values.get("-FIX_BW-", True)
@@ -2108,7 +2138,8 @@ def _fix_colorize_worker(values, window, seed, pil_in=None):
             try:
                 shm_out = SharedMemory(name=f"fix_out_{uuid.uuid4().hex[:12]}", create=True, size=h * w * 3)
                 res = rpc._proxy_slow.colorize_frame_shm(
-                    shm_in.name, shm_out.name, h, w, prompt, 0, steps, seed, skip_bw, enhance_prompt)
+                    shm_in.name, shm_out.name, h, w, prompt, 0, steps, seed, skip_bw,
+                    enhance_prompt, usm_radius)
                 out = pil_in if res.get("skipped") else (_shm_read_fix(shm_out, h, w) if res.get("ok") else pil_in)
                 shm_out.close()
                 shm_out.unlink()
@@ -2120,7 +2151,8 @@ def _fix_colorize_worker(values, window, seed, pil_in=None):
             # RPC engine uses over the wire); delayed import, like vscmnet2.
             from vscmnet2.vsslib.vsimage_engine import _pil_to_bytes, _bytes_to_pil
             data = _pil_to_bytes(pil_in)
-            res = rpc._proxy_slow.colorize_frame(data, prompt, 0, steps, seed, skip_bw, enhance_prompt)
+            res = rpc._proxy_slow.colorize_frame(data, prompt, 0, steps, seed, skip_bw,
+                                                 enhance_prompt, usm_radius)
             out = _bytes_to_pil(res.get("data", data)) if res.get("ok") else pil_in
 
         elapsed = time.time() - t0
@@ -2329,7 +2361,13 @@ tab3_layout = [
           sg.Text("stopped", key="-SERVER_STATUS-", size=(45, 1), expand_x=True)],
         [sg.Text("Colorization Steps:"),
          sg.Combo(steps_values, default_value=cfg["steps"], key="-STEPS-", readonly=True, size=(6,1)),
-         sg.Checkbox("Fast Pipeline", key="-FAST_PIPE-", default=cfg["fast_pipe"], tooltip="qwen21-viggle / qwen-2511: cached-TE split flow; other models: paired 1280px pass")],
+         sg.Checkbox("Fast Pipeline", key="-FAST_PIPE-", default=cfg["fast_pipe"], tooltip="qwen21-viggle / qwen-2511: cached-TE split flow; other models: paired 1280px pass"),
+         sg.Checkbox("Unsharp Mask", key="-USM-", default=cfg.get("usm", False),
+                     tooltip="Pre-filter the input before colorization (unsharp mask: amount 0.50, "
+                             "threshold 0). Removes the film grain that can stop the model from "
+                             "colorizing; set the radius beside."),
+         sg.Text("Radius:"),
+         sg.Input(cfg.get("usm_radius", "3"), key="-USM_RADIUS-", size=(4, 1))],
     ], expand_x=True)],
     [sg.Text("Prompt:"), sg.Multiline(cfg["prompt"], key="-PROMPT-", expand_x=True, size=(80,4), no_scrollbar=True),
      sg.Checkbox("Enhance Prompt", key="-ENHANCE_PROMPT-", default=cfg.get("enhance_prompt", False))],
@@ -2408,6 +2446,12 @@ tab5_layout = [
     [sg.Text("Colorization Steps:"),
      sg.Combo(steps_values, default_value=cfg["fix_steps"], key="-FIX_STEPS-", readonly=True, size=(6,1)),
      sg.Checkbox("Convert in B&W before colorization", key="-FIX_BW-", default=cfg.get("fix_bw", True)),
+     sg.Checkbox("Unsharp Mask", key="-FIX_USM-", default=cfg.get("fix_usm", False),
+                 tooltip="Pre-filter the input before colorization (unsharp mask: amount 0.50, "
+                         "threshold 0). Removes the film grain that can stop the model from "
+                         "colorizing; set the radius beside."),
+     sg.Text("Radius:"),
+     sg.Input(cfg.get("fix_usm_radius", "3"), key="-FIX_USM_RADIUS-", size=(4, 1)),
      sg.Checkbox("Enhance Prompt", key="-FIX_ENHANCE_PROMPT-", default=cfg.get("fix_enhance_prompt", False))],
     [sg.Text("Prompt:"),
      sg.Combo(state["fix_prompts"], default_value=state["fix_prompts"][0],
@@ -3846,10 +3890,14 @@ while True:
             "model_config":          values["-MODEL_CONFIG-"],
             "steps":                 values["-STEPS-"],
             "fast_pipe":             values["-FAST_PIPE-"],
+            "usm":                   values["-USM-"],
+            "usm_radius":            values["-USM_RADIUS-"],
             "enhance_prompt":        values["-ENHANCE_PROMPT-"],
             "run_server_external":   values["-RUN_SERVER_EXTERNAL-"],
             "fix_steps":              values["-FIX_STEPS-"],
             "fix_bw":                 values["-FIX_BW-"],
+            "fix_usm":                values["-FIX_USM-"],
+            "fix_usm_radius":         values["-FIX_USM_RADIUS-"],
             "fix_batch":              values["-FIX_BATCH-"],
             "fix_enhance_prompt":     values["-FIX_ENHANCE_PROMPT-"],
             "fix_prompt_max":         values["-FIX_PROMPT_MAX-"],

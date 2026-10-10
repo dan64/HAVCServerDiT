@@ -36,15 +36,15 @@ All methods return a `dict` with at least `{"ok": bool, "msg": str}`.
 
 | Method                                                                                                | Returns                               | Description                                  |
 | ------------------------------------------------------------------------------------------------------- | -------------------------------------- | -------------------------------------------- |
-| `colorize_image(in_path, out_path, prompt, img_size=0, steps=2, enhance_prompt=False)`                | `{"ok", "elapsed", "skipped", "msg"}` | Single image, paths on the server filesystem |
-| `colorize_image_pair(img1_path, img2_path, out_dir, prompt, gap_px=8, steps=2, enhance_prompt=False)` | `{"ok", "elapsed", "msg"}`            | Two images, single inference pass            |
-| `colorize_single_image(img_path, out_dir, prompt, steps=2, enhance_prompt=False)`                     | `{"ok", "elapsed", "msg"}`            | Single image fallback (odd batch end)        |
+| `colorize_image(in_path, out_path, prompt, img_size=0, steps=2, enhance_prompt=False, usm_radius=0)`                | `{"ok", "elapsed", "skipped", "msg"}` | Single image, paths on the server filesystem |
+| `colorize_image_pair(img1_path, img2_path, out_dir, prompt, gap_px=8, steps=2, enhance_prompt=False, usm_radius=0)` | `{"ok", "elapsed", "msg"}`            | Two images, single inference pass            |
+| `colorize_single_image(img_path, out_dir, prompt, steps=2, enhance_prompt=False, usm_radius=0)`                     | `{"ok", "elapsed", "msg"}`            | Single image fallback (odd batch end)        |
 
 ### Colorization : in-memory (PNG bytes over RPC)
 
 | Method                                                                                    | Returns                                                              | Description                       |
 | -------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | --------------------------------- |
-| `colorize_frame(img_data, prompt, img_size=0, steps=2, seed=42, skip_bw=False, enhance_prompt=False)`                | `{"ok", "data", "elapsed", "skipped", "msg"}`                        | Single frame as raw PNG bytes     |
+| `colorize_frame(img_data, prompt, img_size=0, steps=2, seed=42, skip_bw=False, enhance_prompt=False, usm_radius=0)`                | `{"ok", "data", "elapsed", "skipped", "msg"}`                        | Single frame as raw PNG bytes     |
 | `colorize_frame_pair(img1_data, img2_data, prompt, gap_px=8, steps=2, enhance_prompt=False)` | `{"ok", "data1", "data2", "elapsed", "skipped1", "skipped2", "msg"}` | Two frames, single inference pass |
 
 > `skipped=True` means the frame was too dark to colorize (average brightness < 9/255).
@@ -54,12 +54,20 @@ All methods return a `dict` with at least `{"ok": bool, "msg": str}`.
 
 | Method                                                                                                                         | Returns                                            | Description                                         |
 | ---------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- | ----------------------------------------------------- |
-| `colorize_frame_shm(shm_in, shm_out, h, w, prompt, img_size=0, steps=2, seed=42, skip_bw=False, enhance_prompt=False)`             | `{"ok", "elapsed", "skipped", "msg"}`              | Single frame via shared memory                      |
+| `colorize_frame_shm(shm_in, shm_out, h, w, prompt, img_size=0, steps=2, seed=42, skip_bw=False, enhance_prompt=False, usm_radius=0)`             | `{"ok", "elapsed", "skipped", "msg"}`              | Single frame via shared memory                      |
 | `colorize_frame_pair_shm(shm_in1, shm_out1, h1, w1, shm_in2, shm_out2, h2, w2, prompt, gap_px=8, steps=4, enhance_prompt=False)`    | `{"ok", "elapsed", "skipped1", "skipped2", "msg"}` | Two frames via shared memory, single inference pass |
 
 > `enhance_prompt` (all methods above, default `False`) rewrites the prompt
 > via Qwen3-VL before colorizing — only meaningful for `qwen21-viggle`;
 > silently has no effect on the other backends. See [What's New](whats-new.md).
+>
+> `usm_radius` (all colorization methods above, default `0` = off) applies an
+> **Unsharp Mask** pre-filter to the B&W input before colorization: amount
+> 0.50, threshold 0, radius as given (clamped to 50). It removes the film
+> grain that can stop the model from colorizing. The split-flow endpoints
+> take it too — `encode_frame_te(..., usm_radius=0)` and
+> `encode_frame_edit(..., usm_radius=0)` bake the filter into the cached
+> conditioning, and the radius is part of the cache key.
 > See [Shared Memory Transport](#-shared-memory-transport-same-host-only) for usage details.
 
 ---

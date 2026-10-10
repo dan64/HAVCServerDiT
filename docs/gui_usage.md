@@ -366,7 +366,7 @@ for example in the Cluster 2, the reference frame #000145 was selected to repres
 | **Fast Pipeline**        | Faster colorization mode. qwen21-viggle / qwen-2511 (gguf-qwen): **cached-TE split flow** (conditioning cached per frame in `ref_te/` / `ref_te_edit/`, then sampled — roughly 2× faster on qwen21-viggle, ~1.4× on qwen-2511: 7.3 vs ~10.5 s/frame at 2 steps). nunchaku-qwen: **paired inference**, two frames in one forward pass. longcat-gguf falls back to per-image processing |
 | **Unsharp Mask**         | Pre-filter the input before colorization (unsharp mask: amount 0.50, threshold 0) — removes the film grain that can stop the model from colorizing. Radius in the field beside: **1–4**, default `2`. Applies in every mode: standard, Fast Pipeline and paired |
 | **Enhance Prompt**       | **qwen21-viggle only**: rewrites the prompt via Qwen3-VL before colorizing (image-aware, adds ~15-20s/frame) — no effect on other backends. Try a direct anti-hedging prompt first, see [Suggested Inference Steps](server_usage.md#-suggested-inference-steps) |
-| **Prompt**               | Text prompt sent to the model                                                                                                                                  |
+| **Prompt**               | Text prompt sent to the model — keep it short for qwen-2511; see the prompt tips in [Suggested Inference Steps](server_usage.md#-suggested-inference-steps) |
 | **Cache Directory**      | HuggingFace cache (leave empty for default)                                                                                                                    |
 
 The two image panels show a live preview of the B&W input and the AI output
@@ -414,7 +414,7 @@ Supports both SHM (same-host) and PNG-over-RPC (remote server) transport.
 | **Enhance Prompt**       | **qwen21-viggle only**: rewrites the prompt via Qwen3-VL before colorizing — no effect on other backends |
 | **Convert in B&W**       | Convert the input to grayscale before colorization (useful for re‑colorizing) |
 | **Unsharp Mask**         | Pre-filter the input before colorization (unsharp mask: amount 0.50, threshold 0), radius **1–4** (default `2`) — for grainy sources the model would otherwise leave B&W |
-| **Prompt**               | Text prompt for the model (combo with history)                                |
+| **Prompt**               | Text prompt for the model (combo with history) — keep it short for qwen-2511, see [Suggested Inference Steps](server_usage.md#-suggested-inference-steps) |
 | **Max / Delete / Clear** | Prompt history management                                                     |
 | **Load Image**           | Load image via the ComboBox, drag‑and‑drop, or Browse                         |
 | **Colorize**             | Run colorization with fixed seed (42)                                         |

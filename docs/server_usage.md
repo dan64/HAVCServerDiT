@@ -130,3 +130,11 @@ it does not take an argument and always launches with
 > Avoid naming specific example subjects in this prompt (e.g. "like a stop
 > sign") — the model may render that literal example into the scene instead
 > of just using it as a color reference.
+>
+> **Prompt tip (qwen-2511)**: keep it short and direct — the opposite of the
+> detail-heavy wording `qwen21-viggle` likes. A good default: *"Colorize
+> this image, natural colors. Strictly preserve all shapes, edges and
+> background details."* Longer or more emphatic prompts can steer it the
+> wrong way (a "vibrant colors" variant colored some subjects noticeably
+> wrong in a side-by-side test), so start simple and only add words when the
+> output calls for it.

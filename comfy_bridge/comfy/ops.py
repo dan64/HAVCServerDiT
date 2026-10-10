@@ -1147,9 +1147,10 @@ def _quantized_apply(module, fn, recurse=True):
         if param is None:
             continue
         p = fn(param)
-        if (not torch.is_inference_mode_enabled()) and p.is_inference():
-            p = p.clone()
-        module.register_parameter(key, torch.nn.Parameter(p, requires_grad=False))
+        # wrap_param (not the bare constructor): fn() ran under inference
+        # mode, so quantized values can carry inference-mode inner tensors --
+        # see comfy.utils.wrap_param.
+        module.register_parameter(key, comfy.utils.wrap_param(p))
     for key, buf in module._buffers.items():
         if buf is not None:
             module._buffers[key] = fn(buf)

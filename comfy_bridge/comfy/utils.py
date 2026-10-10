@@ -972,12 +972,27 @@ def set_attr(obj, attr, value):
         setattr(obj, name, value)
     return prev
 
+def wrap_param(value):
+    """torch.nn.Parameter(value, requires_grad=False) that also works for
+    inference-tinged values.
+
+    Inference tensors (created under torch.inference_mode) have a frozen
+    version counter and nn.Parameter() cannot wrap them -- clone them first.
+    Quantized tensor subclasses (e.g. the int8 ConvRot weights) can carry
+    inference-mode inner tensors while is_inference() reports False (backup
+    taken by a patch applied under inference_mode), so the constructor
+    itself must run outside inference mode. Outside it the False context is
+    a no-op, so the plain path and the previous clone semantics are
+    unchanged.
+    """
+    with torch.inference_mode(False):
+        if value.is_inference():
+            value = value.clone()
+        return torch.nn.Parameter(value, requires_grad=False)
+
+
 def set_attr_param(obj, attr, value):
-    # Clone inference tensors (created under torch.inference_mode) since
-    # their version counter is frozen and nn.Parameter() cannot wrap them.
-    if (not torch.is_inference_mode_enabled()) and value.is_inference():
-        value = value.clone()
-    return set_attr(obj, attr, torch.nn.Parameter(value, requires_grad=False))
+    return set_attr(obj, attr, wrap_param(value))
 
 def set_attr_buffer(obj, attr, value):
     obj, name = resolve_attr(obj, attr)

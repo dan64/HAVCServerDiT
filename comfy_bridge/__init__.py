@@ -69,19 +69,30 @@ def load_gguf_pipeline(unet_path, clip_path, vae_name="qwen_image_vae.safetensor
         model = get_value_at_index(
             cn.UNETLoader().load_unet(unet_name=unet_name, weight_dtype="default"), 0)
 
-    # CLIP
-    logger.info("Loading CLIP GGUF: %s", clip_path)
-    clip_data = gguf_clip_loader(clip_path)
-    clip = comfy.sd.load_text_encoder_state_dicts(
-        clip_type=comfy.sd.CLIPType.QWEN_IMAGE,
-        state_dicts=[clip_data],
-        model_options={
-            "custom_operations": GGMLOps,
-            "initial_device": comfy.model_management.text_encoder_offload_device(),
-        },
-        embedding_directory=folder_paths.get_folder_paths("embeddings"),
-    )
-    clip.patcher = GGUFModelPatcher.clone(clip.patcher)
+    # CLIP: GGUF text encoder (ComfyUI-GGUF recipe; the matching mmproj is
+    # auto-discovered from the same folder) or a native safetensors text
+    # encoder (stock CLIPLoader) -- e.g. the Qwen2.5-VL int8 ConvRot
+    # checkpoint, which ships the vision tower in the same file.
+    clip_name = os.path.basename(clip_path)
+    if clip_name.lower().endswith(".safetensors"):
+        import nodes as cn
+        logger.info("Loading CLIP (native safetensors): %s", clip_name)
+        clip = get_value_at_index(
+            cn.CLIPLoader().load_clip(clip_name=clip_name, type="qwen_image",
+                                      device="default"), 0)
+    else:
+        logger.info("Loading CLIP GGUF: %s", clip_name)
+        clip_data = gguf_clip_loader(clip_path)
+        clip = comfy.sd.load_text_encoder_state_dicts(
+            clip_type=comfy.sd.CLIPType.QWEN_IMAGE,
+            state_dicts=[clip_data],
+            model_options={
+                "custom_operations": GGMLOps,
+                "initial_device": comfy.model_management.text_encoder_offload_device(),
+            },
+            embedding_directory=folder_paths.get_folder_paths("embeddings"),
+        )
+        clip.patcher = GGUFModelPatcher.clone(clip.patcher)
     logger.info("CLIP loaded (qwen_image)")
 
     # VAE

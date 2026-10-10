@@ -9,6 +9,9 @@ from PIL import Image
 # Bootstrap: make comfy_bridge importable as top-level
 from . import _bootstrap
 
+# Opt-in per-image profiler for the Qwen-Image-Edit path (HAVC_EDIT_PROFILE=1)
+from . import edit_profile as _edit_profile
+
 # Silence verbose backend logs
 logging.getLogger("comfy_kitchen").setLevel(logging.WARNING)
 logging.getLogger("comfy.quant_ops").setLevel(logging.WARNING)
@@ -100,6 +103,14 @@ def load_gguf_pipeline(unet_path, clip_path, vae_name="qwen_image_vae.safetensor
 
 def colorize(pipeline, image, prompt, steps=4, seed=42):
     """Exact replica of ComfyUI workflow using same node calls."""
+    _edit_profile.start_run(steps=steps, seed=seed, image=image.size)
+    try:
+        return _colorize_impl(pipeline, image, prompt, steps, seed)
+    finally:
+        _edit_profile.end_run()
+
+
+def _colorize_impl(pipeline, image, prompt, steps=4, seed=42):
     import nodes as cn
     from comfy_extras.nodes_flux import FluxKontextImageScale
     from comfy_extras.nodes_qwen import TextEncodeQwenImageEdit
@@ -107,63 +118,71 @@ def colorize(pipeline, image, prompt, steps=4, seed=42):
 
     with torch.inference_mode():
         # PIL → tensor
-        img_np = np.array(image.convert("RGB")).astype(np.float32) / 255.0
-        img_tensor = torch.from_numpy(img_np).unsqueeze(0)
+        with _edit_profile.phase("prep"):
+            img_np = np.array(image.convert("RGB")).astype(np.float32) / 255.0
+            img_tensor = torch.from_numpy(img_np).unsqueeze(0)
 
-        # FluxKontextImageScale
-        _fks_out = FluxKontextImageScale().EXECUTE_NORMALIZED(image=img_tensor)
-        img_scaled = get_value_at_index(_fks_out, 0)
-        if img_scaled.ndim == 3:
-            img_scaled = img_scaled.unsqueeze(0)  # (H,W,C) → (1,H,W,C)
+            # FluxKontextImageScale
+            _fks_out = FluxKontextImageScale().EXECUTE_NORMALIZED(image=img_tensor)
+            img_scaled = get_value_at_index(_fks_out, 0)
+            if img_scaled.ndim == 3:
+                img_scaled = img_scaled.unsqueeze(0)  # (H,W,C) → (1,H,W,C)
 
-        # VAEEncode
-        latent = cn.VAEEncode().encode(
-            pixels=img_scaled, vae=pipeline["vae"])
-        latent_dict = latent[0]
+        with _edit_profile.phase("vaeenc"):
+            # VAEEncode
+            latent = cn.VAEEncode().encode(
+                pixels=img_scaled, vae=pipeline["vae"])
+            latent_dict = latent[0]
 
-        # TextEncodeQwenImageEdit (positive)
-        _pos_raw = TextEncodeQwenImageEdit().EXECUTE_NORMALIZED(
-            prompt=prompt,
-            clip=pipeline["clip"],
-            vae=pipeline["vae"],
-            image=img_scaled,
-        )
-        positive = get_value_at_index(_pos_raw, 0)
+        with _edit_profile.phase("te_pos"):
+            # TextEncodeQwenImageEdit (positive)
+            _pos_raw = TextEncodeQwenImageEdit().EXECUTE_NORMALIZED(
+                prompt=prompt,
+                clip=pipeline["clip"],
+                vae=pipeline["vae"],
+                image=img_scaled,
+            )
+            positive = get_value_at_index(_pos_raw, 0)
 
-        # TextEncodeQwenImageEdit (negative)
-        _neg_raw = TextEncodeQwenImageEdit().EXECUTE_NORMALIZED(
-            prompt="black and white, faded colors",
-            clip=pipeline["clip"],
-            vae=pipeline["vae"],
-            image=img_scaled,
-        )
-        negative = get_value_at_index(_neg_raw, 0)
+        with _edit_profile.phase("te_neg"):
+            # TextEncodeQwenImageEdit (negative)
+            _neg_raw = TextEncodeQwenImageEdit().EXECUTE_NORMALIZED(
+                prompt="black and white, faded colors",
+                clip=pipeline["clip"],
+                vae=pipeline["vae"],
+                image=img_scaled,
+            )
+            negative = get_value_at_index(_neg_raw, 0)
 
-        # ModelSamplingAuraFlow
-        unet_sampled = ModelSamplingAuraFlow().patch_aura(
-            shift=3, model=pipeline["model"])[0]
+        with _edit_profile.phase("patch"):
+            # ModelSamplingAuraFlow
+            unet_sampled = ModelSamplingAuraFlow().patch_aura(
+                shift=3, model=pipeline["model"])[0]
 
-        # KSampler
-        sampled = cn.KSampler().sample(
-            seed=seed, steps=steps, cfg=1.0,
-            sampler_name="euler", scheduler="simple", denoise=1.0,
-            model=unet_sampled,
-            positive=positive, negative=negative,
-            latent_image=latent_dict,
-        )
-        latent_samples = sampled[0]
+        with _edit_profile.phase("sampling"):
+            # KSampler
+            sampled = cn.KSampler().sample(
+                seed=seed, steps=steps, cfg=1.0,
+                sampler_name="euler", scheduler="simple", denoise=1.0,
+                model=unet_sampled,
+                positive=positive, negative=negative,
+                latent_image=latent_dict,
+            )
+            latent_samples = sampled[0]
 
-        # VAEDecode
-        img_decoded = cn.VAEDecode().decode(
-            samples=latent_samples, vae=pipeline["vae"])
-        img_t = get_value_at_index(img_decoded, 0)
+        with _edit_profile.phase("decode"):
+            # VAEDecode
+            img_decoded = cn.VAEDecode().decode(
+                samples=latent_samples, vae=pipeline["vae"])
+            img_t = get_value_at_index(img_decoded, 0)
 
-    if img_t.ndim == 4:
-        img_np = img_t[0].cpu().float().numpy()
-    else:
-        img_np = img_t.cpu().float().numpy()
-    img_np = np.clip(img_np, 0, 1)
-    return Image.fromarray((img_np * 255).astype(np.uint8))
+    with _edit_profile.phase("post"):
+        if img_t.ndim == 4:
+            img_np = img_t[0].cpu().float().numpy()
+        else:
+            img_np = img_t.cpu().float().numpy()
+        img_np = np.clip(img_np, 0, 1)
+        return Image.fromarray((img_np * 255).astype(np.uint8))
 
 
 def load_viggle_pipeline(unet_path, clip_path, vae_name="qwen_image_2.1_vae_bf16.safetensors", lora_path=None, clip_mmproj=None):

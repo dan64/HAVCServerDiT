@@ -37,43 +37,50 @@ config file here.
 > ⚠️ **`model_precision`**: use `"fp4"` only on RTX 50-Series (Blackwell). On RTX 30 / 40-Series
 > use `"int4"` : FP4 kernels require sm_120 and will fail on older architectures.
 
-### GGUF Backend : `config/qwen_gguf_q3.json` … `qwen_gguf_q8.json` / `config/longcat_gguf_q3.json` … `longcat_gguf_q8.json`
+### Qwen-Image-Edit 2511 Backend : `config/qwen-2511_int8.json` / `config/qwen-2511_q3.json`
 
-Five quantization levels are available. All share the same structure with
-`model_name: "gguf-qwen"` and a `quant` field that selects the quantization:
+The Qwen-Image-Edit 2511 configs share the same structure
+(`model_name: "gguf-qwen"`); the UNet entry selects the checkpoint format:
 
-| Config file         | `quant` | UNet           | CLIP           |
-| ------------------- | ------- | -------------- | -------------- |
-| `qwen_gguf_q3.json` | `"q3"`  | `…Q3_K_S.gguf` | `…Q3_K_S.gguf` |
-| `qwen_gguf_q4.json` | `"q4"`  | `…Q4_K_S.gguf` | `…Q4_K_S.gguf` |
-| `qwen_gguf_q5.json` | `"q5"`  | `…Q5_K_M.gguf` | `…Q5_K_M.gguf` |
-| `qwen_gguf_q6.json` | `"q6"`  | `…Q6_K.gguf`   | `…Q6_K.gguf`   |
-| `qwen_gguf_q8.json` | `"q8"`  | `…Q8_0.gguf`   | `…Q8_0.gguf`   |
+| Config file           | UNet                                     | Class                     |
+| --------------------- | ---------------------------------------- | ------------------------- |
+| `qwen-2511_int8.json` | native `…_2511_int8_convrot.safetensors` | 16 GB+ VRAM — recommended |
+| `qwen-2511_q3.json`   | `…2511-Q3_K_S.gguf`                      | 12 GB+ VRAM               |
 
-> **Q4 is the recommended default** : good quality/VRAM balance, but even Q3 is capable of delivering frames with acceptable colors.
-> All quants share the same VAE, mmproj, and LoRA files (auto-downloaded from HuggingFace).
+> **`qwen-2511_int8` is the recommended config**: it loads the official
+> Comfy-Org int8 ConvRot checkpoint through the native UNet loader (not the
+> GGUF dequantizer) and runs measurably faster per frame than the GGUF
+> quants. `qwen-2511_q3` (GGUF Q3_K_S) remains the choice for 12 GB-class
+> GPUs. Both share the same VAE, mmproj and LoRA files (auto-downloaded from
+> HuggingFace); the CLIP stays GGUF in both.
 
 > **⚠️ The GGUF backend is experimental.** In some cases the frames colors may be faded or little colored. For production use, prefer `nunchaku-qwen` (FP4/INT4) or `qwen21-viggle`, which are not affected by such problems — see the recommendation note at the top of this README.
 
-Config example (`config/qwen_gguf_q4.json`):
+Config example (`config/qwen-2511_int8.json`):
 
 ```json
 {
     "model_name":       "gguf-qwen",
-    "quant":            "q4",
-    "unet_gguf":        "models/unet/qwen-image-edit-2511-Q4_K_S.gguf",
-    "clip_gguf":        "models/clip/Qwen2.5-VL-7B-Instruct-Q4_K_S.gguf",
-    "clip_mmproj":         "models/clip/Qwen2.5-VL-7B-Instruct-mmproj-BF16.gguf",
+    "quant":            "int8",
+    "unet_gguf":        "models/unet/qwen_image_edit_2511_int8_convrot.safetensors",
+    "unet_hf_name":     "split_files/diffusion_models/qwen_image_edit_2511_int8_convrot.safetensors",
+    "clip_gguf":        "models/clip/Qwen2.5-VL-7B-Instruct-Q4_K_M.gguf",
+    "clip_mmproj":      "models/clip/Qwen2.5-VL-7B-Instruct-mmproj-BF16.gguf",
     "clip_mmproj_hf_name": "mmproj-BF16.gguf",
     "vae_name":         "qwen_image_vae.safetensors",
     "lora_path":        "models/loras/Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors",
     "steps":            4,
-    "hf_unet":          "unsloth/Qwen-Image-Edit-2511-GGUF",
+    "hf_unet":          "Comfy-Org/Qwen-Image-Edit_ComfyUI",
     "hf_clip":          "unsloth/Qwen2.5-VL-7B-Instruct-GGUF",
     "hf_vae":           "Comfy-Org/Qwen-Image_ComfyUI",
     "hf_lora":          "lightx2v/Qwen-Image-Edit-2511-Lightning"
 }
 ```
+
+> `unet_gguf` also accepts a `.safetensors` UNet (loaded natively instead of
+> through the GGUF dequantizer); `unet_hf_name` is the remote filename to
+> fetch when it differs from the local basename — Comfy-Org keeps this
+> checkpoint under `split_files/diffusion_models/`.
 
 > `clip_mmproj_hf_name` exists because the mmproj file's name on HuggingFace
 > (a generic `mmproj-BF16.gguf`, shared across many unrelated repos) rarely

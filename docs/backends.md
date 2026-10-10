@@ -26,18 +26,21 @@ Choose the backend that matches your hardware:
 > **RTX 30/40-Series (Ampere / Ada)**: use `"model_precision": "int4"`. FP4 requires Blackwell (RTX 50).
 > Requires Nunchaku 1.2.1 and `diffusers==0.37.0.dev0` (wheel published in the release assets).
 
-### gguf-qwen : 14 sec/frame (Q3, Q4, Q5, Q6, Q8)
+### qwen-2511 (gguf-qwen) : int8 ConvRot (16 GB+) or Q3_K_S (12 GB+)
 
 | Requirement | Details                                |
 | ----------- | -------------------------------------- |
-| **GPU**     | NVIDIA RTX 30/40/50  (12 GB+ VRAM)     |
+| **GPU**     | NVIDIA RTX 30/40/50  (12 GB+: `qwen-2511_q3`; 16 GB+: `qwen-2511_int8`) |
 | **RAM**     | 32 GB+                                 |
 | **CUDA**    | 13.0+ (or CPU-only: slower, zero VRAM) |
 
-> **Q3_K_S** fits in 12 GB VRAM. **Q4_K_S** (default) balances quality and VRAM.
-> **Q5_K_M / Q6_K** improve fidelity at higher VRAM cost. **Q8_0** is near-lossless.
+> **`qwen-2511_int8`** is the recommended config: the official Comfy-Org int8
+> ConvRot checkpoint, loaded through the native UNet loader — the int8 kernels
+> run natively instead of the GGUF per-op dequant, so it is measurably faster
+> per frame than the GGUF quants.
+> **`qwen-2511_q3`** (GGUF Q3_K_S) is the low-VRAM option for 12 GB-class GPUs.
 > Uses ComfyUI-native code : no ComfyUI GUI installation needed.
-> Pre-made configs for all quantizations are in the `config/` folder.
+> Both configs live in the `config/` folder.
 
 ### longcat-gguf : 12 sec/frame (Q3–Q8) — Best Quality
 

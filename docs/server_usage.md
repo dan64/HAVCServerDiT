@@ -22,8 +22,8 @@ python dit_rpc_server.py --load-pipeline --pipeline-config config/qwen_nunchaku_
 # RTX 30 / 40-Series
 python dit_rpc_server.py --load-pipeline --pipeline-config config/qwen_nunchaku_int4.json
 
-# GGUF (any quantization)
-python dit_rpc_server.py --load-pipeline --pipeline-config config/qwen_gguf_q3.json
+# Qwen-Image-Edit 2511 (native int8 ConvRot recommended; GGUF Q3_K_S for 12 GB GPUs)
+python dit_rpc_server.py --load-pipeline --pipeline-config config/qwen-2511_int8.json
 ```
 
 On Windows you can also use the provided `start_server.cmd` (see [Windows launch script](#-windows-launch-script)).
@@ -56,22 +56,19 @@ Edit the variables at the top of the file to match your setup, then double-click
 In installations created by the installer everything is already configured: the same launchers live in the HAVC folder (`HAVC.vbs`, `HAVC-Server.cmd`, `start_server.cmd`, `run_server_*.cmd`) and run the bundled Python — just double-click them.
 
 ```
-start_server.cmd [q3|q4|q5|q6|q8|fp4|int4|longcat|<config-name>]
+start_server.cmd [q3|int8|fp4|int4|longcat|<config-name>]
 ```
 
-| Argument  | Backend  | Quantization | VRAM  |
-| --------- | -------- | ------------ | ----- |
-| _(none)_  | GGUF     | Q4_K_S       | 12 GB |
-| `q3`      | GGUF     | Q3_K_S       | 12 GB |
-| `q4`      | GGUF     | Q4_K_S       | 12 GB |
-| `q5`      | GGUF     | Q5_K_M       | 16 GB |
-| `q6`      | GGUF     | Q6_K         | 18 GB |
-| `q8`      | GGUF     | Q8_0         | 22 GB |
-| `fp4`     | Nunchaku | FP4          | 16 GB |
-| `int4`    | Nunchaku | INT4         | 16 GB |
-| `longcat` | LongCat  | Q4_K_M       | 12 GB |
+| Argument  | Backend  | Model                        | VRAM  |
+| --------- | -------- | ---------------------------- | ----- |
+| _(none)_  | 2511     | int8 ConvRot                 | 16 GB |
+| `q3`      | 2511     | Q3_K_S (GGUF)                | 12 GB |
+| `int8`    | 2511     | int8 ConvRot (native)        | 16 GB |
+| `fp4`     | Nunchaku | FP4                          | 16 GB |
+| `int4`    | Nunchaku | INT4                         | 16 GB |
+| `longcat` | LongCat  | Q4_K_M                       | 12 GB |
 
-If no argument is passed it defaults to `q4` (Q4_K_S). Use `int4` for RTX 30 / 40-Series Nunchaku:
+If no argument is passed it defaults to `int8` (Qwen-Image-Edit 2511 int8 ConvRot). Use `int4` for RTX 30 / 40-Series Nunchaku:
 
 ```
 start_server.cmd int4
@@ -90,12 +87,13 @@ same list is what the GUI shows as **Model Config** (Tab 2).
 
 **Convenience wrappers** — double-click or run from terminal without arguments:
 
-| File                     | Equivalent command         | Backend        |
-| ------------------------ | --------------------------- | -------------- |
-| `run_server_q3.cmd`      | `start_server.cmd q3`      | GGUF Q3_K_S    |
-| `run_server_fp4.cmd`     | `start_server.cmd fp4`     | Nunchaku FP4   |
-| `run_server_int4.cmd`    | `start_server.cmd int4`    | Nunchaku INT4  |
-| `run_server_longcat.cmd` | `start_server.cmd longcat` | LongCat Q4_K_M |
+| File                     | Equivalent command         | Backend                        |
+| ------------------------ | --------------------------- | ------------------------------ |
+| `run_server_int8.cmd`    | `start_server.cmd int8`    | 2511 int8 ConvRot              |
+| `run_server_q3.cmd`      | `start_server.cmd q3`      | 2511 Q3_K_S (GGUF)             |
+| `run_server_fp4.cmd`     | `start_server.cmd fp4`     | Nunchaku FP4                   |
+| `run_server_int4.cmd`    | `start_server.cmd int4`    | Nunchaku INT4                  |
+| `run_server_longcat.cmd` | `start_server.cmd longcat` | LongCat Q4_K_M                 |
 
 `run_server_qwen21.cmd` is a **standalone launcher** for `qwen21-viggle` —
 it does not take an argument and always launches with

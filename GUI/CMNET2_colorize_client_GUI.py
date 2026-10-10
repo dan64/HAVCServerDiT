@@ -203,7 +203,12 @@ def legacy_model_config(cfg):
     if name == "nunchaku-qwen" and precision:
         return f"qwen_nunchaku_{precision}"
     if name == "gguf-qwen" and precision:
-        return f"qwen_gguf_{precision}"
+        # 2026-10-10 consolidation: the Q3_K_S config survives (12 GB class),
+        # every other quant is replaced by the int8 ConvRot checkpoint.
+        if precision == "q3":
+            return "qwen-2511_q3"
+        if precision in ("q4", "q4km", "q5", "q6", "q8"):
+            return "qwen-2511_int8"
     if name == "longcat-gguf" and precision:
         return f"longcat_gguf_{precision}"
     return ""

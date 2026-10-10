@@ -11,7 +11,7 @@ python dit_rpc_server.py --module-dir /path/to/dit_colorize_main
 ```
 
 **`Model 'xxx' is not supported`**
-Supported values for `model_name` are `"nunchaku-qwen"` (FP4/INT4), `"gguf-qwen"` (Q3_K_S, Q4_K_S, Q5_K_M, Q6_K, Q8_0), `"longcat-gguf"`, and `"qwen21-viggle"`. For `"gguf-qwen"`, the quantization is selected via the `quant` field in the config (e.g. `"q4"`).
+Supported values for `model_name` are `"nunchaku-qwen"` (FP4/INT4), `"gguf-qwen"` (Qwen-Image-Edit 2511: native int8 ConvRot or GGUF Q3_K_S), `"longcat-gguf"`, and `"qwen21-viggle"`. For `"gguf-qwen"`, the checkpoint is selected by the `unet_gguf` file in the config (a `.safetensors` int8 ConvRot or a `.gguf` quant).
 
 **Pipeline takes a long time to load**
 **Nunchaku**: on the first run the model weights (~15–30 GB) are downloaded from HuggingFace.

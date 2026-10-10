@@ -11,13 +11,13 @@ public class ConfigSetUpdateTests
         string dir = TestPaths.NewTempDir();
         try
         {
-            string wheel = WriteWheel(dir, ("qwen_gguf_q3.json", "{\"a\": 1}\n"));
+            string wheel = WriteWheel(dir, ("qwen-2511_q3.json", "{\"a\": 1}\n"));
             Directory.CreateDirectory(Path.Combine(dir, "config"));
-            File.WriteAllText(Path.Combine(dir, "config", "qwen_gguf_q3.json"), "{\"a\": 2}\n");
+            File.WriteAllText(Path.Combine(dir, "config", "qwen-2511_q3.json"), "{\"a\": 2}\n");
 
             IReadOnlyList<string> differing = ConfigSetUpdate.DifferingConfigs(wheel, dir);
 
-            Assert.Equal(new[] { "qwen_gguf_q3.json" }, differing);
+            Assert.Equal(new[] { "qwen-2511_q3.json" }, differing);
         }
         finally
         {
@@ -71,9 +71,9 @@ public class ConfigSetUpdateTests
         string dir = TestPaths.NewTempDir();
         try
         {
-            string wheel = WriteWheel(dir, ("qwen_gguf_q3.json", "{\"a\": 1}\n"));
+            string wheel = WriteWheel(dir, ("qwen-2511_q3.json", "{\"a\": 1}\n"));
             Directory.CreateDirectory(Path.Combine(dir, "config"));
-            File.WriteAllText(Path.Combine(dir, "config", "qwen_gguf_q3.json"), "{\"a\": 1}\n");
+            File.WriteAllText(Path.Combine(dir, "config", "qwen-2511_q3.json"), "{\"a\": 1}\n");
             File.WriteAllText(Path.Combine(dir, "config", "my_custom.json"), "{\"mine\": true}\n");
 
             IReadOnlyList<string> differing = ConfigSetUpdate.DifferingConfigs(wheel, dir);

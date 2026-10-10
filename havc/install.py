@@ -160,7 +160,12 @@ def legacy_model_config(data: dict) -> str:
     if name == "nunchaku-qwen" and precision:
         return f"qwen_nunchaku_{precision}"
     if name == "gguf-qwen" and precision:
-        return f"qwen_gguf_{precision}"
+        # 2026-10-10 consolidation: the Q3_K_S config survives (12 GB class),
+        # every other quant is replaced by the int8 ConvRot checkpoint.
+        if precision == "q3":
+            return "qwen-2511_q3"
+        if precision in ("q4", "q4km", "q5", "q6", "q8"):
+            return "qwen-2511_int8"
     if name == "longcat-gguf" and precision:
         return f"longcat_gguf_{precision}"
     return ""
@@ -218,8 +223,8 @@ if "%WHICH%"=="" set "WHICH=int4"
 set "CFG="
 if /i "%WHICH%"=="int4"    set "CFG=qwen_nunchaku_int4.json"
 if /i "%WHICH%"=="fp4"     set "CFG=qwen_nunchaku_fp4.json"
-if /i "%WHICH%"=="q3"      set "CFG=qwen_gguf_q3.json"
-if /i "%WHICH%"=="q4"      set "CFG=qwen_gguf_q4.json"
+if /i "%WHICH%"=="q3"      set "CFG=qwen-2511_q3.json"
+if /i "%WHICH%"=="int8"    set "CFG=qwen-2511_int8.json"
 if /i "%WHICH%"=="longcat"  set "CFG=longcat_gguf_q4.json"
 if /i "%WHICH%"=="longcat3" set "CFG=longcat_gguf_q3.json"
 if /i "%WHICH%"=="qwen21"   set "CFG=qwen21_viggle.json"
@@ -227,7 +232,7 @@ rem The config folder is the source of truth: a matching config\<name>.json
 rem wins over the shortcuts above, so a new model only needs a new file there.
 if exist "%HERE%config\%WHICH%.json" set "CFG=%WHICH%.json"
 if "%CFG%"=="" (
-    echo [ERROR] Unknown model "%WHICH%". Available: int4 fp4 q3 q4 longcat longcat3 qwen21, or any config name in the config folder.
+    echo [ERROR] Unknown model "%WHICH%". Available: int4 fp4 q3 int8 longcat longcat3 qwen21, or any config name in the config folder.
     pause
     exit /b 1
 )
@@ -251,15 +256,12 @@ if not exist "%PY%" (
 rem HAVC DiT Server launcher for the GUI "External console" mode and manual use
 rem (same argument names as the historical start_server.cmd).
 set "WHICH=%~1"
-if "%WHICH%"=="" set "WHICH=q4"
+if "%WHICH%"=="" set "WHICH=int8"
 set "CFG="
 if /i "%WHICH%"=="fp4"        set "CFG=qwen_nunchaku_fp4.json"
 if /i "%WHICH%"=="int4"       set "CFG=qwen_nunchaku_int4.json"
-if /i "%WHICH%"=="q3"         set "CFG=qwen_gguf_q3.json"
-if /i "%WHICH%"=="q4"         set "CFG=qwen_gguf_q4.json"
-if /i "%WHICH%"=="q5"         set "CFG=qwen_gguf_q5.json"
-if /i "%WHICH%"=="q6"         set "CFG=qwen_gguf_q6.json"
-if /i "%WHICH%"=="q8"         set "CFG=qwen_gguf_q8.json"
+if /i "%WHICH%"=="q3"         set "CFG=qwen-2511_q3.json"
+if /i "%WHICH%"=="int8"       set "CFG=qwen-2511_int8.json"
 if /i "%WHICH%"=="longcat"    set "CFG=longcat_gguf_q4.json"
 if /i "%WHICH%"=="longcat-q3" set "CFG=longcat_gguf_q3.json"
 if /i "%WHICH%"=="longcat-q4" set "CFG=longcat_gguf_q4.json"
@@ -270,7 +272,7 @@ rem The config folder is the source of truth: a matching config\<name>.json
 rem wins over the shortcuts above, so a new model only needs a new file there.
 if exist "%HERE%config\%WHICH%.json" set "CFG=%WHICH%.json"
 if "%CFG%"=="" (
-    echo [ERROR] Unknown model "%WHICH%". Available: fp4 int4 q3 q4 q5 q6 q8 longcat longcat-q3 longcat-q4 longcat-q5 longcat-q6 longcat-q8, or any config name in the config folder.
+    echo [ERROR] Unknown model "%WHICH%". Available: fp4 int4 q3 int8 longcat longcat-q3 longcat-q4 longcat-q5 longcat-q6 longcat-q8, or any config name in the config folder.
     pause
     exit /b 1
 )
@@ -320,8 +322,12 @@ call "%~dp0start_server.cmd" int4
 call "%~dp0start_server.cmd" longcat-q4
 """,
     "run_server_q3.cmd": r"""@echo off
-:: run_server_q3.cmd : launch the server with GGUF Q3_K_S (12 GB VRAM)
+:: run_server_q3.cmd : launch the server with Qwen-Image-Edit 2511 Q3_K_S (12 GB VRAM)
 call "%~dp0start_server.cmd" q3
+""",
+    "run_server_int8.cmd": r"""@echo off
+:: run_server_int8.cmd : launch the server with Qwen-Image-Edit 2511 int8 ConvRot (16 GB VRAM)
+call "%~dp0start_server.cmd" int8
 """,
     "HAVC-Doctor.cmd": r"""@echo off
 setlocal

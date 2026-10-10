@@ -3,14 +3,11 @@
 :: start_server.cmd   :   HAVC DiT Server launcher (Windows)
 ::
 :: Usage:
-::   start_server.cmd          -> loads Q4_K_S GGUF config  (default, 12 GB VRAM)
+::   start_server.cmd          -> loads qwen-2511_int8 config (default, 16 GB VRAM)
 ::   start_server.cmd fp4      -> loads FP4 Nunchaku config (RTX 50-Series, 16 GB)
 ::   start_server.cmd int4     -> loads INT4 Nunchaku config (RTX 30/40-Series, 16 GB)
-::   start_server.cmd q3       -> loads Q3_K_S GGUF config  (12 GB VRAM)
-::   start_server.cmd q4       -> loads Q4_K_S GGUF config  (12 GB VRAM)
-::   start_server.cmd q5       -> loads Q5_K_M GGUF config  (16 GB VRAM)
-::   start_server.cmd q6       -> loads Q6_K GGUF config    (18 GB VRAM)
-::   start_server.cmd q8       -> loads Q8_0 GGUF config    (22 GB VRAM)
+::   start_server.cmd q3       -> loads qwen-2511_q3 config  (Q3_K_S GGUF, 12 GB VRAM)
+::   start_server.cmd int8     -> loads qwen-2511_int8 config (int8 ConvRot, 16 GB VRAM)
 ::   start_server.cmd longcat  -> loads LongCat config      (18+ GB VRAM)
 ::   start_server.cmd <name>   -> loads config\<name>.json  (any config in the
 ::                                config folder; new models only need a new
@@ -46,17 +43,14 @@ set LOGFILE=
 :: ARGUMENT PARSING  :  selects backend and quantization
 :: ---------------------------------------------------------------------------
 set ARG=%~1
-if /i "%ARG%"=="" set ARG=q4
+if /i "%ARG%"=="" set ARG=int8
 
 :: Nunchaku
 if /i "%ARG%"=="fp4"  ( set CONFIG_FILE=config\qwen_nunchaku_fp4.json  & set BACKEND=Nunchaku FP4 )
 if /i "%ARG%"=="int4" ( set CONFIG_FILE=config\qwen_nunchaku_int4.json & set BACKEND=Nunchaku INT4 )
-:: GGUF
-if /i "%ARG%"=="q3"   ( set CONFIG_FILE=config\qwen_gguf_q3.json      & set BACKEND=GGUF Q3_K_S )
-if /i "%ARG%"=="q4"   ( set CONFIG_FILE=config\qwen_gguf_q4.json      & set BACKEND=GGUF Q4_K_S )
-if /i "%ARG%"=="q5"   ( set CONFIG_FILE=config\qwen_gguf_q5.json      & set BACKEND=GGUF Q5_K_M )
-if /i "%ARG%"=="q6"   ( set CONFIG_FILE=config\qwen_gguf_q6.json      & set BACKEND=GGUF Q6_K )
-if /i "%ARG%"=="q8"   ( set CONFIG_FILE=config\qwen_gguf_q8.json      & set BACKEND=GGUF Q8_0 )
+:: Qwen-Image-Edit 2511
+if /i "%ARG%"=="q3"   ( set CONFIG_FILE=config\qwen-2511_q3.json      & set BACKEND=Qwen 2511 Q3_K_S )
+if /i "%ARG%"=="int8" ( set CONFIG_FILE=config\qwen-2511_int8.json    & set BACKEND=Qwen 2511 int8 ConvRot )
 :: LongCat
 if /i "%ARG%"=="longcat"     ( set CONFIG_FILE=config\longcat_gguf_q4.json    & set BACKEND=LongCat Q4_K_M )
 if /i "%ARG%"=="longcat-q3"  ( set CONFIG_FILE=config\longcat_gguf_q3.json    & set BACKEND=LongCat Q3_K_M )
@@ -81,7 +75,7 @@ if exist "%SERVER_DIR%\config\%ARG%.json" (
 )
 
 if "%CONFIG_FILE%"=="" (
-    echo [ERROR] Unknown argument: "%ARG%". Use "q4" ^(default^), "q3", "q5", "q6", "q8", "fp4", "int4", "longcat", "longcat-q3", "longcat-q5", "longcat-q6", "longcat-q8", or the name of a config file in config\.
+    echo [ERROR] Unknown argument: "%ARG%". Use "int8" ^(default^), "q3", "fp4", "int4", "longcat", "longcat-q3", "longcat-q5", "longcat-q6", "longcat-q8", or the name of a config file in config\.
     pause
     exit /b 1
 )

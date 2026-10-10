@@ -1,5 +1,40 @@
 # What's New
 
+### 2026-10-10 — qwen-2511 (gguf-qwen): native int8 ConvRot replaces the Q4–Q8 quants; Fast Pipeline split (about 1.4× faster)
+
+The **Qwen-Image-Edit 2511** backend now ships two configs instead of
+seven: **`qwen-2511_int8`** — the official Comfy-Org **int8 ConvRot**
+checkpoint, loaded through the native UNet loader, so the int8 kernels run
+natively (no GGUF per-op dequant) — and **`qwen-2511_q3`** (GGUF Q3_K_S)
+for 12 GB-class GPUs. The Q4–Q8 GGUF quants are retired: in the
+side-by-side runs the int8 checkpoint was clearly ahead of Q4_K_M at the
+same 16 GB class, while at Q3 fine details can shift (in the test a
+character's expression changed — a smile appeared), so prefer
+`qwen-2511_int8` whenever the VRAM allows. Hardware: **16 GB+ VRAM /
+48 GB+ RAM** for the int8 config (the 20.5 GB checkpoint partly streams
+from system RAM), 12 GB / 32 GB+ for `qwen-2511_q3`. Settings saved in the
+older `model_name`/`model_precision` format are mapped to the new configs
+(same mapping in the GUI and the manager), and the update brings the two
+new config files in. Launchers:
+`run_server_int8.cmd` / `run_server_q3.cmd`; `start_server.cmd` with no
+argument now defaults to `qwen-2511_int8`.
+
+**Fast Pipeline** (the checkbox on Tab 2) now supports this family with the
+**cached-TE split**, under `ref_te_edit/`: each frame's edit conditioning
+is cached with the text encoder resident, then the sampling runs with the
+UNet resident — in chunks of 100 frames, and a chunk's cache is dropped
+once colorized, so a cancelled run resumes from the first missing frame.
+Field test (17 frames, 920×672, 2 steps): **~7.3 s per frame against
+~10.5 s** of the standard path (~1.4×); the first frame of a run costs
+about 14 s more, one-time (model load). At 4 steps — the configs' value —
+the split measures ~11.9 s per frame.
+
+The **standard** path is faster too: the negative text-encoder pass —
+which the sampler never consumed (CFG-off) — is no longer computed: about
+1.8 s per frame at 4 steps, with byte-identical output. Single-image
+colorization with this backend (Fix Image etc.) runs this path, so it
+speeds up as well.
+
 ### 2026-10-09 — qwen21-viggle: about 2× faster colorization (Fast Pipeline split; int8 text encoder)
 
 **Fast Pipeline** (the checkbox on Tab 2) now runs a *cached-TE split* for the

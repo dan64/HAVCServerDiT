@@ -38,7 +38,11 @@ Choose the backend that matches your hardware:
 > ConvRot checkpoint, loaded through the native UNet loader — the int8 kernels
 > run natively instead of the GGUF per-op dequant, so it is measurably faster
 > per frame than the GGUF quants.
-> **`qwen-2511_q3`** (GGUF Q3_K_S) is the low-VRAM option for 12 GB-class GPUs.
+> **`qwen-2511_q3`** (GGUF Q3_K_S) is the low-VRAM option for 12 GB-class GPUs;
+> on fine details it shows the quant's artifacts — in a side-by-side run the
+> character's expression visibly shifted (a smile appeared), and the int8
+> checkpoint was clearly ahead overall. Use it only when VRAM rules out
+> `qwen-2511_int8`.
 > Uses ComfyUI-native code : no ComfyUI GUI installation needed.
 > Both configs live in the `config/` folder.
 

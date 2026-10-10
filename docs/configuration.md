@@ -51,8 +51,11 @@ The Qwen-Image-Edit 2511 configs share the same structure
 > Comfy-Org int8 ConvRot checkpoint through the native UNet loader (not the
 > GGUF dequantizer) and runs measurably faster per frame than the GGUF
 > quants. `qwen-2511_q3` (GGUF Q3_K_S) remains the choice for 12 GB-class
-> GPUs. Both share the same VAE, mmproj and LoRA files (auto-downloaded from
-> HuggingFace); the CLIP stays GGUF in both.
+> GPUs, with one caveat measured in a side-by-side run: at Q3 fine details
+> can shift (the character's expression changed — a smile appeared), so
+> prefer `qwen-2511_int8` whenever 16 GB of VRAM is available. Both share
+> the same VAE, mmproj and LoRA files (auto-downloaded from HuggingFace);
+> the CLIP stays GGUF in both.
 
 > **⚠️ The GGUF backend is experimental.** In some cases the frames colors may be faded or little colored. For production use, prefer `nunchaku-qwen` (FP4/INT4) or `qwen21-viggle`, which are not affected by such problems — see the recommendation note at the top of this README.
 

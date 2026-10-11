@@ -15,9 +15,3 @@
 # were deliberately not copied to avoid vendoring that unused, fragile
 # chain -- do not re-add "from .nodes import ..." here without also
 # copying and fixing that chain.
-#
-# havc_flags.py is HAVC's own addition: it selects this v26-10-11 code or the
-# byte-identical pre-update copy in legacy_v26_09_04/ for the GGUF
-# text-encoder path (pipeline config key fix_qwen21_enabled, env
-# HAVC_FIX_QWEN21). The upstream files in this folder stay untouched, so a
-# future upstream update is a plain drop-in.

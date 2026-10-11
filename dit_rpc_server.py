@@ -247,7 +247,6 @@ class ColorizeService:
         clip_mmproj: str = "",
         clip_mmproj_hf_name: str = "",
         unet_hf_name: str = "",
-        fix_qwen21_enabled=None,
     ) -> dict:
         """
         Load the Nunchaku/Qwen pipeline.
@@ -322,7 +321,6 @@ class ColorizeService:
                         clip_mmproj=clip_mmproj,
                         clip_mmproj_hf_name=clip_mmproj_hf_name,
                         unet_hf_name=unet_hf_name,
-                        fix_qwen21_enabled=fix_qwen21_enabled,
                     )
                 elif model_name == "qwen21-turbo":
                     pipe = load_qwen21_turbo_pipeline(
@@ -334,7 +332,6 @@ class ColorizeService:
                         hf_clip=hf_clip,
                         hf_vae=hf_vae,
                         unet_hf_name=unet_hf_name,
-                        fix_qwen21_enabled=fix_qwen21_enabled,
                     )
                 else:
                     pipe = None
@@ -1298,26 +1295,6 @@ class PipelineConfigError(ValueError):
     unknown/incomplete format."""
 
 
-def _parse_optional_flag(value):
-    """Optional boolean config key (e.g. fix_qwen21_enabled): True/False,
-    numbers (0/non-zero) or the string forms "true"/"on"/"yes" and
-    "false"/"off"/"no" (case-insensitive). Anything else -- including the
-    key being absent -- returns None, i.e. "not specified": the caller
-    falls back to its own default."""
-    if value is None:
-        return None
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, (int, float)):
-        return value != 0
-    text = str(value).strip().lower()
-    if text in ("true", "on", "1", "yes"):
-        return True
-    if text in ("false", "off", "0", "no"):
-        return False
-    return None
-
-
 def parse_pipeline_config(config_path: str) -> dict:
     """
     Read and validate a JSON pipeline configuration file (see config/*.json).
@@ -1406,10 +1383,6 @@ def parse_pipeline_config(config_path: str) -> dict:
             "clip_mmproj": cfg.get("clip_mmproj", ""),
             "clip_mmproj_hf_name": cfg.get("clip_mmproj_hf_name", ""),
             "unet_hf_name": cfg.get("unet_hf_name", ""),
-            # optional: picks the vendored Reboot implementation for a GGUF
-            # clip (True = v26-10-11, False = the pre-update copy); absent /
-            # unparsable -> None -> the loader's own default
-            "fix_qwen21_enabled": _parse_optional_flag(cfg.get("fix_qwen21_enabled")),
         }
 
     # Legacy format
@@ -1481,7 +1454,6 @@ def _load_pipeline_from_parsed(service: ColorizeService, cfg: dict,
         clip_mmproj=cfg.get("clip_mmproj", ""),
         clip_mmproj_hf_name=cfg.get("clip_mmproj_hf_name", ""),
         unet_hf_name=cfg.get("unet_hf_name", ""),
-        fix_qwen21_enabled=cfg.get("fix_qwen21_enabled"),
     )
 
 

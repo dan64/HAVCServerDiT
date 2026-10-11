@@ -369,8 +369,7 @@ def load_viggle_pipeline(model_name: str, unet_path: str, clip_path: str,
                           hf_lora="Viggle/Qwen-Image-2.1-viggle-turbo",
                           clip_mmproj: str = "",
                           clip_mmproj_hf_name: str = "",
-                          unet_hf_name: str = "",
-                          fix_qwen21_enabled=None):
+                          unet_hf_name: str = ""):
     """
     Load the Qwen-Image-2.1 pipeline (native ComfyUI int8 ConvRot weights).
     The Viggle-Turbo LoRA is applied as an unmerged runtime hook when
@@ -388,9 +387,6 @@ def load_viggle_pipeline(model_name: str, unet_path: str, clip_path: str,
     repo, when it differs from the default download path the loader assumes
     ("diffusion_models/<local filename>", the Comfy-Org layout) -- e.g. for
     files kept at the root of the Viggle repo.
-    fix_qwen21_enabled : optional, selects the vendored Reboot implementation
-    for a GGUF clip_path (True = v26-10-11, False = pre-update copy); ignored
-    when clip_path is a safetensors text encoder.
     """
     if model_name != "qwen21-viggle":
         return None
@@ -438,8 +434,7 @@ def load_viggle_pipeline(model_name: str, unet_path: str, clip_path: str,
     if _auto:
         _ensure_models(_files)
 
-    pipeline = _comfy_load_viggle(unet_path, clip_path, lora_path=lora_path, vae_name=vae_name, clip_mmproj=clip_mmproj,
-                                  fix_qwen21_enabled=fix_qwen21_enabled)
+    pipeline = _comfy_load_viggle(unet_path, clip_path, lora_path=lora_path, vae_name=vae_name, clip_mmproj=clip_mmproj)
     pipeline["_model_type"] = "qwen21-viggle"
     pipeline["_colorize_fn"] = _colorize_viggle
     return pipeline
@@ -450,8 +445,7 @@ def load_qwen21_turbo_pipeline(model_name: str, unet_path: str, clip_path: str,
                                 hf_unet="Comfy-Org/Qwen-Image-2.1",
                                 hf_clip="Comfy-Org/Qwen-Image-2.1",
                                 hf_vae="Comfy-Org/Qwen-Image-2.1",
-                                unet_hf_name: str = "",
-                                fix_qwen21_enabled=None):
+                                unet_hf_name: str = ""):
     """
     Load the Qwen-Image-2.1-Turbo pipeline (native ComfyUI int8 ConvRot
     weights from the Comfy-Org repack).
@@ -464,9 +458,6 @@ def load_qwen21_turbo_pipeline(model_name: str, unet_path: str, clip_path: str,
     unet_hf_name : optional, the UNet filename as it exists on the hf_unet
     repo, when it differs from the default download path the loader assumes
     ("diffusion_models/<local filename>", the Comfy-Org layout).
-    fix_qwen21_enabled : optional, selects the vendored Reboot implementation
-    for a GGUF clip_path (True = v26-10-11, False = pre-update copy); ignored
-    when clip_path is a safetensors text encoder.
     """
     if model_name != "qwen21-turbo":
         return None
@@ -498,8 +489,7 @@ def load_qwen21_turbo_pipeline(model_name: str, unet_path: str, clip_path: str,
     if _auto:
         _ensure_models(_files)
 
-    pipeline = _comfy_load_qwen21(unet_path, clip_path, vae_name=vae_name,
-                                  fix_qwen21_enabled=fix_qwen21_enabled)
+    pipeline = _comfy_load_qwen21(unet_path, clip_path, vae_name=vae_name)
     pipeline["_model_type"] = "qwen21-turbo"
     pipeline["_colorize_fn"] = _colorize_turbo
     return pipeline

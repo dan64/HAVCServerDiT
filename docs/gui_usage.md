@@ -579,9 +579,9 @@ colorization. Results are saved to `ref_qwen/`.
 Two modes are available:
 
 - **Standard**: each frame is sent individually
-- **Fast Pipeline**: with qwen21-viggle and qwen-2511 (gguf-qwen) the frames
+- **Fast Pipeline**: with qwen21-viggle, qwen21-turbo and qwen-2511 (gguf-qwen) the frames
   are colorized in two chunked phases — first every frame's conditioning is
-  cached (text-encoder for qwen21-viggle in `ref_te/`, the edit
+  cached (text-encoder for qwen21-viggle / qwen21-turbo in `ref_te/`, the edit
   conditioning for qwen-2511 in `ref_te_edit/`), then the colorization
   samples from that cache. The models stay resident for the whole phase,
   which is roughly 2× faster for qwen21-viggle and ~1.4× for qwen-2511

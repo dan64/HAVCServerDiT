@@ -28,6 +28,9 @@ file there. Supported config formats (see config/*.json):
     GGUF / LongCat:  model_name/unet_gguf/clip_gguf/vae_name/steps
     qwen21-viggle:   model_name/unet_name/clip_name/lora_path/vae_name/steps
                      (optional: clip_mmproj, clip_mmproj_hf_name, unet_hf_name)
+    qwen21-turbo:    model_name/unet_name/clip_name/vae_name/steps
+                     (optional: unet_hf_name; the checkpoint carries its own
+                     8-step sigma table, so steps is informational)
 -------------------------------------------------------------------------------
 """
 
@@ -62,6 +65,7 @@ try:
         load_gguf_pipeline,
         load_longcat_pipeline,
         load_viggle_pipeline,
+        load_qwen21_turbo_pipeline,
         process_image,
         process_image_pair,
         process_single_image,
@@ -80,6 +84,7 @@ except ImportError as _e:
     load_gguf_pipeline        = None
     load_longcat_pipeline     = None
     load_viggle_pipeline      = None
+    load_qwen21_turbo_pipeline = None
     process_image             = None
     process_image_pair        = None
     process_single_image      = None
@@ -302,6 +307,17 @@ class ColorizeService:
                         hf_lora=hf_lora,
                         clip_mmproj=clip_mmproj,
                         clip_mmproj_hf_name=clip_mmproj_hf_name,
+                        unet_hf_name=unet_hf_name,
+                    )
+                elif model_name == "qwen21-turbo":
+                    pipe = load_qwen21_turbo_pipeline(
+                        model_name=model_name,
+                        unet_path=model_precision,
+                        clip_path=model_rank,
+                        vae_name=vae_name,
+                        hf_unet=hf_unet,
+                        hf_clip=hf_clip,
+                        hf_vae=hf_vae,
                         unet_hf_name=unet_hf_name,
                     )
                 else:
@@ -1164,6 +1180,10 @@ def parse_pipeline_config(config_path: str) -> dict:
         {"model_name": "qwen21-viggle", "unet_name": "...", "clip_name": "...",
          "vae_name": "...", "lora_path": "...", "steps": 6}
 
+    New format (qwen21-turbo, same keys as qwen21-viggle):
+        {"model_name": "qwen21-turbo", "unet_name": "...", "clip_name": "...",
+         "vae_name": "...", "lora_path": "", "steps": 8}
+
     Legacy format (Nunchaku models):
         {"model_name": "nunchaku-qwen", "model_precision": "...",
          "model_rank": "...", "model_inference_steps": "4",
@@ -1212,7 +1232,7 @@ def parse_pipeline_config(config_path: str) -> dict:
             "unet_hf_name": cfg.get("unet_hf_name", ""),
         }
 
-    # New format (qwen21-viggle, native ComfyUI int8 ConvRot weights)
+    # New format (qwen21-viggle / qwen21-turbo, native ComfyUI int8 ConvRot weights)
     if "unet_name" in cfg:
         required = {"model_name", "unet_name", "clip_name", "vae_name", "lora_path", "steps"}
         missing = required - cfg.keys()

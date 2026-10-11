@@ -391,6 +391,13 @@ _VIGGLE_SIGMA_SCHEDULES = {
     8: _VIGGLE_SIGMA_NODES_8,
 }
 
+# Qwen-Image-2.1-Turbo: the checkpoint's own 8-step sigma table (the
+# `sample_sigmas` of Qwen/Qwen-Image-2.1-Turbo's model_index.json, plus the
+# terminal 0 the samplers append). Fixed by the checkpoint -- the step count
+# is not a free parameter for this family.
+_QWEN21_TURBO_SIGMAS = ("1.0, 0.978453, 0.95418, 0.926626, 0.89508, "
+                        "0.845148, 0.704534, 0.414568, 0")
+
 _VIGGLE_PE_SYSTEM_PROMPT = """# Image Prompt Rewriting Expert
 
 You turn a user's image request into one long English paragraph that describes the
@@ -670,6 +677,55 @@ def _viggle_sample_decode(pipeline, conditioning, latent_dict, steps, seed):
     return Image.fromarray((img_np * 255).astype(np.uint8))
 
 
+def _qwen21_turbo_sample_decode(pipeline, conditioning, latent_dict, seed):
+    """Sampler + decode tail of the qwen21-turbo path: the reference
+    workflow's SamplerCustomAdvanced graph -- the ModelSamplingFlux "Qwen 2K
+    shift" patch (max_shift 0.6935 / base_shift 0.5), QwenImage21Cache,
+    BasicGuider (CFG-off) and the checkpoint's own sigma table through
+    ManualSigmas.
+
+    The shift patch is inert with an explicit sigma table (the sampler
+    consumes the given sigmas directly and ModelSamplingFlux.timestep() is
+    the identity); it is kept to mirror the tested workflow exactly -- it is
+    what the Base schedule would need. Returns the colorized PIL image.
+    """
+    import nodes as cn
+    from comfy_extras.nodes_model_advanced import ModelSamplingFlux
+    from comfy_extras.nodes_qwen import QwenImage21Cache
+    from comfy_extras.nodes_custom_sampler import (
+        RandomNoise, KSamplerSelect, BasicGuider, SamplerCustomAdvanced, ManualSigmas)
+
+    height = latent_dict["samples"].shape[-2] * 16
+    width = latent_dict["samples"].shape[-1] * 16
+    shifted_model = get_value_at_index(
+        ModelSamplingFlux().patch(max_shift=0.6935, base_shift=0.5,
+                                  width=width, height=height,
+                                  model=pipeline["model"]), 0)
+    cached_model = get_value_at_index(
+        QwenImage21Cache().EXECUTE_NORMALIZED(model=shifted_model, device="auto", dtype="default"), 0)
+    guider = get_value_at_index(
+        BasicGuider().EXECUTE_NORMALIZED(model=cached_model, conditioning=conditioning), 0)
+    noise = get_value_at_index(RandomNoise().EXECUTE_NORMALIZED(noise_seed=seed), 0)
+    sampler = get_value_at_index(KSamplerSelect().EXECUTE_NORMALIZED(sampler_name="euler"), 0)
+    sigmas = get_value_at_index(
+        ManualSigmas().EXECUTE_NORMALIZED(sigmas=_QWEN21_TURBO_SIGMAS), 0)
+
+    sampled = SamplerCustomAdvanced().EXECUTE_NORMALIZED(
+        noise=noise, guider=guider, sampler=sampler, sigmas=sigmas, latent_image=latent_dict)
+    latent_samples = get_value_at_index(sampled, 0)
+
+    img_decoded = cn.VAEDecode().decode(samples=latent_samples, vae=pipeline["vae"])
+    img_t = get_value_at_index(img_decoded, 0)
+
+    if img_t.ndim == 4:
+        img_np = img_t[0].cpu().float().numpy()
+    else:
+        img_np = img_t.cpu().float().numpy()
+    img_np = np.clip(img_np, 0, 1)
+    img_np = img_np[..., :3]  # the Qwen-Image-2.1 VAE decode has an extra 4th channel, drop it (RGB only)
+    return Image.fromarray((img_np * 255).astype(np.uint8))
+
+
 def _viggle_encode_positive(pipeline, img_tensor, prompt, resolution):
     """The positive branch of TextEncodeQwenImage21.execute() for a single
     reference image: same area-budget resize at `resolution`, same VAE
@@ -766,11 +822,50 @@ def encode_viggle_conditioning(pipeline, image, prompt, resolution=1024, enhance
 
 
 def colorize_viggle_from_conditioning(pipeline, conditioning, latent_dict, steps=6, seed=42):
-    """Sample + decode one image from a precomputed viggle conditioning (phase
-    B of the split-colorize flow). Returns the colorized PIL image."""
+    """Sample + decode one image from a precomputed conditioning (phase B of
+    the split-colorize flow), with the schedule of the family the pipeline
+    belongs to: the viggle-turbo sigmas for qwen21-viggle, the checkpoint's
+    own 8-step table for qwen21-turbo. Returns the colorized PIL image."""
+    if isinstance(pipeline, dict) and pipeline.get("_model_type") == "qwen21-turbo":
+        return colorize_qwen21_turbo_from_conditioning(
+            pipeline, conditioning, latent_dict, steps, seed)
     with torch.inference_mode():
         result = _viggle_sample_decode(pipeline, conditioning, latent_dict, steps, seed)
     return result
+
+
+def colorize_qwen21_turbo(pipeline, image, prompt, steps=8, seed=42, resolution=1024):
+    """Qwen-Image-2.1-Turbo colorization (CFG-off, the checkpoint's own
+    8-step sigma table).
+
+    Same prologue as colorize_viggle() -- the aspect-preserving area-budget
+    resize at `resolution` and the positive branch of TextEncodeQwenImage21
+    -- followed by the turbo sampling tail. `steps` is fixed by the
+    checkpoint schedule: any other value is accepted (call-shape
+    compatibility) and ignored, with a warning.
+    """
+    if int(steps or 0) != 8:
+        logger.warning("colorize_qwen21_turbo: steps=%s ignored (the turbo "
+                       "checkpoint runs its own 8-step schedule)", steps)
+    with torch.inference_mode():
+        img_np = np.array(image.convert("RGB")).astype(np.float32) / 255.0
+        img_tensor = torch.from_numpy(img_np).unsqueeze(0)
+        positive, latent_dict = _viggle_encode_positive(pipeline, img_tensor, prompt, resolution)
+        result = _qwen21_turbo_sample_decode(pipeline, positive, latent_dict, seed)
+    return result
+
+
+def colorize_qwen21_turbo_from_conditioning(pipeline, conditioning, latent_dict, steps=8, seed=42):
+    """Phase B of the split-colorize flow for the qwen21-turbo family: sample
+    + decode one image from a precomputed conditioning (the same
+    TextEncodeQwenImage21 structure the viggle flow caches). `steps` is fixed
+    by the checkpoint schedule (see colorize_qwen21_turbo). Returns the
+    colorized PIL image."""
+    if int(steps or 0) != 8:
+        logger.warning("colorize_qwen21_turbo_from_conditioning: steps=%s ignored "
+                       "(the turbo checkpoint runs its own 8-step schedule)", steps)
+    with torch.inference_mode():
+        return _qwen21_turbo_sample_decode(pipeline, conditioning, latent_dict, seed)
 
 
 def save_viggle_conditioning(path, conditioning, latent_dict, prompt="", prompt_original="", meta=None):

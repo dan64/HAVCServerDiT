@@ -440,6 +440,61 @@ def load_viggle_pipeline(model_name: str, unet_path: str, clip_path: str,
     return pipeline
 
 
+def load_qwen21_turbo_pipeline(model_name: str, unet_path: str, clip_path: str,
+                                vae_name: str = "qwen_image_2.1_vae_bf16.safetensors",
+                                hf_unet="Comfy-Org/Qwen-Image-2.1",
+                                hf_clip="Comfy-Org/Qwen-Image-2.1",
+                                hf_vae="Comfy-Org/Qwen-Image-2.1",
+                                unet_hf_name: str = ""):
+    """
+    Load the Qwen-Image-2.1-Turbo pipeline (native ComfyUI int8 ConvRot
+    weights from the Comfy-Org repack).
+
+    Same architecture and loading path as qwen21-viggle (Qwen3-VL 8B text
+    encoder + the 2.1 VAE, stock ComfyUI loaders): the difference is
+    entirely in the sampling recipe -- the checkpoint ships its own 8-step
+    sigma table (ManualSigmas) and no LoRA is involved.
+
+    unet_hf_name : optional, the UNet filename as it exists on the hf_unet
+    repo, when it differs from the default download path the loader assumes
+    ("diffusion_models/<local filename>", the Comfy-Org layout).
+    """
+    if model_name != "qwen21-turbo":
+        return None
+
+    import torch
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cudnn.allow_tf32 = True
+
+    import os as _os
+    _bridge_dir = _os.path.join(_os.path.dirname(__file__), "comfy_bridge")
+    unet_path = _os.path.join(_bridge_dir, unet_path) if not _os.path.isabs(unet_path) else unet_path
+    clip_path = _os.path.join(_bridge_dir, clip_path) if not _os.path.isabs(clip_path) else clip_path
+
+    # comfy_bridge.load_viggle_pipeline is the generic Qwen-Image-2.1 native
+    # loader (safetensors UNet through the stock UNETLoader, safetensors
+    # clip, VAE): the turbo checkpoint needs no LoRA and no separate mmproj
+    # (the int8 clip ships the vision tower in the same file).
+    from comfy_bridge import load_viggle_pipeline as _comfy_load_qwen21, colorize_qwen21_turbo as _colorize_turbo
+
+    _auto = _os.environ.get("COMFY_AUTO_DOWNLOAD", "1") == "1"
+    _vae_local = _os.path.join(_bridge_dir, "models", "vae", vae_name)
+    _files = {
+        # unet: unet_hf_name overrides the assumed remote path when the file
+        # is not stored under the Comfy-Org-style "diffusion_models/" folder.
+        "unet": (unet_path, hf_unet, unet_hf_name or ("diffusion_models/" + _os.path.basename(unet_path))),
+        "clip": (clip_path, hf_clip, "text_encoders/" + _os.path.basename(clip_path)),
+        "vae":  (_vae_local, hf_vae,  "vae/" + vae_name),
+    }
+    if _auto:
+        _ensure_models(_files)
+
+    pipeline = _comfy_load_qwen21(unet_path, clip_path, vae_name=vae_name)
+    pipeline["_model_type"] = "qwen21-turbo"
+    pipeline["_colorize_fn"] = _colorize_turbo
+    return pipeline
+
+
 def upscale_with_lanczos(image, target_size):
     return image.resize(target_size, Image.Resampling.LANCZOS)
 
@@ -465,6 +520,12 @@ def colorize_image(pipe, img: Image, prompt:str, steps: int = 2, seed: int=42, e
     if isinstance(pipe, dict) and pipe.get("_model_type") == "longcat-gguf":
         _colorize_fn = pipe.get("_colorize_fn")
         return _colorize_fn(pipe, img, prompt=prompt, steps=steps, seed=seed)
+
+    # Qwen-Image-2.1-Turbo pipeline (dict with _model_type marker)
+    if isinstance(pipe, dict) and pipe.get("_model_type") == "qwen21-turbo":
+        _colorize_fn = pipe.get("_colorize_fn")
+        kwargs = {"resolution": resolution} if resolution is not None else {}
+        return _colorize_fn(pipe, img, prompt=prompt, steps=steps, seed=seed, **kwargs)
 
     # Qwen-Image-2.1 + Viggle-Turbo pipeline (dict with _model_type marker)
     if isinstance(pipe, dict) and pipe.get("_model_type") == "qwen21-viggle":

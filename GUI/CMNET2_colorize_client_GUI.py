@@ -1130,7 +1130,7 @@ def orchestrator(init_values, window):
 
     # ---- STEP 2b: COLORIZE FAST (paired / qwen21-viggle split) ----
     def do_colorize_split(values, window):
-        """Fast Pipeline for the qwen21-viggle family: split colorize in chunks.
+        """Fast Pipeline for the qwen21-viggle / qwen21-turbo families: split colorize in chunks.
 
         Every chunk runs phase A (TE + VAE resident: the frames are encoded and
         their conditioning cached under ref_te/) and then phase B (UNet + VAE
@@ -1176,12 +1176,26 @@ def orchestrator(init_values, window):
             log_message("ℹ️ No images to colorize.")
             return
 
+        model_type = (read_model_config(values["-MODEL_CONFIG-"]) or {}).get(
+            "model_name", "")
         prompt         = values["-PROMPT-"]
         steps          = int(values.get("-STEPS-", cfg["steps"]))
         enhance_prompt = values.get("-ENHANCE_PROMPT-", False)
         usm_radius     = usm_radius_of(values, "-USM-", "-USM_RADIUS-")
         seed           = 42
         chunk_size     = 200
+        if model_type == "qwen21-turbo":
+            # The turbo checkpoint carries its own 8-step sigma table and has
+            # no viggle-style prompt enhancer: the panel's steps/enhance
+            # settings do not apply to this family.
+            if steps != 8:
+                log_message(f"ℹ️ qwen21-turbo: using its own 8-step schedule "
+                            f"(panel steps = {steps}).")
+            if enhance_prompt:
+                log_message("ℹ️ qwen21-turbo: prompt enhancement is not used "
+                            "by this family.")
+            steps = 8
+            enhance_prompt = False
 
         chunks = [image_files[i:i + chunk_size]
                   for i in range(0, tot_num_images, chunk_size)]
@@ -1539,6 +1553,13 @@ def orchestrator(init_values, window):
             # Fast Pipeline on the qwen21-viggle family runs the split flow
             # (phase A: conditioning cache; phase B: sampling from the cache,
             # in chunks of 200 frames) instead of the 1280px pair pass.
+            do_colorize_split(values, window)
+            return
+        if model_type == "qwen21-turbo":
+            # Fast Pipeline on the qwen21-turbo family runs the same split
+            # flow as qwen21-viggle (phase A: conditioning cache; phase B:
+            # sampling from the cache with the checkpoint's own 8-step
+            # schedule, in chunks of 200 frames).
             do_colorize_split(values, window)
             return
         if model_type == "gguf-qwen":
@@ -2370,7 +2391,7 @@ tab3_layout = [
           sg.Text("stopped", key="-SERVER_STATUS-", size=(45, 1), expand_x=True)],
         [sg.Text("Colorization Steps:"),
          sg.Combo(steps_values, default_value=cfg["steps"], key="-STEPS-", readonly=True, size=(6,1)),
-         sg.Checkbox("Fast Pipeline", key="-FAST_PIPE-", default=cfg["fast_pipe"], tooltip="qwen21-viggle / qwen-2511: cached-TE split flow; other models: paired 1280px pass"),
+         sg.Checkbox("Fast Pipeline", key="-FAST_PIPE-", default=cfg["fast_pipe"], tooltip="qwen21-viggle / qwen21-turbo / qwen-2511: cached-TE split flow; other models: paired 1280px pass"),
          sg.Checkbox("Unsharp Mask", key="-USM-", default=cfg.get("usm", False),
                      tooltip="Pre-filter the input before colorization (unsharp mask: amount 0.50, "
                              "threshold 0). Removes the film grain that can stop the model from "

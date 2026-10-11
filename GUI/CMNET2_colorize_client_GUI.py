@@ -182,6 +182,42 @@ class CMNET2RpcClient:
         return self._proxy_slow.colorize_frame_edit_from_te(
             str(te_dir), str(stem), str(out_path), steps, seed, bool(first))
 
+    # ---- split colorize, paired mode (config key fast_split_TE) ----
+    def encode_pair_te(self, in1_path, in2_path, te_dir, stem, prompt,
+                       resolution=1024, img_size=0, enhance_prompt=False,
+                       first=False, usm_radius=0.0) -> dict:
+        """Phase A, one pair (qwen21-viggle / qwen21-turbo): cache the
+        conditioning of the merged canvas (in2_path="" for a tail frame)."""
+        return self._proxy_slow.encode_pair_te(
+            str(in1_path), str(in2_path), str(te_dir), str(stem), prompt,
+            int(resolution), int(img_size), bool(enhance_prompt), bool(first),
+            float(usm_radius))
+
+    def colorize_pair_from_te(self, te_dir, stem, out1_path, out2_path="",
+                              steps=2, seed=42, first=False) -> dict:
+        """Phase B, one pair (qwen21-viggle / qwen21-turbo): sample + decode
+        the cached pair canvas and split it back into the frames."""
+        return self._proxy_slow.colorize_pair_from_te(
+            str(te_dir), str(stem), str(out1_path), str(out2_path),
+            int(steps), int(seed), bool(first))
+
+    def encode_pair_edit(self, in1_path, in2_path, te_dir, stem, prompt,
+                         img_size=0, first=False, usm_radius=0.0) -> dict:
+        """Phase A, one pair (qwen-2511): cache the edit conditioning of the
+        merged canvas (in2_path="" for a tail frame)."""
+        return self._proxy_slow.encode_pair_edit(
+            str(in1_path), str(in2_path), str(te_dir), str(stem), prompt,
+            int(img_size), bool(first), float(usm_radius))
+
+    def colorize_pair_edit_from_te(self, te_dir, stem, out1_path,
+                                   out2_path="", steps=4, seed=42,
+                                   first=False) -> dict:
+        """Phase B, one pair (qwen-2511): sample + decode the cached edit
+        conditioning and split the canvas back into the frames."""
+        return self._proxy_slow.colorize_pair_edit_from_te(
+            str(te_dir), str(stem), str(out1_path), str(out2_path),
+            int(steps), int(seed), bool(first))
+
 
 # ---------------------------------------------------------------------------
 # CONFIGURATION MANAGEMENT

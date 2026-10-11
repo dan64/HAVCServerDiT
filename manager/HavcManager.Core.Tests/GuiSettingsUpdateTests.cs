@@ -14,9 +14,9 @@ public class GuiSettingsUpdateTests
         {
             string template = Template();
             string wheel = WriteWheel(dir, template);
-            WriteInstalled(dir, WithInstallValues(template, dir, "qwen21-viggle"));
+            WriteInstalled(dir, WithInstallValues(template, dir, "qwen21-turbo"));
 
-            Assert.False(GuiSettingsUpdate.Differs(wheel, dir, "qwen21-viggle"));
+            Assert.False(GuiSettingsUpdate.Differs(wheel, dir, "qwen21-turbo"));
         }
         finally
         {
@@ -32,11 +32,11 @@ public class GuiSettingsUpdateTests
         {
             string template = Template();
             string wheel = WriteWheel(dir, template);
-            JsonObject installed = Parse(WithInstallValues(template, dir, "qwen21-viggle"));
+            JsonObject installed = Parse(WithInstallValues(template, dir, "qwen21-turbo"));
             installed["fix_steps"] = "4";
             WriteInstalled(dir, installed.ToJsonString());
 
-            Assert.True(GuiSettingsUpdate.Differs(wheel, dir, "qwen21-viggle"));
+            Assert.True(GuiSettingsUpdate.Differs(wheel, dir, "qwen21-turbo"));
         }
         finally
         {
@@ -53,7 +53,7 @@ public class GuiSettingsUpdateTests
         {
             string wheel = WriteWheel(dir, Template());
 
-            Assert.False(GuiSettingsUpdate.Differs(wheel, dir, "qwen21-viggle"));
+            Assert.False(GuiSettingsUpdate.Differs(wheel, dir, "qwen21-turbo"));
         }
         finally
         {
@@ -70,7 +70,7 @@ public class GuiSettingsUpdateTests
             string wheel = WriteWheel(dir, Template());
             WriteInstalled(dir, "{ not json");
 
-            Assert.True(GuiSettingsUpdate.Differs(wheel, dir, "qwen21-viggle"));
+            Assert.True(GuiSettingsUpdate.Differs(wheel, dir, "qwen21-turbo"));
         }
         finally
         {
@@ -86,11 +86,11 @@ public class GuiSettingsUpdateTests
         {
             string template = Template();
             string wheel = WriteWheel(dir, template);
-            JsonObject installed = Parse(WithInstallValues(template, dir, "qwen21-viggle"));
+            JsonObject installed = Parse(WithInstallValues(template, dir, "qwen21-turbo"));
             installed["base_dir"] = @"C:\old\work";
             WriteInstalled(dir, installed.ToJsonString());
 
-            Assert.True(GuiSettingsUpdate.Differs(wheel, dir, "qwen21-viggle"));
+            Assert.True(GuiSettingsUpdate.Differs(wheel, dir, "qwen21-turbo"));
         }
         finally
         {
@@ -109,7 +109,7 @@ public class GuiSettingsUpdateTests
             WriteInstalled(dir, WithInstallValues(template, dir, "longcat-gguf"));
 
             Assert.False(GuiSettingsUpdate.Differs(wheel, dir, "longcat-gguf"));
-            Assert.True(GuiSettingsUpdate.Differs(wheel, dir, "qwen21-viggle"));
+            Assert.True(GuiSettingsUpdate.Differs(wheel, dir, "qwen21-turbo"));
         }
         finally
         {
@@ -128,13 +128,13 @@ public class GuiSettingsUpdateTests
         {
             string template = Template();
             string wheel = WriteWheel(dir, template);
-            JsonObject installed = Parse(WithInstallValues(template, dir, "qwen21-viggle"));
+            JsonObject installed = Parse(WithInstallValues(template, dir, "qwen21-turbo"));
             installed.Remove("model_config");
             installed["model_name"] = "nunchaku-qwen";
             installed["model_precision"] = "fp4";
             WriteInstalled(dir, installed.ToJsonString());
 
-            Assert.True(GuiSettingsUpdate.Differs(wheel, dir, "qwen21-viggle"));
+            Assert.True(GuiSettingsUpdate.Differs(wheel, dir, "qwen21-turbo"));
         }
         finally
         {

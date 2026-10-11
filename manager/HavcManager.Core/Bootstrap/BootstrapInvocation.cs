@@ -19,7 +19,7 @@ public sealed record BootstrapInvocation
 
     /// <summary>
     /// GUI default model (--default-model): "longcat-gguf" below the RAM
-    /// threshold, else "qwen21-viggle"; seeds gui_cmnet2_settings.json when empty.
+    /// threshold, else "qwen21-turbo"; seeds gui_cmnet2_settings.json when empty.
     /// </summary>
     public string? DefaultModel { get; init; }
 

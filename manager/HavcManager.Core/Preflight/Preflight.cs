@@ -17,7 +17,7 @@ public sealed record PreflightCheck(string Name, PreflightStatus Status, string?
 
 /// <summary>
 /// Full outcome of the preflight checks, plus the default model picked for
-/// this machine (longcat-gguf below the RAM threshold, else qwen21-viggle).
+/// this machine (longcat-gguf below the RAM threshold, else qwen21-turbo).
 /// </summary>
 public sealed record PreflightReport(IReadOnlyList<PreflightCheck> Checks, string DefaultModelName)
 {
@@ -27,7 +27,7 @@ public sealed record PreflightReport(IReadOnlyList<PreflightCheck> Checks, strin
 /// <summary>
 /// First-run environment checks (PHASE1_SPEC §6.2 step 1): OS, nvidia-smi
 /// (name/driver/VRAM — missing GPU is a non-blocking warning), VRAM and
-/// system RAM vs the default model requirements (qwen21-viggle: at least
+/// system RAM vs the default model requirements (qwen21-turbo: at least
 /// 12 GB VRAM and 32 GB RAM; below the RAM threshold the default switches to
 /// the lighter longcat-gguf, Q3), disk space (indicative thresholds),
 /// manifest reachability (with a fallback to a `release.json` next to the app).
@@ -37,7 +37,12 @@ public sealed class Preflight
     // The install folder also holds the model files (comfy_bridge\models,
     // 2026-10-05): the threshold covers runtime + tools + ~15 GB of weights.
     private const long MinInstallBytes = 30L * 1024 * 1024 * 1024;  // ~30 GB (indicative)
-    private const string DefaultModelName = "qwen21-viggle";        // name in the GUI model list
+
+    /// <summary>
+    /// Nominal default model (--default-model value; the bootstrap maps it to
+    /// the turbo config since 2026-10-11).
+    /// </summary>
+    public const string DefaultModelName = "qwen21-turbo";
     private const string LighterModelName = "longcat-gguf";         // below the RAM threshold
     private const long MinDefaultModelVramMiB = 12 * 1024;          // 12 GiB
     private const long MinDefaultModelRamBytes = 32L * 1024 * 1024 * 1024;  // 32 GiB
@@ -130,7 +135,7 @@ public sealed class Preflight
 
     /// <summary>
     /// Default model for this machine: longcat-gguf (Q3) when the system RAM
-    /// is below the requirement, else qwen21-viggle (also when the RAM cannot
+    /// is below the requirement, else qwen21-turbo (also when the RAM cannot
     /// be measured). Used by the wizard at preflight and by update/repair runs
     /// so the GUI settings seed stays consistent.
     /// </summary>

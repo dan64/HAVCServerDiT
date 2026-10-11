@@ -97,7 +97,7 @@ public static class GuiSettingsUpdate
         template["mkv_path"] = Path.Combine(installDir, "tools", "MKVToolNix", "mkvmerge.exe");
         template["base_dir"] = samples;
         template["fixv_base_dir"] = samples;
-        string model = defaultModel ?? "qwen21-viggle"; // --default-model default
+        string model = defaultModel ?? "qwen21-turbo"; // --default-model default
         // GUI "Model Config" (config/ file stem): DEFAULT_MODEL_CONFIG in
         // havc/install.py. The nominal default family seeds the turbo config
         // (2026-10-11); the old model_name/model_precision pair is

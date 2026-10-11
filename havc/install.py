@@ -133,18 +133,18 @@ CMNET2_DINOV2 = (
 )
 
 # Default model seeded into the GUI settings when the value is missing: the
-# user-facing name from the GUI model list (the launcher argument mapping the
-# same model in HAVC-Server.cmd is `qwen21`; `longcat3` maps longcat-gguf).
-# The manager passes --default-model: below the RAM threshold of the nominal
-# default (qwen21-viggle) it seeds the lighter longcat-gguf (Q3).
-DEFAULT_MODEL_NAME = "qwen21-viggle"
+# --default-model value the manager passes (2026-10-11: the turbo family,
+# the current pick of the nominal default; `longcat-gguf` is the lighter
+# model it switches to below the RAM threshold).
+DEFAULT_MODEL_NAME = "qwen21-turbo"
 
 # GUI "Model Config" (the config/ file stem, without .json) seeded/wired for
 # each --default-model value: the config folder is what selects the model.
-# The nominal default family (qwen21-viggle, picked by the manager at or
-# above the RAM threshold) seeds the turbo config -- the current best pick
-# of that family (2026-10-11); below the threshold it seeds longcat-gguf Q3.
-DEFAULT_MODEL_CONFIG = {"qwen21-viggle": "qwen21_turbo_int8",
+# Both names of the nominal default family map to the turbo config
+# (`qwen21-viggle` is the pre-2026-10-11 name, kept for older managers);
+# below the RAM threshold it seeds longcat-gguf Q3.
+DEFAULT_MODEL_CONFIG = {"qwen21-turbo": "qwen21_turbo_int8",
+                        "qwen21-viggle": "qwen21_turbo_int8",
                         "longcat-gguf": "longcat_gguf_q3"}
 
 

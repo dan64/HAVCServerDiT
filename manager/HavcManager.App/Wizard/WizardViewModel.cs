@@ -131,13 +131,6 @@ public sealed class WizardViewModel : INotifyPropertyChanged
 
     public ObservableCollection<string> InstalledLines { get; } = new();
 
-    /// <summary>
-    /// Nominal default model for "Start server" (launcher argument; `qwen21`
-    /// maps to qwen21_viggle.json; `longcat3` → longcat_gguf_q3.json when the
-    /// preflight switches the default). Other models via the HAVC GUI.
-    /// </summary>
-    public const string DefaultBackend = "qwen21";
-
     public bool DirtyWarningVisible
     {
         get => _dirtyWarningVisible;
@@ -735,7 +728,7 @@ public sealed class WizardViewModel : INotifyPropertyChanged
                 ? new RuntimeState { Name = runtime.Name, Sha256 = runtime.Sha256, Python = runtime.Python }
                 : null,
             Dinov2 = true,
-            BackendDefault = BackendArgFor(_defaultModelName ?? "qwen21-viggle"),
+            BackendDefault = BackendDefaults.ArgFor(_defaultModelName ?? Preflight.DefaultModelName),
             LastVerify = new LastVerifyState
             {
                 Ts = DateTimeOffset.UtcNow.ToString("o"),
@@ -859,14 +852,7 @@ public sealed class WizardViewModel : INotifyPropertyChanged
     public void StartServer()
         => ShellIntegration.StartServer(
             InstallDir,
-            Existing?.State.BackendDefault is { Length: > 0 } backend ? backend : DefaultBackend);
-
-    /// <summary>HAVC-Server.cmd argument for a GUI model name (launcher mapping).</summary>
-    private static string BackendArgFor(string guiModelName) => guiModelName switch
-    {
-        "longcat-gguf" => "longcat3",
-        _ => DefaultBackend,
-    };
+            BackendDefaults.Resolve(Existing?.State.BackendDefault));
 
     public void OpenReleaseNotes()
     {

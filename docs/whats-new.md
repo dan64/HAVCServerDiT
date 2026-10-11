@@ -31,6 +31,19 @@ black-and-white. qwen21-viggle at 2 steps remains the best speed /
 quality / stability trade-off, so it stays the default seeded by the
 installer, the manager and the launchers.
 
+### 2026-10-11 — ComfyUI-GGUF-Reboot runtime updated to v26-10-11 (Qwen3-VL mmproj lookup)
+
+The vendored GGUF runtime — shipped as the pinned `comfy_bridge_v0.33.zip` —
+was updated to the upstream **v26-10-11** release. The visible fix: for a
+**GGUF Qwen3-VL text encoder**, the matching **mmproj sidecar** is now found
+even when the file names mix the hyphenation styles (`Qwen3-VL-...` encoder
+next to a `Qwen3VL-...` mmproj) — that combination used to load a text-only
+model without the vision tower, silently; and an ambiguous match now fails
+loudly instead of keeping the first file. Only GGUF-encoder setups are
+affected (the shipped qwen21 configs use the int8 `.safetensors` encoder,
+which never touches this code). The K-quant / Q8 fallback paths added
+upstream stay opt-in and are inert by default.
+
 ### 2026-10-10 — qwen-2511 (gguf-qwen): native int8 ConvRot replaces the Q4–Q8 quants; Fast Pipeline split (about 1.4× faster)
 
 The **Qwen-Image-Edit 2511** backend now ships two configs instead of

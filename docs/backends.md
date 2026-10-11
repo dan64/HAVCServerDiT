@@ -100,6 +100,27 @@ Choose the backend that matches your hardware:
 > All files are auto-downloaded on first run — see [What's New](whats-new.md).
 > Launch with `start_server.cmd qwen21_viggle`.
 
+### qwen21-turbo : ~4.5 sec/frame single split, ~2.3 with the paired split (Qwen-Image-2.1-Turbo int8 ConvRot)
+
+| Requirement | Details                            |
+| ----------- | ---------------------------------- |
+| **GPU**     | NVIDIA RTX 30/40/50  (14 GB+ VRAM; **12 GB+** with Fast Pipeline) |
+| **RAM**     | 32 GB+                             |
+| **CUDA**    | 13.0+                              |
+
+> The second Qwen-Image-2.1 variant: same loading path as `qwen21-viggle`
+> (int8 ConvRot UNet + int8 ConvRot text encoder, native ComfyUI loaders)
+> with no LoRA. The checkpoint carries its **own 8-step sigma schedule** —
+> the Colorization Steps setting does not apply — and there is no prompt
+> enhancer; like qwen21-viggle it wants a **detailed prompt**. Measured on
+> an RTX 5070 Ti 16 GB: **~4.5 s/frame** on the single split (`1024`
+> budget), **~2.3 s/frame** with the paired split
+> (`qwen21_turbo-fast_int8`, `fast_split_TE`). It colors better than the
+> viggle family but is noticeably **less stable** between similar frames —
+> see the note at the top; the shipped default stays
+> `qwen21_viggle-soft_int8`. Configs: `qwen21_turbo_int8` /
+> `qwen21_turbo-fast_int8`; launch with `start_server.cmd qwen21_turbo_int8`.
+
 ### All backends
 
 | Requirement | Details                |

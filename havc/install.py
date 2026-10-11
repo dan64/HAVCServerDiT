@@ -55,14 +55,18 @@ NVENC = {
 # `comfy-bridge` step; existing `models/` files are preserved on update.
 # v0.31 (2026-10-07): adds GGUF UNet support to the qwen21-viggle loader;
 # v0.32 (2026-10-09): qwen21-viggle cached-TE split colorize (phase A/B)
-# and the single-pass live path; the NEW FILE NAME is what makes existing
-# installs re-extract it (the `.source` marker only tracks the name).
-# Bucket: HAVC Assets v1.0.2.
+# and the single-pass live path;
+# v0.33 (2026-10-11): qwen-2511 native int8 loader support (stock UNETLoader
+# branch + the wrap_param partial-unload fix), the qwen21-turbo family
+# (int8 ConvRot), the Reboot v26-10-11 update (Qwen3-VL mmproj sidecar
+# lookup) and the models/diffusion_models skeleton; the NEW FILE NAME is
+# what makes existing installs re-extract it (the `.source` marker only
+# tracks the name). Bucket: HAVC Assets v1.0.3.
 COMFY_BRIDGE = {
-    "name": "comfy_bridge_v0.32.zip",
-    "url": "https://github.com/dan64/HAVCServerDiT/releases/download/v1.0.2/comfy_bridge_v0.32.zip",
-    "sha256": "f527cf27272a531a2cd4ef9871daf7aeddeff7701bb8b62165f238fdf99c1df1",
-    "size": 10668711,
+    "name": "comfy_bridge_v0.33.zip",
+    "url": "https://github.com/dan64/HAVCServerDiT/releases/download/v1.0.3/comfy_bridge_v0.33.zip",
+    "sha256": "3700fc0a457cd4cb064a2799fac1f91836b0980bc47076e7260e3adbdf556202",
+    "size": 10681093,
 }
 
 # cmnet2 assets (plugins + weights) — pinned; sha256 also verified against

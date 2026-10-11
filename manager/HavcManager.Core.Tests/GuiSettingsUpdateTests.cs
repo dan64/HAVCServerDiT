@@ -145,7 +145,7 @@ public class GuiSettingsUpdateTests
     private static string Template() =>
         "{\"script_dir\": \"\", \"vspipe_path\": \"\", \"x265_path\": \"\", " +
         "\"mkv_path\": \"\", \"base_dir\": \"\", \"fixv_base_dir\": \"\", " +
-        "\"model_config\": \"qwen21_viggle\", " +
+        "\"model_config\": \"qwen21_turbo_int8\", " +
         "\"fix_steps\": \"2\", \"window_w\": 926, \"window_h\": 814}";
 
     private static JsonObject Parse(string json) => JsonNode.Parse(json)!.AsObject();
@@ -161,7 +161,7 @@ public class GuiSettingsUpdateTests
         node["mkv_path"] = Path.Combine(installDir, "tools", "MKVToolNix", "mkvmerge.exe");
         node["base_dir"] = samples;
         node["fixv_base_dir"] = samples;
-        node["model_config"] = model == "longcat-gguf" ? "longcat_gguf_q3" : "qwen21_viggle";
+        node["model_config"] = model == "longcat-gguf" ? "longcat_gguf_q3" : "qwen21_turbo_int8";
         return node.ToJsonString();
     }
 

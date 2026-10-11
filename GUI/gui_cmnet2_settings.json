@@ -6,7 +6,7 @@
     "encode_script": "encode_cmnet2.vpy",
     "base_dir": "C:/HAVCServerDiT/GUI/samples",
     "input_video": "",
-    "model_config": "qwen21_viggle",
+    "model_config": "qwen21_turbo_int8",
     "steps": "2",
     "fast_pipe": true,
     "enhance_prompt": false,

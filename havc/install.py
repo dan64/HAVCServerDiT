@@ -141,7 +141,10 @@ DEFAULT_MODEL_NAME = "qwen21-viggle"
 
 # GUI "Model Config" (the config/ file stem, without .json) seeded/wired for
 # each --default-model value: the config folder is what selects the model.
-DEFAULT_MODEL_CONFIG = {"qwen21-viggle": "qwen21_viggle",
+# The nominal default family (qwen21-viggle, picked by the manager at or
+# above the RAM threshold) seeds the turbo config -- the current best pick
+# of that family (2026-10-11); below the threshold it seeds longcat-gguf Q3.
+DEFAULT_MODEL_CONFIG = {"qwen21-viggle": "qwen21_turbo_int8",
                         "longcat-gguf": "longcat_gguf_q3"}
 
 

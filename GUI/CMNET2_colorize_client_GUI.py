@@ -234,13 +234,15 @@ def legacy_model_config(cfg):
 
 def resolve_model_config(cfg, configs):
     """Pick the config to select: the saved value, else its equivalent from
-    the old model_name/model_precision pair, else the default
-    (qwen21_viggle), else the first available config."""
+    the old model_name/model_precision pair, else the shipped default
+    (qwen21_turbo_int8), else the historical qwen21_viggle, else the first
+    available config."""
     for candidate in (cfg.get("model_config", ""), legacy_model_config(cfg)):
         if candidate in configs:
             return candidate
-    if "qwen21_viggle" in configs:
-        return "qwen21_viggle"
+    for default in ("qwen21_turbo_int8", "qwen21_viggle"):
+        if default in configs:
+            return default
     return configs[0] if configs else ""
 
 

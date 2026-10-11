@@ -1123,15 +1123,20 @@ def orchestrator(init_values, window):
         out_dir.mkdir(exist_ok=True)
 
         out_stems = {f.stem.lower() for f in out_dir.glob("*.jpg")}
-        if out_stems:
-            log_message(f"⚠️ {len(out_stems)} images already colorized — will be skipped.")
 
-        images = sorted([
+        # the whole image set drives the progress bar: the frames colorized by
+        # the previous runs count as done, so a resumed run restarts from the
+        # video's actual progress instead of 0%
+        all_images = sorted([
             f for f in in_dir.iterdir()
             if f.suffix.lower() in ('.png', '.jpg', '.jpeg')
-            and f.stem.lower() not in out_stems
         ])
+        images = [f for f in all_images if f.stem.lower() not in out_stems]
         total_images = len(images)
+        already = len(all_images) - total_images
+        if already:
+            log_message(f"⚠️ {already} images already colorized — will be skipped. "
+                        f"Progress resumes at {int(already / len(all_images) * 100)}%.")
         if total_images == 0:
             log_message("ℹ️ No images to colorize.")
             return
@@ -1148,10 +1153,11 @@ def orchestrator(init_values, window):
                 log_message("[COLORIZE] Task skipped by user.")
                 break
 
-            curr_i = i + 1
-            p = int((curr_i / total_images) * 100)
-            window.write_event_value("-PROGRESS-", (p, f"{p}% {curr_i}/{total_images}"))
-            eta = get_eta_string(curr_i, total_images, start_time)
+            curr_i = already + i + 1
+            p = int((curr_i / len(all_images)) * 100)
+            window.write_event_value("-PROGRESS-",
+                                     (p, f"{p}% {curr_i}/{len(all_images)}"))
+            eta = get_eta_string(curr_i - already, total_images, start_time)
             update_status(window, f"Status: ETA COLORIZE: {eta}...", "info")
 
             try:
@@ -1191,7 +1197,7 @@ def orchestrator(init_values, window):
                 log_message(f"Error on {img_path.name}: {e}")
 
         window.write_event_value("-PROGRESS-",
-                                 (100, f"100% {total_images}/{total_images}"))
+                                 (100, f"100% {len(all_images)}/{len(all_images)}"))
         update_status(window, "Status: OK", "info")
         if count > 0:
             log_message(
@@ -1236,15 +1242,18 @@ def orchestrator(init_values, window):
         extensions = {".jpg", ".jpeg", ".png", ".bmp", ".tiff"}
         out_stems  = {f.stem.lower() for f in out_dir.glob("*.jpg")}
 
-        if out_stems:
-            log_message(f"⚠️ {len(out_stems)} images already colorized — will be skipped.")
-
-        image_files = sorted([
-            f for f in in_dir.iterdir()
-            if f.suffix.lower() in extensions
-            and f.stem.lower() not in out_stems
+        # the whole frame set drives the progress bar: the frames colorized by
+        # the previous runs count as done, so a resumed run restarts from the
+        # video's actual progress instead of 0%
+        all_images = sorted([
+            f for f in in_dir.iterdir() if f.suffix.lower() in extensions
         ])
+        image_files = [f for f in all_images if f.stem.lower() not in out_stems]
         tot_num_images = len(image_files)
+        already = len(all_images) - tot_num_images
+        if already:
+            log_message(f"⚠️ {already} images already colorized — will be skipped. "
+                        f"Progress resumes at {int(already / len(all_images) * 100)}%.")
         if tot_num_images == 0:
             log_message("ℹ️ No images to colorize.")
             return
@@ -1280,8 +1289,11 @@ def orchestrator(init_values, window):
                     f"{chunk_size} — split colorize (TE cache @ {resolution}px, "
                     f"then infer).")
 
-        total_steps = 2 * tot_num_images   # one cache step + one infer step per frame
-        done_steps  = 0
+        # the bar spans the whole video, not just this run's remainder: the
+        # frames already colorized seed it (one cache + one infer step each)
+        total_steps = 2 * len(all_images)
+        seed_steps  = 2 * already
+        done_steps  = seed_steps
         infer_time  = 0.0
         count       = 0
         start_time  = time.time()
@@ -1293,8 +1305,16 @@ def orchestrator(init_values, window):
             done_steps += 1
             p = int((done_steps / total_steps) * 100)
             window.write_event_value("-PROGRESS-", (p, f"{p}% {done_steps}/{total_steps}"))
-            eta = get_eta_string(done_steps, total_steps, start_time)
+            # the bar spans the whole video, but the ETA covers only what this
+            # run still has to do
+            eta = get_eta_string(done_steps - seed_steps,
+                                 total_steps - seed_steps, start_time)
             update_status(window, f"Status: ETA COLORIZE ({label}): {eta}...", "info")
+
+        # show the resume point right away: the bar would otherwise still hold
+        # the previous run's value until the first frame completes
+        p0 = int((seed_steps / total_steps) * 100)
+        window.write_event_value("-PROGRESS-", (p0, f"{p0}% {seed_steps}/{total_steps}"))
 
         try:
             for chunk_idx, chunk in enumerate(chunks):
@@ -1417,7 +1437,7 @@ def orchestrator(init_values, window):
             return
 
         window.write_event_value("-PROGRESS-",
-                                 (100, f"100% {tot_num_images}/{tot_num_images}"))
+                                 (100, f"100% {total_steps}/{total_steps}"))
         update_status(window, "Status: OK", "info")
         if count > 0:
             log_message(
@@ -1476,8 +1496,10 @@ def orchestrator(init_values, window):
         todo = [u for u in units
                 if not all((out_dir / (f.stem + ".jpg")).exists() for f in u)]
         already = sum(len(u) for u in units) - sum(len(u) for u in todo)
+        done_units = len(units) - len(todo)
         if already:
-            log_message(f"⚠️ {already} images already colorized — will be skipped.")
+            log_message(f"⚠️ {already} images already colorized — will be skipped. "
+                        f"Progress resumes at {int(done_units / len(units) * 100)}%.")
         if not todo:
             log_message("ℹ️ No images to colorize.")
             return
@@ -1514,8 +1536,11 @@ def orchestrator(init_values, window):
                     f"{len(chunks)} chunk(s) of max {chunk_size} — paired split "
                     f"colorize (TE cache @ {resolution}px, then infer).")
 
-        total_steps = 2 * len(todo)   # one cache step + one infer step per pair
-        done_steps  = 0
+        # the bar spans the whole video, not just this run's remainder: the
+        # pairs already colorized seed it (one cache + one infer step each)
+        total_steps = 2 * len(units)
+        seed_steps  = 2 * done_units
+        done_steps  = seed_steps
         infer_time  = 0.0
         count       = 0
         start_time  = time.time()
@@ -1527,8 +1552,16 @@ def orchestrator(init_values, window):
             done_steps += 1
             p = int((done_steps / total_steps) * 100)
             window.write_event_value("-PROGRESS-", (p, f"{p}% {done_steps}/{total_steps}"))
-            eta = get_eta_string(done_steps, total_steps, start_time)
+            # the bar spans the whole video, but the ETA covers only what this
+            # run still has to do
+            eta = get_eta_string(done_steps - seed_steps,
+                                 total_steps - seed_steps, start_time)
             update_status(window, f"Status: ETA COLORIZE ({label}): {eta}...", "info")
+
+        # show the resume point right away: the bar would otherwise still hold
+        # the previous run's value until the first unit completes
+        p0 = int((seed_steps / total_steps) * 100)
+        window.write_event_value("-PROGRESS-", (p0, f"{p0}% {seed_steps}/{total_steps}"))
 
         try:
             for chunk_idx, chunk in enumerate(chunks):
@@ -1672,8 +1705,8 @@ def orchestrator(init_values, window):
             log_message("[COLORIZE] Task skipped by user.")
             return
 
-        scheduled = sum(len(u) for u in todo)
-        window.write_event_value("-PROGRESS-", (100, f"100% {scheduled}/{scheduled}"))
+        window.write_event_value("-PROGRESS-",
+                                 (100, f"100% {total_steps}/{total_steps}"))
         update_status(window, "Status: OK", "info")
         if count > 0:
             log_message(
@@ -1719,15 +1752,18 @@ def orchestrator(init_values, window):
         extensions = {".jpg", ".jpeg", ".png", ".bmp", ".tiff"}
         out_stems  = {f.stem.lower() for f in out_dir.glob("*.jpg")}
 
-        if out_stems:
-            log_message(f"⚠️ {len(out_stems)} images already colorized — will be skipped.")
-
-        image_files = sorted([
-            f for f in in_dir.iterdir()
-            if f.suffix.lower() in extensions
-            and f.stem.lower() not in out_stems
+        # the whole frame set drives the progress bar: the frames colorized by
+        # the previous runs count as done, so a resumed run restarts from the
+        # video's actual progress instead of 0%
+        all_images = sorted([
+            f for f in in_dir.iterdir() if f.suffix.lower() in extensions
         ])
+        image_files = [f for f in all_images if f.stem.lower() not in out_stems]
         tot_num_images = len(image_files)
+        already = len(all_images) - tot_num_images
+        if already:
+            log_message(f"⚠️ {already} images already colorized — will be skipped. "
+                        f"Progress resumes at {int(already / len(all_images) * 100)}%.")
         if tot_num_images == 0:
             log_message("ℹ️ No images to colorize.")
             return
@@ -1743,8 +1779,11 @@ def orchestrator(init_values, window):
         log_message(f"ℹ️ {tot_num_images} images, {len(chunks)} chunk(s) of max "
                     f"{chunk_size} — split colorize (edit TE cache, then infer).")
 
-        total_steps = 2 * tot_num_images   # one cache step + one infer step per frame
-        done_steps  = 0
+        # the bar spans the whole video, not just this run's remainder: the
+        # frames already colorized seed it (one cache + one infer step each)
+        total_steps = 2 * len(all_images)
+        seed_steps  = 2 * already
+        done_steps  = seed_steps
         infer_time  = 0.0
         count       = 0
         start_time  = time.time()
@@ -1756,8 +1795,16 @@ def orchestrator(init_values, window):
             done_steps += 1
             p = int((done_steps / total_steps) * 100)
             window.write_event_value("-PROGRESS-", (p, f"{p}% {done_steps}/{total_steps}"))
-            eta = get_eta_string(done_steps, total_steps, start_time)
+            # the bar spans the whole video, but the ETA covers only what this
+            # run still has to do
+            eta = get_eta_string(done_steps - seed_steps,
+                                 total_steps - seed_steps, start_time)
             update_status(window, f"Status: ETA COLORIZE ({label}): {eta}...", "info")
+
+        # show the resume point right away: the bar would otherwise still hold
+        # the previous run's value until the first frame completes
+        p0 = int((seed_steps / total_steps) * 100)
+        window.write_event_value("-PROGRESS-", (p0, f"{p0}% {seed_steps}/{total_steps}"))
 
         try:
             for chunk_idx, chunk in enumerate(chunks):
@@ -1880,7 +1927,7 @@ def orchestrator(init_values, window):
             return
 
         window.write_event_value("-PROGRESS-",
-                                 (100, f"100% {tot_num_images}/{tot_num_images}"))
+                                 (100, f"100% {total_steps}/{total_steps}"))
         update_status(window, "Status: OK", "info")
         if count > 0:
             log_message(
@@ -1952,15 +1999,18 @@ def orchestrator(init_values, window):
         extensions = {".jpg", ".jpeg", ".png", ".bmp", ".tiff"}
         out_stems  = {f.stem.lower() for f in out_dir.glob("*.jpg")}
 
-        if out_stems:
-            log_message(f"⚠️ {len(out_stems)} images already colorized — will be skipped.")
-
-        image_files = sorted([
-            f for f in in_dir.iterdir()
-            if f.suffix.lower() in extensions
-            and f.stem.lower() not in out_stems
+        # the whole image set drives the progress bar: the frames colorized by
+        # the previous runs count as done, so a resumed run restarts from the
+        # video's actual progress instead of 0%
+        all_images = sorted([
+            f for f in in_dir.iterdir() if f.suffix.lower() in extensions
         ])
+        image_files = [f for f in all_images if f.stem.lower() not in out_stems]
         tot_num_images = len(image_files)
+        already = len(all_images) - tot_num_images
+        if already:
+            log_message(f"⚠️ {already} images already colorized — will be skipped. "
+                        f"Progress resumes at {int(already / len(all_images) * 100)}%.")
 
         if tot_num_images == 0:
             log_message("ℹ️ No images to colorize.")
@@ -1975,7 +2025,7 @@ def orchestrator(init_values, window):
         usm_radius     = usm_radius_of(values, "-USM-", "-USM_RADIUS-")
         tot_time   = 0.0
         count      = 0
-        n_images   = 0
+        n_images   = already
         start_time = time.time()
 
         for pair in pairs:
@@ -1987,9 +2037,10 @@ def orchestrator(init_values, window):
                 break
 
             n_images += len(pair)
-            p = int((n_images / tot_num_images) * 100)
-            window.write_event_value("-PROGRESS-", (p, f"{p}% {n_images}/{tot_num_images}"))
-            eta = get_eta_string(n_images, tot_num_images, start_time)
+            p = int((n_images / len(all_images)) * 100)
+            window.write_event_value("-PROGRESS-",
+                                     (p, f"{p}% {n_images}/{len(all_images)}"))
+            eta = get_eta_string(n_images - already, tot_num_images, start_time)
             update_status(window, f"Status: ETA COLORIZE: {eta}...", "info")
             steps  = int(values.get("-STEPS-", cfg["steps"]))
             
@@ -2044,7 +2095,7 @@ def orchestrator(init_values, window):
                 log_message(f"Error on pair {pair[0].name}: {e}")
 
         window.write_event_value("-PROGRESS-",
-                                 (100, f"100% {n_images}/{tot_num_images}"))
+                                 (100, f"100% {len(all_images)}/{len(all_images)}"))
         update_status(window, "Status: OK", "info")
         if count > 0:
             log_message(

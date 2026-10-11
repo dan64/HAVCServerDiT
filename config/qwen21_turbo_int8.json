@@ -8,7 +8,7 @@
     "vae_name":            "qwen_image_2.1_vae_bf16.safetensors",
     "lora_path":           "",
     "steps":               8,
-    "fast_split_TE":       true,
+    "fast_split_TE":       false,
     "split_TE_resolution": 1024,
     "hf_unet":             "Comfy-Org/Qwen-Image-2.1",
     "hf_clip":             "Comfy-Org/Qwen-Image-2.1",

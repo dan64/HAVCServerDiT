@@ -203,12 +203,19 @@ Differences from the default config above:
 > The GUI lists each file in **Model Config** by its file name (e.g.
 > `qwen21_viggle-soft_int8`), next to the default `qwen21_viggle`.
 
-### qwen21-turbo Backend : `config/qwen21_turbo_int8.json`
+### qwen21-turbo Backend : `config/qwen21_turbo_int8.json` & `qwen21_turbo-fast_int8.json`
 
 The official Qwen-Image-2.1-Turbo repack (Comfy-Org): the base
 Qwen-Image-2.1 architecture with the turbo distillation baked into the
-checkpoint (no LoRA, no prompt enhancer). Same key set as `qwen21-viggle`
-minus the LoRA keys:
+checkpoint (no LoRA, no prompt enhancer). Two configs ship, identical but
+for the paired-split flag:
+
+| Config file                    | Fast Pipeline mode                  |
+| ------------------------------ | ----------------------------------- |
+| `qwen21_turbo_int8.json`       | standard split (one frame per pass) |
+| `qwen21_turbo-fast_int8.json`  | **paired split** (`fast_split_TE`)  |
+
+Same key set as `qwen21-viggle` minus the LoRA keys:
 
 ```json
 {
@@ -219,12 +226,16 @@ minus the LoRA keys:
     "lora_path":           "",
     "steps":               8,
     "fast_split_TE":       true,
-    "split_TE_resolution": 1280,
+    "split_TE_resolution": 1024,
     "hf_unet":             "Comfy-Org/Qwen-Image-2.1",
     "hf_clip":             "Comfy-Org/Qwen-Image-2.1",
     "hf_vae":              "Comfy-Org/Qwen-Image-2.1"
 }
 ```
+
+> Pick the config in the GUI's **Model Config** combo to switch modes: the
+> two variants write to **separate caches** (`ref_te/` vs `ref_te_pair/`), so
+> switching never mixes a single-flow cache with a paired one.
 
 > The checkpoint carries its **own 8-step sigma schedule** (the same table
 > published as `sample_sigmas` in `Qwen/Qwen-Image-2.1-Turbo`), so the step

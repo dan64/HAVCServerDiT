@@ -31,6 +31,13 @@ file there. Supported config formats (see config/*.json):
     qwen21-turbo:    model_name/unet_name/clip_name/vae_name/steps
                      (optional: unet_hf_name; the checkpoint carries its own
                      8-step sigma table, so steps is informational)
+
+    The optional key "fast_split_TE": true (or "on"/"1"/"yes") makes the GUI's
+    Fast Pipeline run the paired split: consecutive frames are merged before
+    the text encoder and the decoded canvas is split back afterwards (one TE
+    pass + one sampling pass per two frames). Supported by every split-TE
+    family (qwen21-viggle, qwen21-turbo, gguf-qwen); the flag lives in the
+    config file and is consumed by the GUI, not by this server.
 -------------------------------------------------------------------------------
 """
 
@@ -609,6 +616,123 @@ class ColorizeService:
         except Exception as e:
             logging.exception("colorize_frame_edit_from_te failed")
             return {"ok": False, "skipped": False, "elapsed": 0.0, "msg": str(e)}
+
+    # ---- split colorize, paired mode (config key "fast_split_TE") ----
+    # Two consecutive frames are merged before the text encoder and the decoded
+    # canvas is split back after the transformer: one TE pass + one sampling
+    # pass per pair. The GUI drives these in place of the per-frame phase A/B
+    # calls when the selected config sets "fast_split_TE".
+
+    def encode_pair_te(self, in1_path: str, in2_path: str, te_dir: str, stem: str,
+                       prompt: str, resolution: int = 1024, img_size: int = 0,
+                       enhance_prompt: bool = False, first: bool = False,
+                       usm_radius: float = 0.0) -> dict:
+        """Phase A (one pair), qwen21-viggle / qwen21-turbo families: cache the
+        conditioning of the merged canvas under te_dir/<stem>.safetensors, the
+        pair geometry included. in2_path="" (odd trailing frame) degrades the
+        pair to a single-frame conditioning; first=True drops the loaded models
+        so the TE + VAE start clean. Already-cached pairs are skipped (resume).
+        """
+        if self._pipeline is None:
+            return {"ok": False, "skipped": False, "elapsed": 0.0, "msg": "Pipeline not loaded"}
+        if self._pipeline_model_name not in ("qwen21-viggle", "qwen21-turbo"):
+            return {"ok": False, "skipped": False, "elapsed": 0.0,
+                    "msg": "encode_pair_te requires a qwen21 (split-TE) pipeline"}
+        try:
+            from dit_colorize_main import encode_pair_te as _encode_pair_te
+            res = _encode_pair_te(
+                self._pipeline, str(in1_path), str(in2_path), str(te_dir), str(stem),
+                str(prompt), resolution=int(resolution), img_size=int(img_size),
+                enhance_prompt=bool(enhance_prompt), first=bool(first),
+                model_config=(self._pipeline_config_name or self._pipeline_model_name or ""),
+                usm_radius=float(usm_radius or 0.0))
+            logging.info("encode_pair_te: %s skipped=%s %.2fs",
+                         stem, res.get("skipped"), res.get("elapsed", 0.0))
+            return res
+        except Exception as e:
+            logging.exception("encode_pair_te failed")
+            return {"ok": False, "skipped": False, "elapsed": 0.0, "msg": str(e)}
+
+    def colorize_pair_from_te(self, te_dir: str, stem: str, out1_path: str,
+                              out2_path: str = "", steps: int = 2, seed: int = 42,
+                              first: bool = False) -> dict:
+        """Phase B (one pair), qwen21-viggle / qwen21-turbo families: sample +
+        decode the cached pair canvas and split it back into the frames (one
+        output for a degraded pair); first=True drops the loaded models so the
+        UNet + VAE start clean. Pairs whose expected outputs all exist are
+        skipped (resume).
+        """
+        if self._pipeline is None:
+            return {"ok": False, "skipped": False, "elapsed": 0.0, "written": [],
+                    "msg": "Pipeline not loaded"}
+        if self._pipeline_model_name not in ("qwen21-viggle", "qwen21-turbo"):
+            return {"ok": False, "skipped": False, "elapsed": 0.0, "written": [],
+                    "msg": "colorize_pair_from_te requires a qwen21 (split-TE) pipeline"}
+        try:
+            from dit_colorize_main import colorize_pair_from_te as _colorize_pair_from_te
+            res = _colorize_pair_from_te(
+                self._pipeline, str(te_dir), str(stem), str(out1_path),
+                str(out2_path), steps=int(steps), seed=int(seed), first=bool(first))
+            logging.info("colorize_pair_from_te: %s skipped=%s %.2fs (%d out)",
+                         stem, res.get("skipped"), res.get("elapsed", 0.0),
+                         len(res.get("written") or []))
+            return res
+        except Exception as e:
+            logging.exception("colorize_pair_from_te failed")
+            return {"ok": False, "skipped": False, "elapsed": 0.0, "written": [],
+                    "msg": str(e)}
+
+    def encode_pair_edit(self, in1_path: str, in2_path: str, te_dir: str, stem: str,
+                         prompt: str, img_size: int = 0, first: bool = False,
+                         usm_radius: float = 0.0) -> dict:
+        """Phase A (one pair), qwen-2511 (gguf-qwen) family: the same paired
+        scheme as encode_pair_te(), with the edit node's conditioning.
+        """
+        if self._pipeline is None:
+            return {"ok": False, "skipped": False, "elapsed": 0.0, "msg": "Pipeline not loaded"}
+        if self._pipeline_model_name != "gguf-qwen":
+            return {"ok": False, "skipped": False, "elapsed": 0.0,
+                    "msg": "encode_pair_edit requires the qwen-2511 (gguf-qwen) pipeline"}
+        try:
+            from dit_colorize_main import encode_pair_edit as _encode_pair_edit
+            res = _encode_pair_edit(
+                self._pipeline, str(in1_path), str(in2_path), str(te_dir), str(stem),
+                str(prompt), img_size=int(img_size), first=bool(first),
+                model_config=(self._pipeline_config_name or self._pipeline_model_name or ""),
+                usm_radius=float(usm_radius or 0.0))
+            logging.info("encode_pair_edit: %s skipped=%s %.2fs",
+                         stem, res.get("skipped"), res.get("elapsed", 0.0))
+            return res
+        except Exception as e:
+            logging.exception("encode_pair_edit failed")
+            return {"ok": False, "skipped": False, "elapsed": 0.0, "msg": str(e)}
+
+    def colorize_pair_edit_from_te(self, te_dir: str, stem: str, out1_path: str,
+                                   out2_path: str = "", steps: int = 4,
+                                   seed: int = 42, first: bool = False) -> dict:
+        """Phase B (one pair), qwen-2511 (gguf-qwen) family: sample + decode the
+        cached edit conditioning and split the canvas back into the frames; a
+        pair whose expected outputs all exist is skipped (resume).
+        """
+        if self._pipeline is None:
+            return {"ok": False, "skipped": False, "elapsed": 0.0, "written": [],
+                    "msg": "Pipeline not loaded"}
+        if self._pipeline_model_name != "gguf-qwen":
+            return {"ok": False, "skipped": False, "elapsed": 0.0, "written": [],
+                    "msg": "colorize_pair_edit_from_te requires the qwen-2511 (gguf-qwen) pipeline"}
+        try:
+            from dit_colorize_main import colorize_pair_edit_from_te as _colorize_pair_edit_from_te
+            res = _colorize_pair_edit_from_te(
+                self._pipeline, str(te_dir), str(stem), str(out1_path),
+                str(out2_path), steps=int(steps), seed=int(seed), first=bool(first))
+            logging.info("colorize_pair_edit_from_te: %s skipped=%s %.2fs (%d out)",
+                         stem, res.get("skipped"), res.get("elapsed", 0.0),
+                         len(res.get("written") or []))
+            return res
+        except Exception as e:
+            logging.exception("colorize_pair_edit_from_te failed")
+            return {"ok": False, "skipped": False, "elapsed": 0.0, "written": [],
+                    "msg": str(e)}
 
     def cleanup_te_cache(self, te_dir: str) -> dict:
         """Delete the conditioning cache of a colorized chunk (the manifest is

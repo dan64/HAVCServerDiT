@@ -113,6 +113,7 @@ it does not take an argument and always launches with
 | Qwen-Image-Edit 2511     | **2**             | `qwen-2511_int8` / `qwen-2511_q3` — GUI default (fastest); the config files ship `steps: 4`, the LoRA's distilled step count |
 | LongCat (longcat-gguf)   | **8**             | Calibrated for 8 steps; best quality at 8 steps; 4 steps possible but colors are faded |
 | Qwen-Image-2.1 (qwen21-viggle) | **6**       | LoRA step schedules: `2`/`4`/`6`/`8` — `6` (the LoRA's native step count) gives the most accurate colors, `2` is the fastest |
+| Qwen-Image-2.1-Turbo (qwen21-turbo) | **8**  | Fixed by the checkpoint's own sigma table (its `sample_sigmas`); the GUI steps setting does not apply. `config/qwen21_turbo_int8.json` sets `fast_split_TE` — Fast Pipeline pairs consecutive frames |
 
 > **Prompt tip (qwen21-viggle)**: on subjects with a strong color convention
 > (e.g. a well-known costume), the model can leave the color ambiguous and
@@ -130,6 +131,10 @@ it does not take an argument and always launches with
 > Avoid naming specific example subjects in this prompt (e.g. "like a stop
 > sign") — the model may render that literal example into the scene instead
 > of just using it as a color reference.
+>
+> **Prompt tip (qwen21-turbo)**: same rule as qwen21-viggle — it wants a
+> detailed, explicit prompt (the shipped default fits it well). Keep the
+> short-and-direct style for qwen-2511 only.
 >
 > **Prompt tip (qwen-2511)**: keep it short and direct — the opposite of the
 > detail-heavy wording `qwen21-viggle` likes. A good default: *"Colorize

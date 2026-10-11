@@ -255,6 +255,20 @@ def read_model_config(config_name):
         return None
 
 
+def config_flag(mapping, key, default=False):
+    """Truthiness of an optional config key: JSON booleans work as-is, and the
+    string forms "true"/"on"/"1"/"yes" (case-insensitive) are accepted too,
+    so a hand-edited config file behaves the same either way."""
+    value = (mapping or {}).get(key, default)
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    if value is None:
+        return bool(default)
+    return str(value).strip().lower() in ("true", "on", "1", "yes")
+
+
 def load_all_configs():
     defaults = {
         # --- paths ---
@@ -1338,6 +1352,249 @@ def orchestrator(init_values, window):
                 f"🎉 Done! {count} images in {infer_time:.2f}s "
                 f"({infer_time / count:.2f}s/image, infer only)")
 
+    def do_colorize_split_pair(values, window, family):
+        """Fast Pipeline, paired split (config key fast_split_TE): consecutive
+        frames are merged side by side *before* the text encoder and the decoded
+        canvas is split back *after* the transformer -- one TE pass and one
+        sampling pass per two frames.
+
+        family is "te" (qwen21-viggle / qwen21-turbo conditioning format) or
+        "edit" (qwen-2511). Same chunk/resume/cleanup scheme as
+        do_colorize_split(): phase A caches the pair conditioning with the TE +
+        VAE resident, phase B samples with the UNet + VAE resident, and a
+        chunk's cache is dropped once its frames are colorized. The pair cache
+        lives in ref_te_pair/ (te) or ref_te_pair_edit/ (edit); a pair is done
+        when both of its frames have an output (the tail frame of an odd count
+        runs through the same path as a one-frame pair).
+        """
+        rpc = state.get("rpc_client")
+        if rpc is None:
+            log_message("⚠️ No connection to RPC server.")
+            return
+
+        if not rpc.is_pipeline_loaded():
+            log_message("Loading AI pipeline on server...")
+            result = rpc.load_pipeline_from_config(
+                values["-MODEL_CONFIG-"], values["-CACHE_DIR-"])
+            if not result.get("ok"):
+                log_message(f"⚠️ Unable to load pipeline: {result.get('msg')}")
+                return
+            log_message(f"✅ Pipeline loaded: {result.get('msg')}")
+
+        rpc.clear_stop()
+
+        in_dir  = Path(values["-BASE_DIR-"]) / "ref_tht10"
+        out_dir = Path(values["-BASE_DIR-"]) / "ref_qwen"
+        te_dir  = Path(values["-BASE_DIR-"]) / ("ref_te_pair_edit" if family == "edit" else "ref_te_pair")
+        out_dir.mkdir(exist_ok=True)
+        te_dir.mkdir(exist_ok=True)
+
+        extensions = {".jpg", ".jpeg", ".png", ".bmp", ".tiff"}
+        image_files = sorted([
+            f for f in in_dir.iterdir() if f.suffix.lower() in extensions
+        ])
+        if not image_files:
+            log_message("ℹ️ No images to colorize.")
+            return
+
+        # pairs in absolute order: the parity of every frame must stay the same
+        # across runs, so a resumed run re-pairs exactly the same frames
+        units = [image_files[i:i + 2] for i in range(0, len(image_files), 2)]
+        todo = [u for u in units
+                if not all((out_dir / (f.stem + ".jpg")).exists() for f in u)]
+        already = sum(len(u) for u in units) - sum(len(u) for u in todo)
+        if already:
+            log_message(f"⚠️ {already} images already colorized — will be skipped.")
+        if not todo:
+            log_message("ℹ️ No images to colorize.")
+            return
+
+        prompt         = values["-PROMPT-"]
+        steps          = int(values.get("-STEPS-", cfg["steps"]))
+        enhance_prompt = values.get("-ENHANCE_PROMPT-", False)
+        usm_radius     = usm_radius_of(values, "-USM-", "-USM_RADIUS-")
+        seed           = 42
+        # the edit conditioning is ~21 MB per frame, the te one ~1.4 MB: these
+        # pair chunk sizes keep the same disk budget as the single split flows
+        chunk_size     = 50 if family == "edit" else 100
+
+        model_type = (read_model_config(values["-MODEL_CONFIG-"]) or {}).get(
+            "model_name", "")
+        if model_type == "qwen21-turbo":
+            # same override as do_colorize_split(): the checkpoint carries its
+            # own 8-step sigma table and has no viggle-style prompt enhancer
+            if steps != 8:
+                log_message(f"ℹ️ qwen21-turbo: using its own 8-step schedule "
+                            f"(panel steps = {steps}).")
+            if enhance_prompt:
+                log_message("ℹ️ qwen21-turbo: prompt enhancement is not used "
+                            "by this family.")
+            steps = 8
+            enhance_prompt = False
+
+        chunks = [todo[i:i + chunk_size] for i in range(0, len(todo), chunk_size)]
+        log_message(f"ℹ️ {sum(len(u) for u in todo)} frames, {len(todo)} pair(s), "
+                    f"{len(chunks)} chunk(s) of max {chunk_size} — paired split "
+                    f"colorize (TE cache, then infer).")
+
+        total_steps = 2 * len(todo)   # one cache step + one infer step per pair
+        done_steps  = 0
+        infer_time  = 0.0
+        count       = 0
+        start_time  = time.time()
+        stopped        = False
+        skipped_by_user = False
+
+        def bump(label):
+            nonlocal done_steps
+            done_steps += 1
+            p = int((done_steps / total_steps) * 100)
+            window.write_event_value("-PROGRESS-", (p, f"{p}% {done_steps}/{total_steps}"))
+            eta = get_eta_string(done_steps, total_steps, start_time)
+            update_status(window, f"Status: ETA COLORIZE ({label}): {eta}...", "info")
+
+        try:
+            for chunk_idx, chunk in enumerate(chunks):
+                if state["stop_requested"]:
+                    stopped = True
+                    break
+                if not gui_get(window, values, "-DO_STEP3-", False):
+                    skipped_by_user = True
+                    break
+
+                log_message(f"ℹ️ Chunk {chunk_idx + 1}/{len(chunks)} — phase A: "
+                            f"caching TE conditioning ({len(chunk)} pair(s))...")
+
+                # phase A: TE + VAE resident, one cache file per pair
+                first = True
+                for unit in chunk:
+                    if state["stop_requested"]:
+                        stopped = True
+                        break
+                    if not gui_get(window, values, "-DO_STEP3-", False):
+                        skipped_by_user = True
+                        break
+                    stem = (unit[0].stem if len(unit) == 1
+                            else f"{unit[0].stem}__{unit[1].stem}")
+                    in2 = str(unit[1]) if len(unit) == 2 else ""
+                    for f in unit:
+                        try:
+                            window.write_event_value(
+                                "-PREVIEW_BW-", Image.open(f).convert("RGB"))
+                        except Exception:
+                            pass
+                    try:
+                        if family == "edit":
+                            res = rpc.encode_pair_edit(str(unit[0]), in2, str(te_dir),
+                                                       stem, prompt, 0, first, usm_radius)
+                        else:
+                            res = rpc.encode_pair_te(str(unit[0]), in2, str(te_dir),
+                                                     stem, prompt, 1024, 0,
+                                                     enhance_prompt, first, usm_radius)
+                    except xmlrpc.client.Fault as e:
+                        log_message(f"RPC Fault on {stem}: {e.faultString}")
+                        continue
+                    except Exception as e:
+                        log_message(f"Error on {stem}: {e}")
+                        continue
+                    first = False
+                    if not res.get("ok"):
+                        log_message(f"⚠️ {stem}: {res.get('msg')}")
+                        continue
+                    if res.get("skipped"):
+                        log_message(f"ℹ️ {stem}: skipped (dark or already cached)")
+                    bump("TE")
+
+                if stopped or skipped_by_user:
+                    break
+
+                log_message(f"ℹ️ Chunk {chunk_idx + 1}/{len(chunks)} — phase B: colorizing...")
+
+                # phase B: UNet + VAE resident, sample from the cache and split
+                first = True
+                for unit in chunk:
+                    if state["stop_requested"]:
+                        stopped = True
+                        break
+                    if not gui_get(window, values, "-DO_STEP3-", False):
+                        skipped_by_user = True
+                        break
+                    stem = (unit[0].stem if len(unit) == 1
+                            else f"{unit[0].stem}__{unit[1].stem}")
+                    out1 = out_dir / (unit[0].stem + ".jpg")
+                    out2 = out_dir / (unit[1].stem + ".jpg") if len(unit) == 2 else ""
+                    # keep the B&W pane in step with the pair being inferenced
+                    for f in unit:
+                        try:
+                            window.write_event_value(
+                                "-PREVIEW_BW-", Image.open(f).convert("RGB"))
+                        except Exception:
+                            pass
+                    try:
+                        if family == "edit":
+                            res = rpc.colorize_pair_edit_from_te(
+                                str(te_dir), stem, str(out1), str(out2),
+                                steps, seed, first)
+                        else:
+                            res = rpc.colorize_pair_from_te(
+                                str(te_dir), stem, str(out1), str(out2),
+                                steps, seed, first)
+                    except xmlrpc.client.Fault as e:
+                        log_message(f"RPC Fault on {stem}: {e.faultString}")
+                        continue
+                    except Exception as e:
+                        log_message(f"Error on {stem}: {e}")
+                        continue
+                    first = False
+                    if not res.get("ok"):
+                        log_message(f"⚠️ {stem}: {res.get('msg')}")
+                        continue
+                    written = res.get("written") or []
+                    if res.get("skipped"):
+                        log_message(f"ℹ️ {stem}: skipped "
+                                    f"({res.get('msg') or 'already colorized'})")
+                    else:
+                        elapsed = res.get("elapsed", 0.0)
+                        infer_time += elapsed
+                        for path in written:
+                            count += 1
+                            if elapsed > 0:
+                                log_gui_only(f"✅ Split-pair: {Path(path).name} "
+                                             f"[{elapsed / len(written):.2f}s/image]")
+                            if os.path.isfile(path):
+                                window.write_event_value(
+                                    "-PREVIEW_CLR-", Image.open(path).convert("RGB"))
+                    bump("INFER")
+
+                if stopped or skipped_by_user:
+                    break
+
+                res = rpc.cleanup_te_cache(str(te_dir))
+                if not res.get("ok"):
+                    log_message(f"⚠️ TE cache cleanup failed: {res.get('msg')}")
+                else:
+                    log_message(f"🧹 Chunk {chunk_idx + 1}/{len(chunks)}: "
+                                f"{res.get('count', 0)} TE cache file(s) removed.")
+        except Exception as e:
+            log_message(f"Error during paired split colorize: {e}")
+
+        if stopped:
+            rpc.request_stop()
+            update_status(window, "Status: cancelled", "warning")
+            log_message("⚠️ Colorize cancelled — the TE cache is kept for the next run.")
+            return
+        if skipped_by_user:
+            log_message("[COLORIZE] Task skipped by user.")
+            return
+
+        scheduled = sum(len(u) for u in todo)
+        window.write_event_value("-PROGRESS-", (100, f"100% {scheduled}/{scheduled}"))
+        update_status(window, "Status: OK", "info")
+        if count > 0:
+            log_message(
+                f"🎉 Done! {count} images in {infer_time:.2f}s "
+                f"({infer_time / count:.2f}s/image, infer only)")
+
     def do_colorize_split_edit(values, window):
         """Fast Pipeline for the qwen-2511 (gguf-qwen) family: split colorize in
         chunks.
@@ -1547,27 +1804,39 @@ def orchestrator(init_values, window):
         # (VIGGLE_PAIR_RESOLUTION=1280, see dit_colorize_main.py) than the
         # other backends (1024) - that headroom allows a wider gap between
         # the two merged frames without eating into per-frame detail.
-        model_type = (read_model_config(values["-MODEL_CONFIG-"]) or {}).get(
-            "model_name", "")
+        model_cfg  = read_model_config(values["-MODEL_CONFIG-"]) or {}
+        model_type = model_cfg.get("model_name", "")
+        # config key fast_split_TE: the split-TE flows pair consecutive frames
+        # (merged before the text encoder, split after the transformer)
+        fast_pair  = config_flag(model_cfg, "fast_split_TE")
         if model_type == "qwen21-viggle":
             # Fast Pipeline on the qwen21-viggle family runs the split flow
             # (phase A: conditioning cache; phase B: sampling from the cache,
             # in chunks of 200 frames) instead of the 1280px pair pass.
-            do_colorize_split(values, window)
+            if fast_pair:
+                do_colorize_split_pair(values, window, "te")
+            else:
+                do_colorize_split(values, window)
             return
         if model_type == "qwen21-turbo":
             # Fast Pipeline on the qwen21-turbo family runs the same split
             # flow as qwen21-viggle (phase A: conditioning cache; phase B:
             # sampling from the cache with the checkpoint's own 8-step
             # schedule, in chunks of 200 frames).
-            do_colorize_split(values, window)
+            if fast_pair:
+                do_colorize_split_pair(values, window, "te")
+            else:
+                do_colorize_split(values, window)
             return
         if model_type == "gguf-qwen":
             # Fast Pipeline on the qwen-2511 family runs the edit split flow
             # (phase A: edit conditioning cache; phase B: sampling from the
             # cache, in chunks of 100 frames -- the edit conditioning is ~21 MB
             # per frame) instead of the paired pass, which this family never had.
-            do_colorize_split_edit(values, window)
+            if fast_pair:
+                do_colorize_split_pair(values, window, "edit")
+            else:
+                do_colorize_split_edit(values, window)
             return
         gap_px = 16 if model_type == "qwen21-viggle" else 8
 
@@ -2391,7 +2660,7 @@ tab3_layout = [
           sg.Text("stopped", key="-SERVER_STATUS-", size=(45, 1), expand_x=True)],
         [sg.Text("Colorization Steps:"),
          sg.Combo(steps_values, default_value=cfg["steps"], key="-STEPS-", readonly=True, size=(6,1)),
-         sg.Checkbox("Fast Pipeline", key="-FAST_PIPE-", default=cfg["fast_pipe"], tooltip="qwen21-viggle / qwen21-turbo / qwen-2511: cached-TE split flow; other models: paired 1280px pass"),
+         sg.Checkbox("Fast Pipeline", key="-FAST_PIPE-", default=cfg["fast_pipe"], tooltip="qwen21-viggle / qwen21-turbo / qwen-2511: cached-TE split flow; other models: paired 1280px pass. A config with fast_split_TE pairs consecutive frames (merged before the TE, split after the transformer)"),
          sg.Checkbox("Unsharp Mask", key="-USM-", default=cfg.get("usm", False),
                      tooltip="Pre-filter the input before colorization (unsharp mask: amount 0.50, "
                              "threshold 0). Removes the film grain that can stop the model from "

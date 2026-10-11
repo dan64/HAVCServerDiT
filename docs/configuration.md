@@ -203,22 +203,64 @@ Differences from the default config above:
 > The GUI lists each file in **Model Config** by its file name (e.g.
 > `qwen21_viggle-soft_int8`), next to the default `qwen21_viggle`.
 
+### qwen21-turbo Backend : `config/qwen21_turbo_int8.json`
+
+The official Qwen-Image-2.1-Turbo repack (Comfy-Org): the base
+Qwen-Image-2.1 architecture with the turbo distillation baked into the
+checkpoint (no LoRA, no prompt enhancer). Same key set as `qwen21-viggle`
+minus the LoRA keys:
+
+```json
+{
+    "model_name":          "qwen21-turbo",
+    "unet_name":           "models/diffusion_models/qwen_image_2.1_turbo_int8_convrot.safetensors",
+    "clip_name":           "models/text_encoders/qwen3vl_8b_int8_convrot.safetensors",
+    "vae_name":            "qwen_image_2.1_vae_bf16.safetensors",
+    "lora_path":           "",
+    "steps":               8,
+    "fast_split_TE":       true,
+    "hf_unet":             "Comfy-Org/Qwen-Image-2.1",
+    "hf_clip":             "Comfy-Org/Qwen-Image-2.1",
+    "hf_vae":              "Comfy-Org/Qwen-Image-2.1"
+}
+```
+
+> The checkpoint carries its **own 8-step sigma schedule** (the same table
+> published as `sample_sigmas` in `Qwen/Qwen-Image-2.1-Turbo`), so the step
+> count is fixed at 8 for this family: the GUI's *Colorization Steps*
+> setting does not apply (a notice is logged). It has no image-aware prompt
+> enhancer -- and, like qwen21-viggle, it wants a **detailed prompt**.
+
+#### Paired split (`fast_split_TE`)
+
+`"fast_split_TE": true` (string forms `"on"` / `"1"` / `"yes"` also work)
+makes the Fast Pipeline pair consecutive frames inside the split flow: the
+two frames are merged side by side *before* the text encoder and the decoded
+canvas is split back *after* the transformer -- one TE pass and one sampling
+pass per two frames instead of one of each per frame. The pair shares the
+single flow's area budget, so each frame is colorized at about half that
+budget's resolution. It applies to every split-TE family (`qwen21-viggle`,
+`qwen21-turbo`, `gguf-qwen`); models without split-TE support never see the
+option, because the flag only lives in the configs of the families that use
+it.
+
 ### Key reference
 
 | Key                                       | Required | Description                                                                                  |
 | ----------------------------------------- | -------- | -------------------------------------------------------------------------------------------- |
-| `model_name`                              | ✅        | `"nunchaku-qwen"`, `"gguf-qwen"`, `"longcat-gguf"`, or `"qwen21-viggle"`                     |
+| `model_name`                              | ✅        | `"nunchaku-qwen"`, `"gguf-qwen"`, `"longcat-gguf"`, `"qwen21-viggle"`, or `"qwen21-turbo"`                     |
 | `quant`                                   |          | **GGUF only**: quantization level (`"q3"`, `"q4"`, `"q5"`, `"q6"`, `"q8"`). Default: `"q4"`  |
 | `model_precision`                         | ✅        | **Nunchaku**: `"fp4"` (RTX 50) or `"int4"` (RTX 30/40). **GGUF/qwen21-viggle**: not used     |
 | `unet_gguf` / `clip_gguf`                 | ✅        | **GGUF only**: local paths to the GGUF model files                                           |
-| `unet_name` / `clip_name`                 | ✅        | **qwen21-viggle only**: local paths to the model files — `unet_name` can be `.safetensors` or `.gguf` (GGUF quants load through the same ComfyUI-GGUF recipe as the gguf backends), `clip_name` can be `.safetensors` or `.gguf` |
+| `unet_name` / `clip_name`                 | ✅        | **qwen21-viggle / qwen21-turbo**: local paths to the model files — `unet_name` can be `.safetensors` or `.gguf` (GGUF quants load through the same ComfyUI-GGUF recipe as the gguf backends), `clip_name` can be `.safetensors` or `.gguf` |
 | `clip_mmproj` / `clip_mmproj_hf_name`     |          | **GGUF/qwen21-viggle-with-GGUF-CLIP**: local path to the mmproj (vision tower) file / its filename on HuggingFace if different from the local one. Required for a GGUF CLIP to see images at all — without it the vision tower silently isn't loaded |
-| `unet_hf_name`                            |          | **qwen21-viggle only**: UNet filename on HuggingFace when it differs from the default download path (`diffusion_models/<local filename>`, the Comfy-Org layout) — e.g. merged checkpoints kept at the repo root. Only used by auto-download |
+| `unet_hf_name`                            |          | **qwen21-viggle / qwen21-turbo**: UNet filename on HuggingFace when it differs from the default download path (`diffusion_models/<local filename>`, the Comfy-Org layout) — e.g. merged checkpoints kept at the repo root. Only used by auto-download |
 | `model_rank`                              |          | **Nunchaku**: SVD rank (`"32"`). **GGUF/qwen21-viggle**: not used                            |
 | `model_inference_steps`                   |          | **Nunchaku**: diffusion steps (`"4"`). **GGUF/qwen21-viggle**: not used at load time          |
 | `cache_dir`                               |          | HuggingFace cache directory. Leave empty to use the default `~/.cache/huggingface`           |
 | `full_model_path`                         |          | **Nunchaku**: local path to the transformer checkpoint. **GGUF**: not used                   |
 | `lora_path`                               |          | **GGUF/qwen21-viggle**: path to the LoRA (`.safetensors`). Omit (or empty) to skip LoRA merging — e.g. GGUF, or a qwen21-viggle checkpoint with the LoRA already merged in |
-| `steps`                                   |          | **GGUF**: inference steps (`4` with LoRA, `20` without). **qwen21-viggle**: documents the native step count only, not consumed at load time |
-| `vae_name`                                |          | **GGUF/qwen21-viggle only**: VAE filename                                                    |
-| `hf_*`                                    |          | **GGUF/qwen21-viggle only**: HuggingFace repo names for auto-download                        |
+| `steps`                                   |          | **GGUF**: inference steps (`4` with LoRA, `20` without). **qwen21-viggle**: documents the native step count only, not consumed at load time. **qwen21-turbo**: fixed at 8 by the checkpoint's own schedule |
+| `vae_name`                                |          | **GGUF / qwen21-viggle / qwen21-turbo**: VAE filename                                                    |
+| `hf_*`                                    |          | **GGUF / qwen21-viggle / qwen21-turbo**: HuggingFace repo names for auto-download                        |
+| `fast_split_TE`                           |          | **Split-TE families** (`qwen21-viggle` / `qwen21-turbo` / `gguf-qwen`): `true` (or `"on"`/`"1"`/`"yes"`) makes the Fast Pipeline pair consecutive frames -- merged before the text encoder, split back after the transformer. Default off |

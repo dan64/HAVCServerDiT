@@ -1017,6 +1017,363 @@ def colorize_frame_edit_from_te(pipe, te_dir, stem, out_path, steps: int = 4,
     return {"ok": True, "skipped": False, "elapsed": elapsed, "msg": ""}
 
 
+# ----------------------------
+# Split colorize, PAIRED mode (config key "fast_split_TE"): two frames are
+# merged side by side *before* the text encoder and the decoded canvas is
+# split back *after* the transformer -- one TE pass and one sampling pass per
+# two frames. Available to every split-TE family (the qwen21-viggle /
+# qwen21-turbo conditioning format and the qwen-2511 edit one); a model opts
+# in with "fast_split_TE": true in its config/*.json (the GUI reads the flag
+# and drives these functions through their RPC twins).
+# ----------------------------
+
+PAIR_GAP_PX = 16  # neutral separator between the two frames of a pair
+
+
+def _pair_canvas_frame(orig, img_size, usm_radius):
+    """One frame of a pair: desaturate, optional USM pre-filter, optional
+    long-side resize -- the same prologue process_image_standard() uses."""
+    bw = ImageEnhance.Color(orig).enhance(0.0)
+    bw = apply_input_usm(bw, usm_radius)
+    return resize_long_side(bw, img_size) if img_size > 0 else bw
+
+
+def _pair_merge_canvas(img1_path, img2_path, img_size=0, usm_radius=0.0,
+                       gap_px=PAIR_GAP_PX):
+    """Build the paired conditioning canvas from one or two frames.
+
+    Both frames are desaturated (and optionally USM-filtered), padded to the
+    same height with neutral gray and merged side by side. A dark frame
+    degrades the pair to the surviving frame alone (the same semantics as
+    process_image_pair()); a fully dark pair conditions nothing.
+
+    Returns {"mode": "pair"|"single"|"dark", "image": PIL|None, "geom": dict}.
+    The geometry travels in the conditioning metadata: it is what phase B uses
+    to map the decoded canvas back to the two frames.
+    """
+    orig1 = Image.open(img1_path).convert("RGB")
+    dark1 = is_image_dark(orig1, threshold=9)
+
+    img2_path = str(img2_path or "")
+    orig2 = None
+    dark2 = False
+    if img2_path and os.path.isfile(img2_path):
+        orig2 = Image.open(img2_path).convert("RGB")
+        dark2 = is_image_dark(orig2, threshold=9)
+
+    if dark1 and (orig2 is None or dark2):
+        return {"mode": "dark", "image": None, "geom": {}}
+
+    if dark1 or dark2 or orig2 is None:
+        # one usable frame: condition that one alone; `which` keeps the
+        # mapping to the pair's two output paths
+        which = 2 if dark1 else 1
+        src = orig2 if dark1 else orig1
+        return {"mode": "single", "image": _pair_canvas_frame(src, img_size, usm_radius),
+                "geom": {"mode": "single", "which": which,
+                         "ow": src.size[0], "oh": src.size[1]}}
+
+    bw1 = _pair_canvas_frame(orig1, img_size, usm_radius)
+    bw2 = _pair_canvas_frame(orig2, img_size, usm_radius)
+    if bw1.height != bw2.height:
+        target_h = max(bw1.height, bw2.height)
+        bw1 = ImageOps.pad(bw1, (bw1.width, target_h), color=(127, 127, 127))
+        bw2 = ImageOps.pad(bw2, (bw2.width, target_h), color=(127, 127, 127))
+    merged = merge_two_images_with_gap(bw1, bw2, gap_px=gap_px)
+    return {"mode": "pair", "image": merged,
+            "geom": {"mode": "pair", "w1": bw1.width, "w2": bw2.width,
+                     "h": merged.height, "gap": int(gap_px),
+                     "ow1": orig1.size[0], "oh1": orig1.size[1],
+                     "ow2": orig2.size[0], "oh2": orig2.size[1]}}
+
+
+def _pair_geometry_peek(te_path):
+    """The pair geometry recorded in a conditioning's metadata (None when the
+    file is not a paired conditioning). Reads the safetensors metadata only --
+    no tensors, so it is cheap enough for a resume check."""
+    from safetensors import safe_open
+
+    with safe_open(str(te_path), framework="pt", device="cpu") as f:
+        meta = dict(f.metadata() or {})
+    raw = meta.get("pair_geometry")
+    if not raw:
+        return None
+    try:
+        return json.loads(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def _pair_outputs(geom, out1_path, out2_path):
+    """The output paths the geometry implies: one for a degraded pair (the
+    surviving frame), two for a merged pair."""
+    if geom.get("mode") == "single":
+        path = out2_path if int(geom.get("which", 1)) == 2 else out1_path
+        return [str(path)] if path else []
+    return [str(p) for p in (out1_path, out2_path) if p]
+
+
+def _pair_split_save(colorized, geom, out1_path, out2_path):
+    """Split one decoded pair canvas back into its frames, upscale each to its
+    original size and save it (the same two-step geometry the old pair flow
+    used: canvas -> merged working size -> per-frame original). Returns the
+    list of written paths."""
+    if geom.get("mode") == "single":
+        path = out2_path if int(geom.get("which", 1)) == 2 else out1_path
+        if not path:
+            raise ValueError("_pair_split_save: missing output path for the single frame")
+        upscale_with_lanczos(colorized, (int(geom["ow"]), int(geom["oh"]))).save(path)
+        return [str(path)]
+
+    if not (out1_path and out2_path):
+        raise ValueError("_pair_split_save: a merged pair needs both output paths")
+    merged_w = int(geom["w1"]) + int(geom["gap"]) + int(geom["w2"])
+    merged = upscale_with_lanczos(colorized, (merged_w, int(geom["h"])))
+    left, right = split_merged_output(merged, int(geom["w1"]), gap_px=int(geom["gap"]))
+    upscale_with_lanczos(left, (int(geom["ow1"]), int(geom["oh1"]))).save(out1_path)
+    upscale_with_lanczos(right, (int(geom["ow2"]), int(geom["oh2"]))).save(out2_path)
+    return [str(out1_path), str(out2_path)]
+
+
+def encode_pair_te(pipe, in1_path, in2_path, te_dir, stem, prompt, resolution: int = 1024,
+                   img_size: int = 0, enhance_prompt: bool = False, first: bool = False,
+                   model_config: str = "", usm_radius: float = 0.0) -> dict:
+    """Phase A, one pair (qwen21-viggle / qwen21-turbo conditioning format):
+    condition the merged canvas of one or two frames with a single text-encoder
+    pass and cache it under te_dir/<stem>.safetensors, geometry included.
+
+    Same contract as encode_frame_te(): first=True drops the loaded models
+    before anything else; a pair already cached for the same prompt/settings is
+    skipped (resume). in2_path may be empty (an odd trailing frame) or point
+    to a dark frame: the pair degrades to a single-frame conditioning.
+    Returns {"ok", "skipped", "elapsed", "msg"}.
+    """
+    import logging
+
+    import comfy.model_management
+
+    import comfy_bridge
+
+    logger = logging.getLogger(__name__)
+
+    if first:
+        # phase A wants the TE + VAE alone in VRAM: start from a clean slate
+        comfy.model_management.unload_all_models()
+
+    os.makedirs(te_dir, exist_ok=True)
+    key = dict(_te_manifest_key(model_config, prompt, resolution, img_size,
+                                enhance_prompt, usm_radius), pair=True)
+    _, cached = _te_manifest_load(te_dir, key)
+
+    src = str(in1_path)
+    in2_path = str(in2_path or "")
+    mtimes = [os.path.getmtime(src)]
+    if in2_path and os.path.isfile(in2_path):
+        mtimes.append(os.path.getmtime(in2_path))
+    else:
+        in2_path = ""
+    mtime = max(mtimes)
+
+    te_path = os.path.join(te_dir, stem + ".safetensors")
+    prev = cached.get(stem)
+    if prev and prev.get("mtime") == mtime and os.path.isfile(te_path):
+        return {"ok": True, "skipped": True, "elapsed": 0.0, "msg": ""}
+
+    t0 = time.perf_counter()
+    canvas = _pair_merge_canvas(src, in2_path, img_size=img_size, usm_radius=usm_radius)
+    if canvas["mode"] == "dark":
+        logger.info("encode_pair_te: both frames too dark, skipped: %s", stem)
+        return {"ok": True, "skipped": True, "elapsed": 0.0, "msg": "too dark"}
+
+    res = comfy_bridge.encode_viggle_conditioning(
+        pipe, canvas["image"], prompt, resolution=resolution,
+        enhance_prompt=enhance_prompt)
+    comfy_bridge.save_viggle_conditioning(
+        te_path, res["conditioning"], res["latent"],
+        prompt=res["prompt"], prompt_original=prompt,
+        meta={"source": os.path.basename(src), "model_config": model_config,
+              "pair_geometry": json.dumps(canvas["geom"], separators=(",", ":"))})
+
+    cached[stem] = {"mtime": mtime, "te": os.path.basename(te_path)}
+    _te_manifest_save(te_dir, key, cached)
+    elapsed = time.perf_counter() - t0
+    logger.info("encode_pair_te: %s (mode=%s)", stem, canvas["mode"])
+    return {"ok": True, "skipped": False, "elapsed": elapsed, "msg": ""}
+
+
+def colorize_pair_from_te(pipe, te_dir, stem, out1_path, out2_path="", steps: int = 2,
+                          seed: int = 42, first: bool = False) -> dict:
+    """Phase B, one pair (qwen21-viggle / qwen21-turbo conditioning format):
+    sample + decode the cached pair canvas, split it back into the frames and
+    save each at its original size (one output for a degraded pair). Same
+    contract as colorize_frame_from_te(): first=True drops the loaded models
+    first; a pair whose expected outputs all exist is skipped. Returns
+    {"ok", "skipped", "elapsed", "msg", "written"}.
+    """
+    import logging
+
+    import comfy.model_management
+
+    import comfy_bridge
+
+    logger = logging.getLogger(__name__)
+
+    if first:
+        # phase B wants the UNet + VAE alone in VRAM: start from a clean slate
+        comfy.model_management.unload_all_models()
+
+    te_path = os.path.join(te_dir, stem + ".safetensors")
+    if not os.path.isfile(te_path):
+        # never encoded (e.g. a fully dark pair) or the chunk cache was already
+        # dropped: nothing to do here, not an error
+        return {"ok": True, "skipped": True, "elapsed": 0.0, "written": [],
+                "msg": "no conditioning cached"}
+
+    geom = _pair_geometry_peek(te_path)
+    if geom is None:
+        return {"ok": False, "skipped": False, "elapsed": 0.0, "written": [],
+                "msg": "colorize_pair_from_te: not a paired conditioning"}
+    outs = _pair_outputs(geom, str(out1_path or ""), str(out2_path or ""))
+    if not outs:
+        return {"ok": False, "skipped": False, "elapsed": 0.0, "written": [],
+                "msg": "colorize_pair_from_te: missing output path"}
+    if all(os.path.isfile(p) for p in outs):
+        return {"ok": True, "skipped": True, "elapsed": 0.0, "written": [], "msg": ""}
+
+    t0 = time.perf_counter()
+    try:
+        loaded = comfy_bridge.load_viggle_conditioning(te_path)
+    except ValueError as exc:
+        # a conditioning of the other family left in this folder (same stem):
+        # skip instead of sampling a mismatched structure
+        logger.warning("colorize_pair_from_te: %s: %s", stem, exc)
+        return {"ok": True, "skipped": True, "elapsed": 0.0, "written": [],
+                "msg": str(exc)}
+
+    colorized_lowres = comfy_bridge.colorize_viggle_from_conditioning(
+        pipe, loaded["conditioning"], loaded["latent"], steps=steps, seed=seed)
+    written = _pair_split_save(colorized_lowres, geom, out1_path, out2_path)
+    elapsed = time.perf_counter() - t0
+    logger.info("colorize_pair_from_te: %s (mode=%s, %d out)",
+                stem, geom.get("mode"), len(written))
+    return {"ok": True, "skipped": False, "elapsed": elapsed,
+            "written": written, "msg": ""}
+
+
+def encode_pair_edit(pipe, in1_path, in2_path, te_dir, stem, prompt, img_size: int = 0,
+                     first: bool = False, model_config: str = "",
+                     usm_radius: float = 0.0) -> dict:
+    """Phase A, one pair of the qwen-2511 edit family: the same scheme as
+    encode_pair_te(), but the conditioning is the edit node's (context +
+    reference latent + start latent) -- see encode_edit_conditioning().
+    Returns {"ok", "skipped", "elapsed", "msg"}.
+    """
+    import logging
+
+    import comfy.model_management
+
+    import comfy_bridge
+
+    logger = logging.getLogger(__name__)
+
+    if first:
+        # phase A wants the TE + VAE alone in VRAM: start from a clean slate
+        comfy.model_management.unload_all_models()
+
+    os.makedirs(te_dir, exist_ok=True)
+    # resolution is not a parameter of the edit path: 0 marks the edit format
+    # (same marker the single-frame edit flow uses)
+    key = dict(_te_manifest_key(model_config, prompt, 0, img_size, False, usm_radius),
+               pair=True)
+    _, cached = _te_manifest_load(te_dir, key)
+
+    src = str(in1_path)
+    in2_path = str(in2_path or "")
+    mtimes = [os.path.getmtime(src)]
+    if in2_path and os.path.isfile(in2_path):
+        mtimes.append(os.path.getmtime(in2_path))
+    else:
+        in2_path = ""
+    mtime = max(mtimes)
+
+    te_path = os.path.join(te_dir, stem + ".safetensors")
+    prev = cached.get(stem)
+    if prev and prev.get("mtime") == mtime and os.path.isfile(te_path):
+        return {"ok": True, "skipped": True, "elapsed": 0.0, "msg": ""}
+
+    t0 = time.perf_counter()
+    canvas = _pair_merge_canvas(src, in2_path, img_size=img_size, usm_radius=usm_radius)
+    if canvas["mode"] == "dark":
+        logger.info("encode_pair_edit: both frames too dark, skipped: %s", stem)
+        return {"ok": True, "skipped": True, "elapsed": 0.0, "msg": "too dark"}
+
+    res = comfy_bridge.encode_edit_conditioning(pipe, canvas["image"], prompt)
+    comfy_bridge.save_edit_conditioning(
+        te_path, res["conditioning"], res["latent"], prompt=prompt,
+        meta={"source": os.path.basename(src), "model_config": model_config,
+              "pair_geometry": json.dumps(canvas["geom"], separators=(",", ":"))})
+
+    cached[stem] = {"mtime": mtime, "te": os.path.basename(te_path)}
+    _te_manifest_save(te_dir, key, cached)
+    elapsed = time.perf_counter() - t0
+    logger.info("encode_pair_edit: %s (mode=%s)", stem, canvas["mode"])
+    return {"ok": True, "skipped": False, "elapsed": elapsed, "msg": ""}
+
+
+def colorize_pair_edit_from_te(pipe, te_dir, stem, out1_path, out2_path="",
+                               steps: int = 4, seed: int = 42,
+                               first: bool = False) -> dict:
+    """Phase B, one pair of the qwen-2511 edit family: sample + decode the
+    cached edit conditioning, split the canvas back and save each frame at its
+    original size. Same contract as colorize_pair_from_te(). Returns
+    {"ok", "skipped", "elapsed", "msg", "written"}.
+    """
+    import logging
+
+    import comfy.model_management
+
+    import comfy_bridge
+
+    logger = logging.getLogger(__name__)
+
+    if first:
+        # phase B wants the UNet + VAE alone in VRAM: start from a clean slate
+        comfy.model_management.unload_all_models()
+
+    te_path = os.path.join(te_dir, stem + ".safetensors")
+    if not os.path.isfile(te_path):
+        return {"ok": True, "skipped": True, "elapsed": 0.0, "written": [],
+                "msg": "no conditioning cached"}
+
+    geom = _pair_geometry_peek(te_path)
+    if geom is None:
+        return {"ok": False, "skipped": False, "elapsed": 0.0, "written": [],
+                "msg": "colorize_pair_edit_from_te: not a paired conditioning"}
+    outs = _pair_outputs(geom, str(out1_path or ""), str(out2_path or ""))
+    if not outs:
+        return {"ok": False, "skipped": False, "elapsed": 0.0, "written": [],
+                "msg": "colorize_pair_edit_from_te: missing output path"}
+    if all(os.path.isfile(p) for p in outs):
+        return {"ok": True, "skipped": True, "elapsed": 0.0, "written": [], "msg": ""}
+
+    t0 = time.perf_counter()
+    try:
+        loaded = comfy_bridge.load_edit_conditioning(te_path)
+    except ValueError as exc:
+        logger.warning("colorize_pair_edit_from_te: %s: %s", stem, exc)
+        return {"ok": True, "skipped": True, "elapsed": 0.0, "written": [],
+                "msg": str(exc)}
+
+    colorized_lowres = comfy_bridge.colorize_edit_from_conditioning(
+        pipe, loaded["conditioning"], loaded["latent"], steps=steps, seed=seed)
+    written = _pair_split_save(colorized_lowres, geom, out1_path, out2_path)
+    elapsed = time.perf_counter() - t0
+    logger.info("colorize_pair_edit_from_te: %s (mode=%s, %d out)",
+                stem, geom.get("mode"), len(written))
+    return {"ok": True, "skipped": False, "elapsed": elapsed,
+            "written": written, "msg": ""}
+
+
 def cleanup_te_cache(te_dir) -> dict:
     """Delete the conditioning files of a colorized chunk and reset the
     manifest frames (its key fields stay): the split flow only needs the cache

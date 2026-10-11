@@ -38,6 +38,12 @@ file there. Supported config formats (see config/*.json):
     pass + one sampling pass per two frames). Supported by every split-TE
     family (qwen21-viggle, qwen21-turbo, gguf-qwen); the flag lives in the
     config file and is consumed by the GUI, not by this server.
+
+    The optional key "split_TE_resolution" (default 1024) sets the working
+    area budget of the split-TE conditioning (per frame in the single flow,
+    per merged canvas in the paired flow); also consumed by the GUI. The RPC
+    pair/frame methods take the resolution as a parameter, so a server-side
+    caller can pass its own value instead.
 -------------------------------------------------------------------------------
 """
 

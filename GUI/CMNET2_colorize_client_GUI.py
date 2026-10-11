@@ -269,6 +269,23 @@ def config_flag(mapping, key, default=False):
     return str(value).strip().lower() in ("true", "on", "1", "yes")
 
 
+def config_int(mapping, key, default, minimum, maximum, snap=1):
+    """Integer value of an optional config key, clamped to [minimum, maximum]
+    and rounded to the nearest multiple of `snap`: numeric JSON values and
+    numeric strings both work, anything unparsable falls back to `default`,
+    and a hand-edited config cannot push a nonsensical resolution into the
+    pipeline."""
+    try:
+        number = int(round(float((mapping or {}).get(key, default))))
+    except (TypeError, ValueError):
+        number = int(default)
+    number = max(minimum, min(maximum, number))
+    if snap > 1:
+        number = int(round(number / snap)) * snap
+        number = max(minimum, min(maximum, number))
+    return number
+
+
 def load_all_configs():
     defaults = {
         # --- paths ---
@@ -1146,6 +1163,9 @@ def orchestrator(init_values, window):
     def do_colorize_split(values, window):
         """Fast Pipeline for the qwen21-viggle / qwen21-turbo families: split colorize in chunks.
 
+        The conditioning's area budget comes from the config's
+        split_TE_resolution key (default 1024).
+
         Every chunk runs phase A (TE + VAE resident: the frames are encoded and
         their conditioning cached under ref_te/) and then phase B (UNet + VAE
         resident: sample + decode from the cache), dropping the chunk's cache
@@ -1190,14 +1210,18 @@ def orchestrator(init_values, window):
             log_message("ℹ️ No images to colorize.")
             return
 
-        model_type = (read_model_config(values["-MODEL_CONFIG-"]) or {}).get(
-            "model_name", "")
+        model_cfg  = read_model_config(values["-MODEL_CONFIG-"]) or {}
+        model_type = model_cfg.get("model_name", "")
         prompt         = values["-PROMPT-"]
         steps          = int(values.get("-STEPS-", cfg["steps"]))
         enhance_prompt = values.get("-ENHANCE_PROMPT-", False)
         usm_radius     = usm_radius_of(values, "-USM-", "-USM_RADIUS-")
         seed           = 42
         chunk_size     = 200
+        # working area budget of the split-TE conditioning (config key
+        # split_TE_resolution, default 1024): raising it keeps more per-frame
+        # detail in the cached conditioning, at a quadratic time cost
+        resolution     = config_int(model_cfg, "split_TE_resolution", 1024, 256, 2048, 32)
         if model_type == "qwen21-turbo":
             # The turbo checkpoint carries its own 8-step sigma table and has
             # no viggle-style prompt enhancer: the panel's steps/enhance
@@ -1214,7 +1238,8 @@ def orchestrator(init_values, window):
         chunks = [image_files[i:i + chunk_size]
                   for i in range(0, tot_num_images, chunk_size)]
         log_message(f"ℹ️ {tot_num_images} images, {len(chunks)} chunk(s) of max "
-                    f"{chunk_size} — split colorize (TE cache, then infer).")
+                    f"{chunk_size} — split colorize (TE cache @ {resolution}px, "
+                    f"then infer).")
 
         total_steps = 2 * tot_num_images   # one cache step + one infer step per frame
         done_steps  = 0
@@ -1257,7 +1282,7 @@ def orchestrator(init_values, window):
                         window.write_event_value(
                             "-PREVIEW_BW-", Image.open(img_path).convert("RGB"))
                         res = rpc.encode_frame_te(str(img_path), str(te_dir),
-                                                  img_path.stem, prompt, 1024, 0,
+                                                  img_path.stem, prompt, resolution, 0,
                                                   enhance_prompt, first, usm_radius)
                     except xmlrpc.client.Fault as e:
                         log_message(f"RPC Fault on {img_path.name}: {e.faultString}")
@@ -1365,7 +1390,8 @@ def orchestrator(init_values, window):
         chunk's cache is dropped once its frames are colorized. The pair cache
         lives in ref_te_pair/ (te) or ref_te_pair_edit/ (edit); a pair is done
         when both of its frames have an output (the tail frame of an odd count
-        runs through the same path as a one-frame pair).
+        runs through the same path as a one-frame pair). The canvas area
+        budget comes from the config's split_TE_resolution key (default 1024).
         """
         rpc = state.get("rpc_client")
         if rpc is None:
@@ -1418,8 +1444,12 @@ def orchestrator(init_values, window):
         # pair chunk sizes keep the same disk budget as the single split flows
         chunk_size     = 50 if family == "edit" else 100
 
-        model_type = (read_model_config(values["-MODEL_CONFIG-"]) or {}).get(
-            "model_name", "")
+        model_cfg  = read_model_config(values["-MODEL_CONFIG-"]) or {}
+        model_type = model_cfg.get("model_name", "")
+        # working area budget of the merged pair canvas (config key
+        # split_TE_resolution, default 1024): the two frames share it, so each
+        # frame gets about half of it -- raising it keeps more detail
+        resolution = config_int(model_cfg, "split_TE_resolution", 1024, 256, 2048, 32)
         if model_type == "qwen21-turbo":
             # same override as do_colorize_split(): the checkpoint carries its
             # own 8-step sigma table and has no viggle-style prompt enhancer
@@ -1435,7 +1465,7 @@ def orchestrator(init_values, window):
         chunks = [todo[i:i + chunk_size] for i in range(0, len(todo), chunk_size)]
         log_message(f"ℹ️ {sum(len(u) for u in todo)} frames, {len(todo)} pair(s), "
                     f"{len(chunks)} chunk(s) of max {chunk_size} — paired split "
-                    f"colorize (TE cache, then infer).")
+                    f"colorize (TE cache @ {resolution}px, then infer).")
 
         total_steps = 2 * len(todo)   # one cache step + one infer step per pair
         done_steps  = 0
@@ -1489,7 +1519,7 @@ def orchestrator(init_values, window):
                                                        stem, prompt, 0, first, usm_radius)
                         else:
                             res = rpc.encode_pair_te(str(unit[0]), in2, str(te_dir),
-                                                     stem, prompt, 1024, 0,
+                                                     stem, prompt, resolution, 0,
                                                      enhance_prompt, first, usm_radius)
                     except xmlrpc.client.Fault as e:
                         log_message(f"RPC Fault on {stem}: {e.faultString}")

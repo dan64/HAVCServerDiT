@@ -363,7 +363,7 @@ for example in the Cluster 2, the reference frame #000145 was selected to repres
 | **Run Server**           | Starts/stops the server for the selected Model Config as a process managed by the GUI, with its full output streamed live into the **Server Log** tab (Dashboard) — the button becomes **Stop Server** while running, and the status text next to it tracks *Starting server...* → *running on ...* → *stopped*. The GUI **connects automatically** once the server reports it's ready |
 | **External console**     | Reverts **Run Server** to its previous behavior: launches `start_server.cmd <config-name>` in its own visible terminal window instead, with no control or logging from the GUI |
 | **Colorization Steps**   | Diffusion steps per frame (lower = faster). LongCat recommends 8 steps, Qwen 2 steps, qwen21-viggle 6 steps (its LoRA's native step count; step schedules `2`/`4`/`6`/`8` — `6` gives the most accurate colors, `2` is the fastest) |
-| **Fast Pipeline**        | Faster colorization mode. qwen21-viggle / qwen21-turbo / qwen-2511 (gguf-qwen): **cached-TE split flow** (conditioning cached per frame in `ref_te/` / `ref_te_edit/`, then sampled — roughly 2× faster on qwen21-viggle, ~1.4× on qwen-2511: 7.3 vs ~10.5 s/frame at 2 steps). A config with **`fast_split_TE`** pairs consecutive frames inside the split flow (merged before the text encoder, split back after the transformer — one pass per two frames). nunchaku-qwen: **paired inference**, two frames in one forward pass. longcat-gguf falls back to per-image processing |
+| **Fast Pipeline**        | Faster colorization mode. qwen21-viggle / qwen21-turbo / qwen-2511 (gguf-qwen): **cached-TE split flow** (conditioning cached per frame in `ref_te/` / `ref_te_edit/`, then sampled — roughly 2× faster on qwen21-viggle, ~1.4× on qwen-2511: 7.3 vs ~10.5 s/frame at 2 steps). A config with **`fast_split_TE`** pairs consecutive frames inside the split flow (merged before the text encoder, split back after the transformer — one pass per two frames); **`split_TE_resolution`** sets the split-TE working budget (default 1024: more detail at a higher time cost — the pair shares it between the two frames). nunchaku-qwen: **paired inference**, two frames in one forward pass. longcat-gguf falls back to per-image processing |
 | **Unsharp Mask**         | Pre-filter the input before colorization (unsharp mask: amount 0.50, threshold 0) — removes the film grain that can stop the model from colorizing. Radius in the field beside: **1–4**, default `2`. Applies in every mode: standard, Fast Pipeline and paired |
 | **Enhance Prompt**       | **qwen21-viggle only**: rewrites the prompt via Qwen3-VL before colorizing (image-aware, adds ~15-20s/frame) — no effect on other backends. Try a direct anti-hedging prompt first, see [Suggested Inference Steps](server_usage.md#-suggested-inference-steps) |
 | **Prompt**               | Text prompt sent to the model — keep it short for qwen-2511, detailed for qwen21-viggle / qwen21-turbo; see the prompt tips in [Suggested Inference Steps](server_usage.md#-suggested-inference-steps) |
@@ -595,7 +595,10 @@ Two modes are available:
   flow pairs consecutive frames instead: the two frames are merged side by
   side before the text encoder and the decoded canvas is split back after the
   transformer, so two frames cost one pass — the pair shares the single
-  flow's area budget, which is what lets it run that fast.
+  flow's area budget, which is what lets it run that fast (and is why the
+  pair is a little softer: each frame gets about half the budget). The budget
+  itself is a config value: **`split_TE_resolution`** (default 1024), tuned
+  against your own material.
 
 In both modes, frames already present in `ref_qwen/` are skipped: a rerun
 colorizes only what is missing.

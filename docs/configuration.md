@@ -219,6 +219,7 @@ minus the LoRA keys:
     "lora_path":           "",
     "steps":               8,
     "fast_split_TE":       true,
+    "split_TE_resolution": 1280,
     "hf_unet":             "Comfy-Org/Qwen-Image-2.1",
     "hf_clip":             "Comfy-Org/Qwen-Image-2.1",
     "hf_vae":              "Comfy-Org/Qwen-Image-2.1"
@@ -244,6 +245,27 @@ budget's resolution. It applies to every split-TE family (`qwen21-viggle`,
 option, because the flag only lives in the configs of the families that use
 it.
 
+#### Split-TE working resolution (`split_TE_resolution`)
+
+`"split_TE_resolution"` (default `1024`) is the area budget the split-TE
+flows work at: per frame in the single flow, per merged canvas in the paired
+one. Raising it keeps more spatial detail, at a cost roughly proportional to
+the area increase (clamped to `256`–`2048`, snapped to multiples of 32). It
+applies to `qwen21-viggle` / `qwen21-turbo`; for `gguf-qwen` the working size
+comes from the edit node's own image scale, so the key is ignored there.
+Changing it invalidates the conditioning cache automatically (the value is
+part of the cache key), so the next run re-encodes and does not mix
+resolutions.
+
+> **Field note** (paired turbo, 4 frames, RTX 5070 Ti): the pair splits its
+> budget between the two frames, so `1024` gives each frame ~0.5 Mpx while
+> the single flow gets the full ~1.0 Mpx — the source of the pair's slightly
+> softer look. Measured pair cost: `1024` → **2.27 s/frame**, `1280` →
+> **3.88**, `1536` → **6.49** (single flow at `1024`: 4.49). The color
+> rendition also shifts with the budget (of the three, `1280` rendered the
+> most neutral/coolest and `1536` the warmest), so tune it against your own
+> material — sample sheets in `dist/turbo_bench/`.
+
 ### Key reference
 
 | Key                                       | Required | Description                                                                                  |
@@ -264,3 +286,4 @@ it.
 | `vae_name`                                |          | **GGUF / qwen21-viggle / qwen21-turbo**: VAE filename                                                    |
 | `hf_*`                                    |          | **GGUF / qwen21-viggle / qwen21-turbo**: HuggingFace repo names for auto-download                        |
 | `fast_split_TE`                           |          | **Split-TE families** (`qwen21-viggle` / `qwen21-turbo` / `gguf-qwen`): `true` (or `"on"`/`"1"`/`"yes"`) makes the Fast Pipeline pair consecutive frames -- merged before the text encoder, split back after the transformer. Default off |
+| `split_TE_resolution`                     |          | **qwen21-viggle / qwen21-turbo**: area budget of the split-TE flow (default `1024`; per frame in the single flow, per merged canvas in the paired one). Clamped to 256–2048, snapped to 32 |

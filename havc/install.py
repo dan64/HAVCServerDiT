@@ -230,7 +230,7 @@ if /i "%WHICH%"=="q3"      set "CFG=qwen-2511_q3.json"
 if /i "%WHICH%"=="int8"    set "CFG=qwen-2511_int8.json"
 if /i "%WHICH%"=="longcat"  set "CFG=longcat_gguf_q4.json"
 if /i "%WHICH%"=="longcat3" set "CFG=longcat_gguf_q3.json"
-if /i "%WHICH%"=="qwen21"   set "CFG=qwen21_viggle.json"
+if /i "%WHICH%"=="qwen21"   set "CFG=qwen21_turbo_int8.json"
 rem The config folder is the source of truth: a matching config\<name>.json
 rem wins over the shortcuts above, so a new model only needs a new file there.
 if exist "%HERE%config\%WHICH%.json" set "CFG=%WHICH%.json"

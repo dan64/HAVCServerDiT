@@ -326,12 +326,12 @@ dit-colorize-rpc/
 ├── dit_client_example.py        # Example RPC client : single frame
 ├── dit_client_pair_example.py   # Example RPC client : paired inference
 ├── patch_nunchaku.py            # Compatibility patch for nunchaku 1.2.1
-├── config/                      # Pipeline configs (nunchaku FP4/INT4, gguf/longcat Q3–Q8, qwen21-viggle)
-├── comfy_bridge/                # Self-contained ComfyUI runtime (gguf-qwen/longcat-gguf/qwen21-viggle)
+├── config/                      # Pipeline configs (nunchaku FP4/INT4, gguf/longcat Q3–Q8, qwen21-viggle, qwen21-turbo)
+├── comfy_bridge/                # Self-contained ComfyUI runtime (gguf-qwen/longcat-gguf/qwen21-viggle/qwen21-turbo)
 ├── install.cmd                  # Windows automated installer
 ├── start_server.cmd             # Windows launcher : server (nunchaku/gguf/longcat)
 ├── run_server_longcat.cmd       # Windows launcher : LongCat server
-├── run_server_qwen21.cmd        # Windows launcher : qwen21-viggle server
+├── run_server_qwen21.cmd        # Windows launcher : qwen21-turbo server (the default)
 ├── run_client_example.cmd       # Windows launcher : single frame example
 ├── run_client_pair_example.cmd  # Windows launcher : paired inference example
 ├── patch_nunchaku.cmd           # Windows launcher : nunchaku patch

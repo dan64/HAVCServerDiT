@@ -25,7 +25,7 @@ From the install folder (or the repository root on a manual install):
 
 ```
 HAVC.vbs               # desktop GUI (the recommended front-end)
-HAVC-Server.cmd        # console server — pick the model at the prompt
+HAVC-Server.cmd        # console server — optional arg: alias or config name (no arg: int4)
 start_server.cmd q3    # console server with a backend/quantization or a config name
 ```
 

@@ -95,10 +95,10 @@ same list is what the GUI shows as **Model Config** (Tab 2).
 | `run_server_int4.cmd`    | `start_server.cmd int4`    | Nunchaku INT4                  |
 | `run_server_longcat.cmd` | `start_server.cmd longcat` | LongCat Q4_K_M                 |
 
-`run_server_qwen21.cmd` is a **standalone launcher** for `qwen21-viggle` —
-it does not take an argument and always launches with
-`config/qwen21_viggle.json`. The same config can be selected through
-`start_server.cmd` too, by its file name:
+`run_server_qwen21.cmd` is a **standalone launcher** for the shipped default
+(`qwen21-turbo`) — it does not take an argument and always launches with
+`config/qwen21_turbo_int8.json` (the same config as `HAVC-Server.cmd qwen21`).
+The qwen21-viggle config is still one command away:
 `start_server.cmd qwen21_viggle`.
 
 `HAVC-Server.cmd` (the installer's console launcher) accepts the same kind

@@ -300,11 +300,12 @@ if not exist "%PY%" (
     pause
     exit /b 1
 )
-rem HAVC DiT Server launcher for qwen21-viggle (single config, no argument).
-echo Starting HAVC DiT Server (qwen21-viggle) ...
+rem HAVC DiT Server launcher for the qwen21 default (qwen21-turbo; single config,
+rem no argument). qwen21-viggle is still available through start_server.cmd.
+echo Starting HAVC DiT Server (qwen21-turbo) ...
 rem strip the trailing backslash: a quoted path ending in \ would swallow the
 rem closing quote and merge the rest of the command line into the argument.
-"%PY%" -u "%HERE%dit_rpc_server.py" --host 127.0.0.1 --port 8765 --module-dir "%HERE:~0,-1%" --load-pipeline --pipeline-config "%HERE%config\qwen21_viggle.json" --logfile "%HERE%dit_server.log"
+"%PY%" -u "%HERE%dit_rpc_server.py" --host 127.0.0.1 --port 8765 --module-dir "%HERE:~0,-1%" --load-pipeline --pipeline-config "%HERE%config\qwen21_turbo_int8.json" --logfile "%HERE%dit_server.log"
 if %errorlevel% neq 0 (
     echo.
     echo [ERROR] Server exited with code %errorlevel%.

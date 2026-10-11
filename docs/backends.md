@@ -96,7 +96,7 @@ Choose the backend that matches your hardware:
 > assumed safe). A fresh `install.cmd` run sets these; an **existing**
 > `.venv` needs an explicit upgrade, see [Quick Update](installation.md#-quick-update-existing-installation).
 > All files are auto-downloaded on first run — see [What's New](whats-new.md).
-> Launch with `run_server_qwen21.cmd`.
+> Launch with `start_server.cmd qwen21_viggle`.
 
 ### All backends
 

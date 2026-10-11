@@ -165,7 +165,7 @@ def _edit_encode_positive(pipeline, img_scaled, prompt):
     comfy/samplers.py takes the cfg1 fast path (uncond=None), so the negative
     conditioning is never consumed (~1.5 s/image of a second full text-
     encoder pass, vision tower included). Same treatment as colorize_viggle();
-    dist/check_edit_bitexact.py verifies that sampling with the positive
+    dist/scripts/check_edit_bitexact.py verifies that sampling with the positive
     folded in as the negative reproduces the live output byte-for-byte.
     """
     import nodes as cn

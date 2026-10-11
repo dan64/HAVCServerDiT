@@ -1,5 +1,36 @@
 # What's New
 
+### 2026-10-11 — qwen21-turbo family added; the default stays qwen21-viggle at 2 steps (field verdict)
+
+A new family joins the Qwen-Image-2.1 line: **`qwen21-turbo`** —
+Qwen-Image-2.1-Turbo, the official Comfy-Org int8 ConvRot checkpoint —
+with the same architecture and loading path as qwen21-viggle, but the
+checkpoint carries its **own fixed 8-step sigma schedule** (the panel's
+Colorization Steps setting does not apply) and there is no image-aware
+prompt enhancer — like qwen21-viggle, it wants a detailed prompt. Two
+configs ship: **`qwen21_turbo_int8`** and **`qwen21_turbo-fast_int8`**
+(the paired split below).
+
+Two new optional keys, for every split-TE family (qwen21-viggle /
+qwen21-turbo / qwen-2511): **`fast_split_TE`** makes the Fast Pipeline
+pair consecutive frames — merged side by side *before* the text encoder,
+split back *after* the transformer: one TE pass and one sampling pass per
+two frames (measured ~2.3 s/frame against ~4.5 s/frame for the single
+split, at the same 1024 budget); **`split_TE_resolution`** sets the
+split-TE area budget (default 1024). Paired runs use their own cache
+folders (`ref_te_pair/`, `ref_te_pair_edit/`), so switching modes never
+mixes caches.
+
+**Field verdict (2026-10-11)** — the nominal default stays
+**`qwen21_viggle-soft_int8` at 2 steps**: in the film tests the turbo
+family colors better (richer, more accurate hues) but with noticeably
+more variability between similar frames; over a whole film that reads as
+visible color flicker and outweighs the better rendition. The paired
+turbo variant is a middle ground, though some frames come out almost
+black-and-white. qwen21-viggle at 2 steps remains the best speed /
+quality / stability trade-off, so it stays the default seeded by the
+installer, the manager and the launchers.
+
 ### 2026-10-10 — qwen-2511 (gguf-qwen): native int8 ConvRot replaces the Q4–Q8 quants; Fast Pipeline split (about 1.4× faster)
 
 The **Qwen-Image-Edit 2511** backend now ships two configs instead of

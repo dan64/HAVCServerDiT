@@ -14,6 +14,7 @@ import comfy.lora
 import comfy.model_management
 import comfy.quant_ops
 from .dequant import dequantize_tensor, is_quantized
+from .kquant_backend import SUPPORTED_K_QUANTS, try_kquant_linear
 
 
 # ComfyUI and comfy_kitchen can be upgraded independently. Newer ComfyUI
@@ -30,6 +31,31 @@ if "input_act_weight" not in _int8_linear_params:
         )
 
     comfy.quant_ops.ck.int8_linear = _compat_int8_linear
+
+
+# ComfyUI forwards activation-quantization kwargs (input_act, act_weight,
+# residual, ...) through forward_comfy_cast_weights on every Linear call.
+# The GGML path dequantizes weights eagerly and never uses them, so filter
+# them out against each forward_ggml_cast_weights signature. This keeps
+# GGUF usable across the supported core versions without touching the
+# individual implementations.
+_ggml_kwarg_names = {}
+
+def _filter_ggml_kwargs(func, kwargs):
+    if not kwargs:
+        return kwargs
+    fn = getattr(func, "__func__", func)
+    names = _ggml_kwarg_names.get(fn)
+    if names is None:
+        params = inspect.signature(fn).parameters
+        if any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values()):
+            return kwargs
+        names = frozenset(
+            name for name, p in params.items()
+            if p.kind in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
+        )
+        _ggml_kwarg_names[fn] = names
+    return {name: value for name, value in kwargs.items() if name in names}
 
 
 _PERF_LOG_ENV = "COMFYUI_GGUF_PERF_LOG"
@@ -105,6 +131,59 @@ def _configure_perf_logger():
 
 
 _PERF_LOGGER = _configure_perf_logger()
+_Q8_EXECUTION_COUNTS = {"native_calls": 0, "fallback_calls": 0}
+
+
+def q8_execution_stats(reset=False):
+    stats = dict(_Q8_EXECUTION_COUNTS)
+    if reset:
+        for key in _Q8_EXECUTION_COUNTS:
+            _Q8_EXECUTION_COUNTS[key] = 0
+    return stats
+
+
+def _dequantize_q8_weight_portable(weight, dtype):
+    layout = comfy.quant_ops.TensorWiseINT8Layout
+    qdata, scale = layout.get_plain_tensors(weight)
+    qdata = qdata.to(torch.float32)
+    scale = scale.to(device=qdata.device, dtype=torch.float32)
+    if scale.ndim == 1 and scale.shape[0] == qdata.shape[0]:
+        scale = scale.unsqueeze(1)
+    dense = qdata * scale
+    params = weight._params
+    if getattr(params, "convrot", False):
+        group_size = int(getattr(params, "convrot_groupsize", 256))
+        hadamard = _build_regular_hadamard(
+            group_size,
+            device=dense.device,
+            dtype=dense.dtype,
+        )
+        dense = torch.matmul(
+            dense.reshape(dense.shape[0], -1, group_size),
+            hadamard,
+        ).reshape_as(dense)
+    return dense.to(dtype=dtype)
+
+
+def _fallback_q8_linear(layer, input_tensor):
+    weight, bias, offload_stream = comfy.ops.cast_bias_weight(
+        layer,
+        input_tensor,
+        dtype=input_tensor.dtype,
+        bias_dtype=input_tensor.dtype,
+        offloadable=True,
+        compute_dtype=input_tensor.dtype,
+        want_requant=False,
+    )
+    try:
+        if (
+            isinstance(weight, comfy.quant_ops.QuantizedTensor)
+            and weight._layout_cls == "TensorWiseINT8Layout"
+        ):
+            weight = _dequantize_q8_weight_portable(weight, input_tensor.dtype)
+        return torch.nn.functional.linear(input_tensor, weight, bias)
+    finally:
+        comfy.ops.uncast_bias_weight(layer, weight, bias, offload_stream)
 
 
 def _perf_sync(device):
@@ -425,7 +504,9 @@ class GGMLLayer(torch.nn.Module):
 
     def forward_comfy_cast_weights(self, input, *args, **kwargs):
         if self.is_ggml_quantized():
-            out = self.forward_ggml_cast_weights(input, *args, **kwargs)
+            out = self.forward_ggml_cast_weights(
+                input, *args, **_filter_ggml_kwargs(self.forward_ggml_cast_weights, kwargs)
+            )
         else:
             out = super().forward_comfy_cast_weights(input, *args, **kwargs)
 
@@ -455,6 +536,39 @@ class GGMLOps(comfy.ops.manual_cast):
             self.bias_comfy_model_dtype = dtype
 
         def forward_ggml_cast_weights(self, input):
+            weight_qtype = getattr(self.weight, "tensor_type", None)
+            weight_patches = getattr(self.weight, "patches", ())
+            bias_patches = getattr(self.bias, "patches", ()) if self.bias is not None else ()
+            if (
+                weight_qtype in SUPPORTED_K_QUANTS
+                and not weight_patches
+                and not bias_patches
+            ):
+                device = input.device
+                weight = self.weight.to(device)
+                bias = None
+                if self.bias is not None:
+                    bias = self.get_weight(self.bias.to(device), input.dtype)
+                    bias = comfy.ops.cast_to(
+                        bias,
+                        input.dtype,
+                        device,
+                        non_blocking=comfy.model_management.device_supports_non_blocking(
+                            device
+                        ),
+                        copy=False,
+                    )
+                output = try_kquant_linear(
+                    input,
+                    weight.data,
+                    weight_qtype,
+                    getattr(weight, "tensor_shape", weight.shape),
+                    bias,
+                    dequant_dtype=self.dequant_dtype,
+                )
+                if output is not None:
+                    return output
+
             weight, bias = self.cast_bias_weight(input)
             return torch.nn.functional.linear(input, weight, bias)
 
@@ -532,11 +646,48 @@ def get_gguf_q8_ops(compute_dtype=torch.bfloat16, full_precision_mm=False):
             def forward(self, *args, **kwargs):
                 input_tensor = args[0] if args else kwargs.get("input")
                 parent_forward = super().forward
+                q8_weight = (
+                    isinstance(self.weight, comfy.quant_ops.QuantizedTensor)
+                    and self.weight._layout_cls == "TensorWiseINT8Layout"
+                )
+                def run_with_fallback():
+                    if q8_weight and self._full_precision_mm:
+                        _Q8_EXECUTION_COUNTS["fallback_calls"] += 1
+                        return parent_forward(*args, **kwargs)
+                    if q8_weight and getattr(self, "_gguf_q8_failed", False):
+                        _Q8_EXECUTION_COUNTS["fallback_calls"] += 1
+                        return _fallback_q8_linear(self, input_tensor)
+                    try:
+                        result = parent_forward(*args, **kwargs)
+                    except Exception as error:
+                        if not q8_weight or not getattr(self, "_gguf_q8_runtime_fallback", False):
+                            raise
+                        self._gguf_q8_failed = True
+                        try:
+                            result = _fallback_q8_linear(self, input_tensor)
+                        except Exception as fallback_error:
+                            raise RuntimeError(
+                                "Native Q8_CR execution failed and the portable "
+                                "dequantized higher-precision retry also failed."
+                            ) from fallback_error
+                        _Q8_EXECUTION_COUNTS["fallback_calls"] += 1
+                        logging.warning(
+                            "Q8_CR native Linear failed for %dx%d; retried with "
+                            "dequantized higher-precision matmul: %s",
+                            self.out_features,
+                            self.in_features,
+                            error,
+                        )
+                        return result
+                    if q8_weight:
+                        _Q8_EXECUTION_COUNTS["native_calls"] += 1
+                    return result
+
                 return _perf_forward(
                     "int8_tensorwise",
                     self,
                     input_tensor,
-                    lambda: parent_forward(*args, **kwargs),
+                    run_with_fallback,
                 )
 
             def _load_from_state_dict(self, *args):
@@ -605,7 +756,7 @@ def get_gguf_q4_w4a4_ops(
                 self._quant_group_size = 64
                 self._quantized = False
                 self.weight_scale = None
-                self._compute_dtype = torch.bfloat16
+                self._compute_dtype = compute_dtype
                 self._quantized_weight = None
                 self._quantized_weight_device = None
                 self._quantized_weight_linear_dtype = None
@@ -699,7 +850,11 @@ def get_gguf_q4_w4a4_ops(
                 self.weight = torch.nn.Parameter(weight, requires_grad=False)
                 self.weight_scale = torch.nn.Parameter(scale, requires_grad=False)
                 self._quantized = True
-                self._compute_dtype = quant_conf.get("orig_dtype", torch.bfloat16)
+                self._compute_dtype = (
+                    compute_dtype
+                    if compute_dtype is not None
+                    else quant_conf.get("orig_dtype", torch.bfloat16)
+                )
                 self._quantized_weight = None
                 self._quantized_weight_device = None
                 self._fused_weight = None
@@ -929,7 +1084,7 @@ def get_gguf_q4_w4a4_ops(
                     # patched representation is being prepared.
                     self._quantized_weight = None
                     self._quantized_weight_device = None
-                # Apply adapters in the compute (BF16) domain on the un-rotated weight.
+                # Apply adapters in the selected compute dtype on the un-rotated weight.
                 fused = self._dequantized_weight(device, self._compute_dtype)
                 for f in getattr(self, "weight_function", ()):
                     fused = f(fused)

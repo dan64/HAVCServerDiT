@@ -97,12 +97,18 @@ public static class GuiSettingsUpdate
         template["mkv_path"] = Path.Combine(installDir, "tools", "MKVToolNix", "mkvmerge.exe");
         template["base_dir"] = samples;
         template["fixv_base_dir"] = samples;
-        string model = defaultModel ?? "qwen21-turbo"; // --default-model default
+        string model = defaultModel ?? "qwen21-viggle"; // --default-model default
         // GUI "Model Config" (config/ file stem): DEFAULT_MODEL_CONFIG in
-        // havc/install.py. The nominal default family seeds the turbo config
-        // (2026-10-11); the old model_name/model_precision pair is
-        // superseded and dropped from the expected shape as well.
-        template["model_config"] = model == "longcat-gguf" ? "longcat_gguf_q3" : "qwen21_turbo_int8";
+        // havc/install.py. The nominal default family seeds the viggle soft
+        // int8 config (2026-10-11: back from the interim turbo default); the
+        // old model_name/model_precision pair is superseded and dropped from
+        // the expected shape as well.
+        template["model_config"] = model switch
+        {
+            "longcat-gguf" => "longcat_gguf_q3",
+            "qwen21-turbo" => "qwen21_turbo_int8",
+            _ => "qwen21_viggle-soft_int8",
+        };
         template.Remove("model_name");
         template.Remove("model_precision");
     }

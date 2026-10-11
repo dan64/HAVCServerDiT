@@ -271,12 +271,13 @@ def legacy_model_config(cfg):
 def resolve_model_config(cfg, configs):
     """Pick the config to select: the saved value, else its equivalent from
     the old model_name/model_precision pair, else the shipped default
-    (qwen21_turbo_int8), else the historical qwen21_viggle, else the first
-    available config."""
+    (qwen21_viggle-soft_int8 -- more stable colors than the turbo family,
+    field-validated 2026-10-11), else the historical qwen21_viggle, else the
+    first available config."""
     for candidate in (cfg.get("model_config", ""), legacy_model_config(cfg)):
         if candidate in configs:
             return candidate
-    for default in ("qwen21_turbo_int8", "qwen21_viggle"):
+    for default in ("qwen21_viggle-soft_int8", "qwen21_viggle"):
         if default in configs:
             return default
     return configs[0] if configs else ""

@@ -103,7 +103,7 @@ The qwen21-viggle config is still one command away:
 
 `HAVC-Server.cmd` (the installer's console launcher) accepts the same kind
 of argument: `HAVC-Server.cmd qwen21` starts the shipped default config
-(`qwen21_turbo_int8.json`), any config name works as well, and with no
+(`qwen21_viggle-soft_int8.json`), any config name works as well, and with no
 argument it starts `int4`.
 
 > **GUI shortcut**: From the desktop GUI, go to Tab 2 (Colorization), pick a **Model Config**, and click **Run Server** — the GUI starts the server itself, with live output in the **Server Log** tab and auto-connect once it's ready (see [What's New, 2026-10-02](whats-new.md)). Tick **External console** first to instead open a plain terminal window running `start_server.cmd <config-name>` for the selected config.

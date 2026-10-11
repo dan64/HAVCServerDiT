@@ -133,18 +133,20 @@ CMNET2_DINOV2 = (
 )
 
 # Default model seeded into the GUI settings when the value is missing: the
-# --default-model value the manager passes (2026-10-11: the turbo family,
-# the current pick of the nominal default; `longcat-gguf` is the lighter
-# model it switches to below the RAM threshold).
-DEFAULT_MODEL_NAME = "qwen21-turbo"
+# --default-model value the manager passes (2026-10-11: back to the viggle
+# family -- the turbo family colors better but less stably, so the nominal
+# default is qwen21-viggle again; `longcat-gguf` is the lighter model it
+# switches to below the RAM threshold).
+DEFAULT_MODEL_NAME = "qwen21-viggle"
 
 # GUI "Model Config" (the config/ file stem, without .json) seeded/wired for
 # each --default-model value: the config folder is what selects the model.
-# Both names of the nominal default family map to the turbo config
-# (`qwen21-viggle` is the pre-2026-10-11 name, kept for older managers);
-# below the RAM threshold it seeds longcat-gguf Q3.
-DEFAULT_MODEL_CONFIG = {"qwen21-turbo": "qwen21_turbo_int8",
-                        "qwen21-viggle": "qwen21_turbo_int8",
+# The nominal default family seeds `qwen21_viggle-soft_int8` (the stable
+# pick of that family, 2026-10-11; the base `qwen21_viggle` stays one combo
+# entry away); `qwen21-turbo` seeds the turbo config (the interim one-day
+# default, kept working); below the RAM threshold it seeds longcat-gguf Q3.
+DEFAULT_MODEL_CONFIG = {"qwen21-viggle": "qwen21_viggle-soft_int8",
+                        "qwen21-turbo": "qwen21_turbo_int8",
                         "longcat-gguf": "longcat_gguf_q3"}
 
 
@@ -230,7 +232,7 @@ if /i "%WHICH%"=="q3"      set "CFG=qwen-2511_q3.json"
 if /i "%WHICH%"=="int8"    set "CFG=qwen-2511_int8.json"
 if /i "%WHICH%"=="longcat"  set "CFG=longcat_gguf_q4.json"
 if /i "%WHICH%"=="longcat3" set "CFG=longcat_gguf_q3.json"
-if /i "%WHICH%"=="qwen21"   set "CFG=qwen21_turbo_int8.json"
+if /i "%WHICH%"=="qwen21"   set "CFG=qwen21_viggle-soft_int8.json"
 rem The config folder is the source of truth: a matching config\<name>.json
 rem wins over the shortcuts above, so a new model only needs a new file there.
 if exist "%HERE%config\%WHICH%.json" set "CFG=%WHICH%.json"
@@ -300,12 +302,12 @@ if not exist "%PY%" (
     pause
     exit /b 1
 )
-rem HAVC DiT Server launcher for the qwen21 default (qwen21-turbo; single config,
-rem no argument). qwen21-viggle is still available through start_server.cmd.
-echo Starting HAVC DiT Server (qwen21-turbo) ...
+rem HAVC DiT Server launcher for the qwen21 default (qwen21_viggle-soft_int8;
+rem single config, no argument). Other qwen21 configs via start_server.cmd.
+echo Starting HAVC DiT Server (qwen21_viggle-soft_int8) ...
 rem strip the trailing backslash: a quoted path ending in \ would swallow the
 rem closing quote and merge the rest of the command line into the argument.
-"%PY%" -u "%HERE%dit_rpc_server.py" --host 127.0.0.1 --port 8765 --module-dir "%HERE:~0,-1%" --load-pipeline --pipeline-config "%HERE%config\qwen21_turbo_int8.json" --logfile "%HERE%dit_server.log"
+"%PY%" -u "%HERE%dit_rpc_server.py" --host 127.0.0.1 --port 8765 --module-dir "%HERE:~0,-1%" --load-pipeline --pipeline-config "%HERE%config\qwen21_viggle-soft_int8.json" --logfile "%HERE%dit_server.log"
 if %errorlevel% neq 0 (
     echo.
     echo [ERROR] Server exited with code %errorlevel%.

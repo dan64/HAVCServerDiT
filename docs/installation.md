@@ -331,7 +331,7 @@ dit-colorize-rpc/
 ├── install.cmd                  # Windows automated installer
 ├── start_server.cmd             # Windows launcher : server (nunchaku/gguf/longcat)
 ├── run_server_longcat.cmd       # Windows launcher : LongCat server
-├── run_server_qwen21.cmd        # Windows launcher : qwen21-turbo server (the default)
+├── run_server_qwen21.cmd        # Windows launcher : qwen21 default server (qwen21_viggle-soft_int8)
 ├── run_client_example.cmd       # Windows launcher : single frame example
 ├── run_client_pair_example.cmd  # Windows launcher : paired inference example
 ├── patch_nunchaku.cmd           # Windows launcher : nunchaku patch

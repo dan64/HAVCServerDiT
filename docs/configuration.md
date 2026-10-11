@@ -201,7 +201,7 @@ Differences from the default config above:
 > download size matters.
 
 > The GUI lists each file in **Model Config** by its file name (e.g.
-> `qwen21_viggle-soft_int8`), next to the shipped default `qwen21_turbo_int8`.
+> `qwen21_turbo_int8`), next to the shipped default `qwen21_viggle-soft_int8`.
 
 ### qwen21-turbo Backend : `config/qwen21_turbo_int8.json` & `qwen21_turbo-fast_int8.json`
 
@@ -212,8 +212,12 @@ for the paired-split flag:
 
 | Config file                    | Fast Pipeline mode                  |
 | ------------------------------ | ----------------------------------- |
-| `qwen21_turbo_int8.json`       | standard split (one frame per pass) — shipped default |
+| `qwen21_turbo_int8.json`       | standard split (one frame per pass) |
 | `qwen21_turbo-fast_int8.json`  | **paired split** (`fast_split_TE`)  |
+
+> Not the shipped default: the turbo family colors better than the viggle
+> family but less stably (field verdict 2026-10-11), so the default stayed on
+> `qwen21_viggle-soft_int8`. Both turbo configs ship for the manual pick.
 
 Same key set as `qwen21-viggle` minus the LoRA keys:
 

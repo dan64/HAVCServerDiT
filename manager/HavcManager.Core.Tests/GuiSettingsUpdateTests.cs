@@ -14,9 +14,9 @@ public class GuiSettingsUpdateTests
         {
             string template = Template();
             string wheel = WriteWheel(dir, template);
-            WriteInstalled(dir, WithInstallValues(template, dir, "qwen21-turbo"));
+            WriteInstalled(dir, WithInstallValues(template, dir, "qwen21-viggle"));
 
-            Assert.False(GuiSettingsUpdate.Differs(wheel, dir, "qwen21-turbo"));
+            Assert.False(GuiSettingsUpdate.Differs(wheel, dir, "qwen21-viggle"));
         }
         finally
         {
@@ -32,11 +32,11 @@ public class GuiSettingsUpdateTests
         {
             string template = Template();
             string wheel = WriteWheel(dir, template);
-            JsonObject installed = Parse(WithInstallValues(template, dir, "qwen21-turbo"));
+            JsonObject installed = Parse(WithInstallValues(template, dir, "qwen21-viggle"));
             installed["fix_steps"] = "4";
             WriteInstalled(dir, installed.ToJsonString());
 
-            Assert.True(GuiSettingsUpdate.Differs(wheel, dir, "qwen21-turbo"));
+            Assert.True(GuiSettingsUpdate.Differs(wheel, dir, "qwen21-viggle"));
         }
         finally
         {
@@ -53,7 +53,7 @@ public class GuiSettingsUpdateTests
         {
             string wheel = WriteWheel(dir, Template());
 
-            Assert.False(GuiSettingsUpdate.Differs(wheel, dir, "qwen21-turbo"));
+            Assert.False(GuiSettingsUpdate.Differs(wheel, dir, "qwen21-viggle"));
         }
         finally
         {
@@ -70,7 +70,7 @@ public class GuiSettingsUpdateTests
             string wheel = WriteWheel(dir, Template());
             WriteInstalled(dir, "{ not json");
 
-            Assert.True(GuiSettingsUpdate.Differs(wheel, dir, "qwen21-turbo"));
+            Assert.True(GuiSettingsUpdate.Differs(wheel, dir, "qwen21-viggle"));
         }
         finally
         {
@@ -86,11 +86,11 @@ public class GuiSettingsUpdateTests
         {
             string template = Template();
             string wheel = WriteWheel(dir, template);
-            JsonObject installed = Parse(WithInstallValues(template, dir, "qwen21-turbo"));
+            JsonObject installed = Parse(WithInstallValues(template, dir, "qwen21-viggle"));
             installed["base_dir"] = @"C:\old\work";
             WriteInstalled(dir, installed.ToJsonString());
 
-            Assert.True(GuiSettingsUpdate.Differs(wheel, dir, "qwen21-turbo"));
+            Assert.True(GuiSettingsUpdate.Differs(wheel, dir, "qwen21-viggle"));
         }
         finally
         {
@@ -109,7 +109,7 @@ public class GuiSettingsUpdateTests
             WriteInstalled(dir, WithInstallValues(template, dir, "longcat-gguf"));
 
             Assert.False(GuiSettingsUpdate.Differs(wheel, dir, "longcat-gguf"));
-            Assert.True(GuiSettingsUpdate.Differs(wheel, dir, "qwen21-turbo"));
+            Assert.True(GuiSettingsUpdate.Differs(wheel, dir, "qwen21-viggle"));
         }
         finally
         {
@@ -128,13 +128,13 @@ public class GuiSettingsUpdateTests
         {
             string template = Template();
             string wheel = WriteWheel(dir, template);
-            JsonObject installed = Parse(WithInstallValues(template, dir, "qwen21-turbo"));
+            JsonObject installed = Parse(WithInstallValues(template, dir, "qwen21-viggle"));
             installed.Remove("model_config");
             installed["model_name"] = "nunchaku-qwen";
             installed["model_precision"] = "fp4";
             WriteInstalled(dir, installed.ToJsonString());
 
-            Assert.True(GuiSettingsUpdate.Differs(wheel, dir, "qwen21-turbo"));
+            Assert.True(GuiSettingsUpdate.Differs(wheel, dir, "qwen21-viggle"));
         }
         finally
         {
@@ -145,7 +145,7 @@ public class GuiSettingsUpdateTests
     private static string Template() =>
         "{\"script_dir\": \"\", \"vspipe_path\": \"\", \"x265_path\": \"\", " +
         "\"mkv_path\": \"\", \"base_dir\": \"\", \"fixv_base_dir\": \"\", " +
-        "\"model_config\": \"qwen21_turbo_int8\", " +
+        "\"model_config\": \"qwen21_viggle-soft_int8\", " +
         "\"fix_steps\": \"2\", \"window_w\": 926, \"window_h\": 814}";
 
     private static JsonObject Parse(string json) => JsonNode.Parse(json)!.AsObject();
@@ -161,7 +161,12 @@ public class GuiSettingsUpdateTests
         node["mkv_path"] = Path.Combine(installDir, "tools", "MKVToolNix", "mkvmerge.exe");
         node["base_dir"] = samples;
         node["fixv_base_dir"] = samples;
-        node["model_config"] = model == "longcat-gguf" ? "longcat_gguf_q3" : "qwen21_turbo_int8";
+        node["model_config"] = model switch
+        {
+            "longcat-gguf" => "longcat_gguf_q3",
+            "qwen21-turbo" => "qwen21_turbo_int8",
+            _ => "qwen21_viggle-soft_int8",
+        };
         return node.ToJsonString();
     }
 

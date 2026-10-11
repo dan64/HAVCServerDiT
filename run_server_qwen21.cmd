@@ -1,14 +1,14 @@
 @echo off
 :: =============================================================================
 :: run_server_qwen21.cmd   :   HAVC DiT Server launcher for the qwen21 default
-::                             (qwen21-turbo)
+::                             (qwen21_viggle-soft_int8)
 ::
 :: Usage:
-::   run_server_qwen21.cmd    -> loads the Qwen-Image-2.1-Turbo config
+::   run_server_qwen21.cmd    -> loads the Qwen-Image-2.1 + Viggle-Turbo config
 ::
-:: Single-config backend (config\qwen21_turbo_int8.json) - no quant/precision
-:: argument, unlike start_server.cmd. The qwen21-viggle config is still
-:: available: start_server.cmd qwen21_viggle
+:: Single-config backend (config\qwen21_viggle-soft_int8.json) - no
+:: quant/precision argument, unlike start_server.cmd. Other qwen21 configs are
+:: still available: start_server.cmd qwen21_turbo_int8 / qwen21_viggle / ...
 ::
 :: Edit the USER CONFIGURATION block below before first use.
 :: =============================================================================
@@ -39,8 +39,8 @@ set LOGFILE=
 :: ---------------------------------------------------------------------------
 :: BACKEND / CONFIG  :  fixed, single config (no argument needed)
 :: ---------------------------------------------------------------------------
-set CONFIG_FILE=config\qwen21_turbo_int8.json
-set BACKEND=Qwen-Image-2.1-Turbo int8 ConvRot
+set CONFIG_FILE=config\qwen21_viggle-soft_int8.json
+set BACKEND=Qwen-Image-2.1 + Viggle-Turbo soft int8 ConvRot
 
 :: ---------------------------------------------------------------------------
 :: RESOLVE PATHS

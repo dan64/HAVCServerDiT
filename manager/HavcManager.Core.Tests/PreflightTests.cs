@@ -16,13 +16,13 @@ public class PreflightTests
     [Fact]
     public void DecideDefaultModel_keeps_qwen21_at_or_above_32_gb()
     {
-        Assert.Equal("qwen21-turbo", DecideDefaultModel(32 * GiB));
-        Assert.Equal("qwen21-turbo", DecideDefaultModel(128 * GiB));
+        Assert.Equal("qwen21-viggle", DecideDefaultModel(32 * GiB));
+        Assert.Equal("qwen21-viggle", DecideDefaultModel(128 * GiB));
     }
 
     [Fact]
     public void DecideDefaultModel_keeps_qwen21_when_ram_is_unknown()
     {
-        Assert.Equal("qwen21-turbo", DecideDefaultModel(null));
+        Assert.Equal("qwen21-viggle", DecideDefaultModel(null));
     }
 }

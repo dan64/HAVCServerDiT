@@ -17,8 +17,12 @@
     "fix_enhance_prompt": false,
     "fix_prompt_max": "30",
     "fix_prompts": [
-        "color this image, natural colors.",
-        "Add colors to this black-and-white image, not to hedge about what colors might be present. For any subject, garment, object, or setting whose color is a matter of common knowledge or strong convention, assign the expected color directly and confidently. Colorize this image using natural colors. Strictly preserve all shapes, edges and background details.\n"
+        "Color this image, natural colors.",
+        "Add color to this black-and-white image without hesitation regarding the appropriate colors. For any subject, garment, object, or setting where the color is common knowledge or established by convention, confidently apply the expected color; otherwise use natural colors. Color the image by strictly preserving all shapes, outlines, and background details.",
+        "Add colors to this black-and-white image, not to hedge about what colors might be present. For any subject, garment, object, or setting whose color is a matter of common knowledge or strong convention, assign the expected color directly and confidently. Colorize this image using natural colors. Strictly preserve all shapes, edges and background details.",
+        "Color this image with realistic, vibrant colors while preserving skin tones. Strictly preserve all shapes, edges and background details.",
+        "Colorize the image to restore its original color, preserving the texture while maintaining the background details exactly as they appear in the input image.",
+        "Colorize this image, natural colors. Strictly preserve all shapes, edges and background details."
     ],
     "fixv_base_dir": "C:/HAVCServerDiT/GUI/samples",
     "fixv_video": "",
@@ -36,7 +40,7 @@
     "fixc_backbone": "dinov3",
     "mkv_path": "C:\\HAVCServerDiT\\tools\\MKVToolNix\\mkvmerge.exe",
     "hf_cache": "",
-    "prompt": "Add colors to this black-and-white image, not to hedge about what colors might be present. For any subject, garment, object, or setting whose color is a matter of common knowledge or strong convention, assign the expected color directly and confidently. Colorize this image using natural colors. Strictly preserve all shapes, edges and background details.",
+    "prompt": "Add color to this black-and-white image without hesitation regarding the appropriate colors. For any subject, garment, object, or setting where the color is common knowledge or established by convention, confidently apply the expected color; otherwise use natural colors. Color the image by strictly preserving all shapes, outlines, and background details.",
     "shutdown_on_complete": false,
     "dupe_first_frame": false,
     "do_step1": false,

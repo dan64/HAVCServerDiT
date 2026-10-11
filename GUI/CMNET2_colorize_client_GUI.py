@@ -1394,8 +1394,16 @@ def orchestrator(init_values, window):
                 if not res.get("ok"):
                     log_message(f"⚠️ TE cache cleanup failed: {res.get('msg')}")
                 else:
+                    removed = res.get("count", 0)
+                    # the chunk's own cache is one file per frame: anything
+                    # removed beyond that was left behind by an interrupted
+                    # run (its cache is kept on purpose) and is dropped only
+                    # now, with this chunk
+                    extra = removed - len(chunk)
+                    note = (f" ({extra} left over from an interrupted run)"
+                            if extra > 0 else "")
                     log_message(f"🧹 Chunk {chunk_idx + 1}/{len(chunks)}: "
-                                f"{res.get('count', 0)} TE cache file(s) removed.")
+                                f"{removed} TE cache file(s) removed{note}.")
         except Exception as e:
             log_message(f"Error during split colorize: {e}")
 
@@ -1642,8 +1650,16 @@ def orchestrator(init_values, window):
                 if not res.get("ok"):
                     log_message(f"⚠️ TE cache cleanup failed: {res.get('msg')}")
                 else:
+                    removed = res.get("count", 0)
+                    # the chunk's own cache is one file per unit (pair or
+                    # trailing frame): anything removed beyond that was left
+                    # behind by an interrupted run (its cache is kept on
+                    # purpose) and is dropped only now, with this chunk
+                    extra = removed - len(chunk)
+                    note = (f" ({extra} left over from an interrupted run)"
+                            if extra > 0 else "")
                     log_message(f"🧹 Chunk {chunk_idx + 1}/{len(chunks)}: "
-                                f"{res.get('count', 0)} TE cache file(s) removed.")
+                                f"{removed} TE cache file(s) removed{note}.")
         except Exception as e:
             log_message(f"Error during paired split colorize: {e}")
 
@@ -1841,8 +1857,16 @@ def orchestrator(init_values, window):
                 if not res.get("ok"):
                     log_message(f"⚠️ TE cache cleanup failed: {res.get('msg')}")
                 else:
+                    removed = res.get("count", 0)
+                    # the chunk's own cache is one file per frame: anything
+                    # removed beyond that was left behind by an interrupted
+                    # run (its cache is kept on purpose) and is dropped only
+                    # now, with this chunk
+                    extra = removed - len(chunk)
+                    note = (f" ({extra} left over from an interrupted run)"
+                            if extra > 0 else "")
                     log_message(f"🧹 Chunk {chunk_idx + 1}/{len(chunks)}: "
-                                f"{res.get('count', 0)} edit cache file(s) removed.")
+                                f"{removed} edit cache file(s) removed{note}.")
         except Exception as e:
             log_message(f"Error during split colorize: {e}")
 

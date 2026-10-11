@@ -305,7 +305,8 @@ def load_edit_conditioning(path):
     return {"conditioning": conditioning, "latent": latent_dict, "meta": meta}
 
 
-def load_viggle_pipeline(unet_path, clip_path, vae_name="qwen_image_2.1_vae_bf16.safetensors", lora_path=None, clip_mmproj=None):
+def load_viggle_pipeline(unet_path, clip_path, vae_name="qwen_image_2.1_vae_bf16.safetensors", lora_path=None, clip_mmproj=None,
+                         fix_qwen21_enabled=None):
     """Load Qwen-Image-2.1 (native ComfyUI int8 ConvRot or GGUF-quantized).
 
     The Viggle-Turbo LoRA is applied as an unmerged runtime hook when
@@ -320,6 +321,11 @@ def load_viggle_pipeline(unet_path, clip_path, vae_name="qwen_image_2.1_vae_bf16
     (ComfyUI-GGUF-Reboot, filename-containment heuristic)
     from the same folder as clip_path; clip_mmproj isn't consumed here, it
     only exists upstream to drive the mmproj auto-download.
+
+    fix_qwen21_enabled (optional) selects the Reboot implementation used for
+    a GGUF clip: True = the v26-10-11 code, False = the pre-update copy
+    (ComfyUI-GGUF-Reboot.havc_flags; None falls back to the HAVC_FIX_QWEN21
+    env variable, then the module default). Inert on the safetensors path.
     """
     import importlib
     ViggleTurboLora = importlib.import_module("viggle_turbo").ViggleTurboLora
@@ -354,8 +360,11 @@ def load_viggle_pipeline(unet_path, clip_path, vae_name="qwen_image_2.1_vae_bf16
 
     logger.info("Loading CLIP: %s", clip_name)
     if clip_path.lower().endswith(".gguf"):
-        _reboot_loader = importlib.import_module("ComfyUI-GGUF-Reboot.loader")
-        _reboot_ops = importlib.import_module("ComfyUI-GGUF-Reboot.ops")
+        _reboot_flags = importlib.import_module("ComfyUI-GGUF-Reboot.havc_flags")
+        _reboot_loader, _reboot_ops = _reboot_flags.reboot_modules(fix_qwen21_enabled)
+        logger.info("Reboot implementation: %s", "v26-10-11"
+                    if _reboot_flags.resolve_fix_qwen21(fix_qwen21_enabled)
+                    else "legacy (pre-v26-10-11)")
         import comfy.sd
         import comfy.model_management
         import folder_paths

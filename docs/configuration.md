@@ -281,6 +281,26 @@ resolutions.
 > most neutral/coolest and `1536` the warmest), so tune it against your own
 > material — sample sheets in `dist/turbo_bench/`.
 
+#### Reboot implementation switch (`fix_qwen21_enabled`)
+
+`"fix_qwen21_enabled"` (default `true`) picks which implementation of the
+vendored `ComfyUI-GGUF-Reboot` modules loads a **GGUF text encoder**
+(`clip_name` / `clip_gguf` ending in `.gguf`) for the qwen21 families:
+
+- `true` — the v26-10-11 code: a hyphenated `Qwen3-VL-...` encoder finds its
+  non-hyphenated `Qwen3VL-...` mmproj sidecar, and ambiguous matches fail
+  loudly instead of picking a file.
+- `false` — the previous copy (v26-09-04+6, 48de657), exactly as it was:
+  the same mixed naming silently loads a text-only model (no vision tower),
+  and an ambiguous mmproj is picked silently.
+
+The key is ignored by every path that does not load a GGUF text encoder
+through Reboot (e.g. the native safetensors / int8-ConvRot encoders). The
+`HAVC_FIX_QWEN21` environment variable (`1`/`true`/`on`/`yes` or
+`0`/`false`/`off`/`no`) forces the choice for a whole process; an explicit
+config value wins over the variable. The flag is read at every pipeline
+load, so switching it does not require a server restart.
+
 ### Key reference
 
 | Key                                       | Required | Description                                                                                  |
@@ -302,3 +322,4 @@ resolutions.
 | `hf_*`                                    |          | **GGUF / qwen21-viggle / qwen21-turbo**: HuggingFace repo names for auto-download                        |
 | `fast_split_TE`                           |          | **Split-TE families** (`qwen21-viggle` / `qwen21-turbo` / `gguf-qwen`): `true` (or `"on"`/`"1"`/`"yes"`) makes the Fast Pipeline pair consecutive frames -- merged before the text encoder, split back after the transformer. Default off |
 | `split_TE_resolution`                     |          | **qwen21-viggle / qwen21-turbo**: area budget of the split-TE flow (default `1024`; per frame in the single flow, per merged canvas in the paired one). Clamped to 256–2048, snapped to 32 |
+| `fix_qwen21_enabled`                      |          | **qwen21-viggle / qwen21-turbo, GGUF text encoder only**: `false` loads the previous `ComfyUI-GGUF-Reboot` implementation (pre-v26-10-11) instead of the updated one. Default `true` (see the section above) |

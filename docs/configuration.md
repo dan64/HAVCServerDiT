@@ -281,24 +281,112 @@ resolutions.
 > most neutral/coolest and `1536` the warmest), so tune it against your own
 > material — sample sheets in `dist/turbo_bench/`.
 
+### FLUX.2-dev Backend : `config/flux2_dev_*.json`
+
+The FLUX.2-dev family (Black Forest Labs) uses the same key names as the
+qwen21 line (`unet_name`/`clip_name`, which the server normalizes into its
+generic slots), plus three keys of its own: **`guidance`** (the FluxGuidance
+value of the reference workflow, default `4.0`), **`vram_headroom`** (GB of
+VRAM aimdo's DynamicVRAM must keep free — see below) and the family's
+`*_hf_name` download-path overrides. The text encoder is the Mistral-3 small
+safetensors — a `.gguf` here is rejected with an explicit message (no GGUF
+repack of it exists) — and the VAE defaults to the **FLUX.2 small decoder**.
+
+Four configs ship; all set `steps: 2` (the Turbo LoRA's distilled count),
+`guidance: 4.0` and the **paired split** (`fast_split_TE: true`); they differ
+in the UNet only. Example (`config/flux2_dev_int4.json`):
+
+```json
+{
+    "model_name":          "flux2",
+    "unet_name":           "models/diffusion_models/flux2-dev-int4_convrot.safetensors",
+    "unet_hf_name":        "flux2-dev-int4_convrot.safetensors",
+    "clip_name":           "models/text_encoders/mistral_3_small_flux2_fp4_mixed.safetensors",
+    "vae_name":            "flux2_encoder_small_decoder.safetensors",
+    "vae_hf_name":         "full_encoder_small_decoder.safetensors",
+    "lora_path":           "models/loras/Flux2TurboComfyv2.safetensors",
+    "steps":               2,
+    "guidance":            4.0,
+    "vram_headroom":       3,
+    "fast_split_TE":       true,
+    "split_TE_resolution": 1024,
+    "hf_unet":             "Winnougan/INT4-Convrot-Comfy-Models",
+    "hf_clip":             "Comfy-Org/flux2-dev",
+    "hf_vae":              "black-forest-labs/FLUX.2-small-decoder",
+    "hf_lora":             "Comfy-Org/flux2-dev"
+}
+```
+
+| Config file        | UNet                              | Size    |
+| ------------------ | --------------------------------- | ------- |
+| `flux2_dev_int4`   | int4 ConvRot `.safetensors`       | 18.3 GB |
+| `flux2_dev_fp8`    | fp8-mixed `.safetensors`          | 33 GB   |
+| `flux2_dev_q3`     | GGUF `Q3_K_M`                     | 15.8 GB |
+| `flux2_dev_q2`     | GGUF `Q2_K`                       | 12.9 GB |
+
+> **`unet_hf_name`** matters for the int4 config: the community repack keeps
+> the checkpoint at the **repo root**, while the loader's default download
+> path is the Comfy-Org-style `diffusion_models/<filename>`. **`vae_hf_name`**
+> does the same for the VAE: the BFL repo calls the file
+> `full_encoder_small_decoder.safetensors`, while it lands on disk as
+> `flux2_encoder_small_decoder.safetensors`. It is one file holding **both**
+> halves — hence the repo name — whose encoder is bit-identical to the full
+> `flux2-vae`'s, so phase A and any conditioning cache already on disk stay
+> valid; only the decoder is smaller and ~1.55× faster (see
+> [What's New](whats-new.md) and [Backends](backends.md)).
+
+#### `vram_headroom` : VRAM reserved for nothing, to keep streaming even
+
+`"vram_headroom": N` (GB, float, default `0`) is the amount of VRAM aimdo's
+DynamicVRAM keeps **free and unused on purpose** — the same figure as
+ComfyUI's `--vram-headroom`. It exists for checkpoints that *almost* fit the
+card: without it aimdo fills the VRAM to the brim, leaves nothing for the
+activations, and the per-frame time swings wildly; with it the weights stream
+evenly and the cost becomes repeatable (and, on the measured 16 GB card,
+*faster* than the marginal regime).
+
+It only pays off for the **int4 flux2 checkpoint**, so only
+`flux2_dev_int4.json` sets it. Recommended value by VRAM size:
+
+| VRAM    | `vram_headroom` |
+| ------- | --------------- |
+| 12 GB   | `0` — the checkpoint cannot fill the card anyway: nothing to correct      |
+| 16 GB   | `3` — the measured sweet spot (4 GB is equivalent, 8 GB costs ~7%)       |
+| 24 GB+  | `0` — the checkpoint fits; a reservation would only push part of it out   |
+
+> Every other flux2 config, and every other backend, should leave the key
+> unset (`0`): on the 33 GB fp8 checkpoint a reservation measurably costs
+> ~2% and buys nothing (it *cannot* fill the card in the first place).
+>
+> The value is applied **once**, when the first model is loaded
+> (`init_devices` is one-shot), so it is a per-server setting — switching
+> config means restarting the server, which is the normal workflow. The
+> winning value and its source are logged at startup:
+> `DynamicVRAM: extra VRAM headroom 3.00 GB (config vram_headroom)`. The
+> environment variable `HAVC_VRAM_HEADROOM` overrides the config (used for
+> A/B tests; `0` cancels the config's value).
+
 ### Key reference
 
 | Key                                       | Required | Description                                                                                  |
 | ----------------------------------------- | -------- | -------------------------------------------------------------------------------------------- |
-| `model_name`                              | ✅        | `"nunchaku-qwen"`, `"gguf-qwen"`, `"longcat-gguf"`, `"qwen21-viggle"`, or `"qwen21-turbo"`                     |
+| `model_name`                              | ✅        | `"nunchaku-qwen"`, `"gguf-qwen"`, `"longcat-gguf"`, `"qwen21-viggle"`, `"qwen21-turbo"` or `"flux2"`                     |
 | `quant`                                   |          | **GGUF only**: quantization level (`"q3"`, `"q4"`, `"q5"`, `"q6"`, `"q8"`). Default: `"q4"`  |
 | `model_precision`                         | ✅        | **Nunchaku**: `"fp4"` (RTX 50) or `"int4"` (RTX 30/40). **GGUF/qwen21-viggle**: not used     |
 | `unet_gguf` / `clip_gguf`                 | ✅        | **GGUF only**: local paths to the GGUF model files                                           |
-| `unet_name` / `clip_name`                 | ✅        | **qwen21-viggle / qwen21-turbo**: local paths to the model files — `unet_name` can be `.safetensors` or `.gguf` (GGUF quants load through the same ComfyUI-GGUF recipe as the gguf backends), `clip_name` can be `.safetensors` or `.gguf` |
+| `unet_name` / `clip_name`                 | ✅        | **qwen21-viggle / qwen21-turbo / flux2**: local paths to the model files — `unet_name` can be `.safetensors` or `.gguf` (GGUF quants load through the same ComfyUI-GGUF recipe as the gguf backends), `clip_name` can be `.safetensors` or `.gguf` (flux2: safetensors only, the Mistral-3 encoder) |
 | `clip_mmproj` / `clip_mmproj_hf_name`     |          | **GGUF/qwen21-viggle-with-GGUF-CLIP**: local path to the mmproj (vision tower) file / its filename on HuggingFace if different from the local one. Required for a GGUF CLIP to see images at all — without it the vision tower silently isn't loaded |
-| `unet_hf_name`                            |          | **qwen21-viggle / qwen21-turbo**: UNet filename on HuggingFace when it differs from the default download path (`diffusion_models/<local filename>`, the Comfy-Org layout) — e.g. merged checkpoints kept at the repo root. Only used by auto-download |
+| `unet_hf_name`                            |          | **qwen21-viggle / qwen21-turbo / flux2**: UNet filename on HuggingFace when it differs from the default download path (`diffusion_models/<local filename>`, the Comfy-Org layout) — e.g. merged checkpoints kept at the repo root, like the flux2 int4 repack. Only used by auto-download |
 | `model_rank`                              |          | **Nunchaku**: SVD rank (`"32"`). **GGUF/qwen21-viggle**: not used                            |
 | `model_inference_steps`                   |          | **Nunchaku**: diffusion steps (`"4"`). **GGUF/qwen21-viggle**: not used at load time          |
 | `cache_dir`                               |          | HuggingFace cache directory. Leave empty to use the default `~/.cache/huggingface`           |
 | `full_model_path`                         |          | **Nunchaku**: local path to the transformer checkpoint. **GGUF**: not used                   |
-| `lora_path`                               |          | **GGUF/qwen21-viggle**: path to the LoRA (`.safetensors`). Omit (or empty) to skip LoRA merging — e.g. GGUF, or a qwen21-viggle checkpoint with the LoRA already merged in |
-| `steps`                                   |          | **GGUF**: inference steps (`4` with LoRA, `20` without). **qwen21-viggle**: documents the native step count only, not consumed at load time. **qwen21-turbo**: fixed at 8 by the checkpoint's own schedule |
-| `vae_name`                                |          | **GGUF / qwen21-viggle / qwen21-turbo**: VAE filename                                                    |
-| `hf_*`                                    |          | **GGUF / qwen21-viggle / qwen21-turbo**: HuggingFace repo names for auto-download                        |
-| `fast_split_TE`                           |          | **Split-TE families** (`qwen21-viggle` / `qwen21-turbo` / `gguf-qwen`): `true` (or `"on"`/`"1"`/`"yes"`) makes the Fast Pipeline pair consecutive frames -- merged before the text encoder, split back after the transformer. Default off |
-| `split_TE_resolution`                     |          | **qwen21-viggle / qwen21-turbo**: area budget of the split-TE flow (default `1024`; per frame in the single flow, per merged canvas in the paired one). Clamped to 256–2048, snapped to 32 |
+| `clip_hf_name` / `vae_hf_name` / `lora_hf_name` |    | **flux2**: same idea as `unet_hf_name` for the text encoder, the VAE and the LoRA (`vae_hf_name` maps the local `flux2_encoder_small_decoder.safetensors` onto BFL's `full_encoder_small_decoder.safetensors`). Only used by auto-download |
+| `guidance`                                |          | **flux2**: the FluxGuidance value of the reference workflow (default `4.0`), baked into the cached conditioning of the split flow |
+| `vram_headroom`                           |          | **aimdo-backed backends** (gguf-qwen / qwen21-viggle / qwen21-turbo / flux2): GB of VRAM DynamicVRAM keeps free and unused (default `0`). Set to `3` only in `flux2_dev_int4` — see the section above; for the other backends a reservation only costs speed |
+| `lora_path`                               |          | **GGUF/qwen21-viggle/flux2**: path to the LoRA (`.safetensors`). Omit (or empty) to skip LoRA merging — e.g. GGUF, or a qwen21-viggle checkpoint with the LoRA already merged in |
+| `steps`                                   |          | **GGUF**: inference steps (`4` with LoRA, `20` without). **qwen21-viggle**: documents the native step count only, not consumed at load time. **qwen21-turbo**: fixed at 8 by the checkpoint's own schedule. **flux2**: documents the Turbo LoRA's distilled count (`2`) |
+| `vae_name`                                |          | **GGUF / qwen21-viggle / qwen21-turbo / flux2**: VAE filename (flux2 default: the small decoder)                                                    |
+| `hf_*`                                    |          | **GGUF / qwen21-viggle / qwen21-turbo / flux2**: HuggingFace repo names for auto-download                        |
+| `fast_split_TE`                           |          | **Split-TE families** (`qwen21-viggle` / `qwen21-turbo` / `gguf-qwen` / `flux2`): `true` (or `"on"`/`"1"`/`"yes"`) makes the Fast Pipeline pair consecutive frames -- merged before the text encoder, split back after the transformer. Default off; all four flux2 configs ship it on |
+| `split_TE_resolution`                     |          | **qwen21-viggle / qwen21-turbo / flux2**: area budget of the split-TE flow (default `1024`; per frame in the single flow, per merged canvas in the paired one). Clamped to 256–2048, snapped to 32 |

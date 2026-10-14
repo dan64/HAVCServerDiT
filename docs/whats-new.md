@@ -1,5 +1,60 @@
 # What's New
 
+### 2026-10-14 — FLUX.2-dev family added (flux2); `vram_headroom` for the int4 checkpoint
+
+A sixth backend joins the stack: **`flux2`** — **FLUX.2-dev** (Black Forest
+Labs) with the **Mistral-3 small** text encoder, the **FLUX.2 small-decoder**
+VAE and the **Flux.2 Turbo LoRA**. Requirements: **16 GB+ VRAM, 64 GB+ RAM**.
+The text encoder is prompt-only — the B&W frame reaches the transformer as a
+VAE reference latent — so the family runs on the cached-TE split like the
+qwen21 line, with the **paired split** (`fast_split_TE`) on in every shipped
+config: one sampling pass and one VAE encode per two frames.
+
+Four configs ship (`steps: 2`, `guidance: 4.0`):
+
+| Config                       | UNet                        | Size    |
+| ---------------------------- | --------------------------- | ------- |
+| **`flux2_dev_int4`**         | int4 ConvRot `.safetensors` | 18.3 GB |
+| `flux2_dev_fp8`              | fp8-mixed `.safetensors`    | 33 GB   |
+| `flux2_dev_q3`               | GGUF `Q3_K_M`               | 15.8 GB |
+| `flux2_dev_q2`               | GGUF `Q2_K`                 | 12.9 GB |
+
+> **Measured** (RTX 5070 Ti 16 GB, pairs, 2 steps, 1024 budget, warm-up
+excluded): **int4 → ~4.0 s/frame** steady (3.98–4.09 s/frame across three
+runs), **fp8 → ~5.5 s/frame**, **Q2_K → ~9.3 s/frame**. The GGUF quants are
+light but slow (the GGUF branch still runs on the legacy patcher, without
+the DynamicVRAM staging or native kernels) — pick them only when the
+download size rules out the others. The int4 and fp8 figures are ~1.35×
+apart in the int4's favour, at the same stability.
+
+**`vram_headroom`** (new config key, default `0`): the GB of VRAM aimdo's
+DynamicVRAM keeps free and unused on purpose — the same figure as ComfyUI's
+`--vram-headroom`. It exists for a checkpoint that *almost* fits the card:
+without it aimdo fills the VRAM to the brim, leaves nothing for the
+activations, and the per-frame time becomes a lottery (measured 6.8 up to
+49.9 s/unit); with it the weights stream evenly and the cost is repeatable —
+and *lower* than the marginal regime. Only `flux2_dev_int4.json` sets it:
+
+- **`"vram_headroom": 3` on a 16 GB card** — the measured sweet spot; 4 GB is
+equivalent, 8 GB costs ~7% more.
+- **`0` on 12 GB** — the checkpoint cannot fill the card anyway: nothing to
+correct.
+- **`0` on 24 GB+** — the checkpoint fits; a reservation would only push part
+of it out.
+
+Every other backend should leave the key at `0` (on the fp8 checkpoint a
+reservation measurably costs ~2% and buys nothing). The value is applied once
+per server process, at the first model load — changing config means
+restarting the server, the normal workflow — and the log states the value and
+its source: `DynamicVRAM: extra VRAM headroom 3.00 GB (config vram_headroom)`.
+
+**Small-decoder VAE (family default)**: the shipped configs use BFL's
+`FLUX.2-small-decoder` instead of the full `flux2-vae` — identical encode
+(the conditioning caches remain valid), ~1.55× faster decode (PSNR 42.1 dB
+against the full VAE). `vae_hf_name` maps the local filename onto the BFL
+repo's own. See [Backends](backends.md#flux2--40-secframe-paired-flux2-dev-int4-convrot-55-fp8-mixed--flux-family-colors)
+and [Pipeline Configuration](configuration.md).
+
 ### 2026-10-11 — qwen21-turbo family added; the default stays qwen21-viggle at 2 steps (field verdict)
 
 A new family joins the Qwen-Image-2.1 line: **`qwen21-turbo`** —

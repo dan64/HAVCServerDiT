@@ -228,8 +228,8 @@ pip install \
 > 
 > `scipy`, `av`, and `torchsde` are required by the diffusers pipeline.
 > `gguf`, `comfy-aimdo`, and `comfy-kitchen` are required by the GGUF backends
-> (`gguf-qwen`/`longcat-gguf`) and by `qwen21-viggle`. The pinned versions
-> here (`0.5.5`/`0.2.35`) are required specifically for `qwen21-viggle` —
+> (`gguf-qwen`/`longcat-gguf`), by `qwen21-viggle` and by `flux2`. The pinned
+> versions here (`0.5.5`/`0.2.35`) are required specifically for `qwen21-viggle` —
 > exact pins, not just a minimum, to avoid drifting to an untested newer
 > build of these compiled packages.
 
@@ -326,8 +326,8 @@ dit-colorize-rpc/
 ├── dit_client_example.py        # Example RPC client : single frame
 ├── dit_client_pair_example.py   # Example RPC client : paired inference
 ├── patch_nunchaku.py            # Compatibility patch for nunchaku 1.2.1
-├── config/                      # Pipeline configs (nunchaku FP4/INT4, gguf/longcat Q3–Q8, qwen21-viggle, qwen21-turbo)
-├── comfy_bridge/                # Self-contained ComfyUI runtime (gguf-qwen/longcat-gguf/qwen21-viggle/qwen21-turbo)
+├── config/                      # Pipeline configs (nunchaku FP4/INT4, gguf/longcat Q3–Q8, qwen21-viggle, qwen21-turbo, flux2)
+├── comfy_bridge/                # Self-contained ComfyUI runtime (gguf-qwen/longcat-gguf/qwen21-viggle/qwen21-turbo/flux2)
 ├── install.cmd                  # Windows automated installer
 ├── start_server.cmd             # Windows launcher : server (nunchaku/gguf/longcat)
 ├── run_server_longcat.cmd       # Windows launcher : LongCat server

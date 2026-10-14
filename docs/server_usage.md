@@ -24,6 +24,9 @@ python dit_rpc_server.py --load-pipeline --pipeline-config config/qwen_nunchaku_
 
 # Qwen-Image-Edit 2511 (native int8 ConvRot recommended; GGUF Q3_K_S for 12 GB GPUs)
 python dit_rpc_server.py --load-pipeline --pipeline-config config/qwen-2511_int8.json
+
+# FLUX.2-dev (int4 ConvRot on 16 GB; see the vram_headroom note in docs/backends.md)
+python dit_rpc_server.py --load-pipeline --pipeline-config config/flux2_dev_int4.json
 ```
 
 On Windows you can also use the provided `start_server.cmd` (see [Windows launch script](#-windows-launch-script)).
@@ -74,6 +77,16 @@ If no argument is passed it defaults to `int8` (Qwen-Image-Edit 2511 int8 ConvRo
 start_server.cmd int4
 ```
 
+The FLUX.2-dev family has no shortcut alias (the shortcuts above are
+historical); select its configs by name:
+
+```
+start_server.cmd flux2_dev_int4    # FLUX.2-dev int4 ConvRot, 16 GB (recommended)
+start_server.cmd flux2_dev_fp8     # FLUX.2-dev fp8-mixed, 33 GB streamed
+start_server.cmd flux2_dev_q3      # FLUX.2-dev GGUF Q3_K_M
+start_server.cmd flux2_dev_q2      # FLUX.2-dev GGUF Q2_K
+```
+
 Any file in the `config/` folder can also be selected directly by its name
 (a name matching a file there wins over the shortcuts above):
 
@@ -119,6 +132,7 @@ argument it starts `int4`.
 | LongCat (longcat-gguf)   | **8**             | Calibrated for 8 steps; best quality at 8 steps; 4 steps possible but colors are faded |
 | Qwen-Image-2.1 (qwen21-viggle) | **6**       | LoRA step schedules: `2`/`4`/`6`/`8` — `6` (the LoRA's native step count) gives the most accurate colors, `2` is the fastest |
 | Qwen-Image-2.1-Turbo (qwen21-turbo) | **8**  | Fixed by the checkpoint's own sigma table (its `sample_sigmas`); the GUI steps setting does not apply. `config/qwen21_turbo_int8.json` sets `fast_split_TE` — Fast Pipeline pairs consecutive frames |
+| FLUX.2-dev (flux2)       | **2**             | The Flux.2 Turbo LoRA's distilled step count (all four configs ship `steps: 2`); the panel's setting applies. Paired split on by default, `guidance` 4.0 |
 
 > **Prompt tip (qwen21-viggle)**: on subjects with a strong color convention
 > (e.g. a well-known costume), the model can leave the color ambiguous and

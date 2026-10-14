@@ -11,7 +11,7 @@ python dit_rpc_server.py --module-dir /path/to/dit_colorize_main
 ```
 
 **`Model 'xxx' is not supported`**
-Supported values for `model_name` are `"nunchaku-qwen"` (FP4/INT4), `"gguf-qwen"` (Qwen-Image-Edit 2511: native int8 ConvRot or GGUF Q3_K_S), `"longcat-gguf"`, and `"qwen21-viggle"`. For `"gguf-qwen"`, the checkpoint is selected by the `unet_gguf` file in the config (a `.safetensors` int8 ConvRot or a `.gguf` quant).
+Supported values for `model_name` are `"nunchaku-qwen"` (FP4/INT4), `"gguf-qwen"` (Qwen-Image-Edit 2511: native int8 ConvRot or GGUF Q3_K_S), `"longcat-gguf"`, `"qwen21-viggle"`, `"qwen21-turbo"` and `"flux2"` (FLUX.2-dev). For `"gguf-qwen"`, the checkpoint is selected by the `unet_gguf` file in the config (a `.safetensors` int8 ConvRot or a `.gguf` quant).
 
 **Pipeline takes a long time to load**
 **Nunchaku**: on the first run the model weights (~15–30 GB) are downloaded from HuggingFace.
@@ -20,6 +20,17 @@ Subsequent runs load from the local cache.
 
 **Colors look faded or grayish**
 Increase the number of **Colorization Steps** and/or disable **Fast Pipeline**, then re-run — **LongCat** in particular is calibrated for 8 steps, and at 4 steps the colors are faded. See [Suggested Inference Steps](server_usage.md#-suggested-inference-steps) for the recommended per-model values.
+
+**FLUX.2-dev int4 on a 16 GB card: per-frame times swing a lot (e.g. 7 s to 50 s)**
+The int4 checkpoint (18.3 GB) almost fits a 16 GB card, and without a reserve
+aimdo's DynamicVRAM fills the VRAM to the brim, leaving nothing for the
+activations — the cost of each pair of frames then varies with what has to be
+re-faulted. `config/flux2_dev_int4.json` ships `"vram_headroom": 3` for
+exactly this; confirm the setting reached aimdo in the server log
+(`DynamicVRAM: extra VRAM headroom 3.00 GB (config vram_headroom)`). If you
+edited the config to `0`, that is the cause. See
+[Backends](backends.md#vram_headroom--the-int4-checkpoints-setting-per-vram-size)
+for the right value per VRAM size (12 GB and 24 GB+: `0`).
 
 ---
 

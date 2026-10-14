@@ -362,8 +362,8 @@ for example in the Cluster 2, the reference frame #000145 was selected to repres
 | **Model Config**         | Pipeline configuration: lists every `.json` file in the `config/` folder (shown without the extension). The selected file *is* the model — its `model_name` and paths decide backend/quantization. Adding a model only means adding a new config file there; no code changes needed |
 | **Run Server**           | Starts/stops the server for the selected Model Config as a process managed by the GUI, with its full output streamed live into the **Server Log** tab (Dashboard) — the button becomes **Stop Server** while running, and the status text next to it tracks *Starting server...* → *running on ...* → *stopped*. The GUI **connects automatically** once the server reports it's ready |
 | **External console**     | Reverts **Run Server** to its previous behavior: launches `start_server.cmd <config-name>` in its own visible terminal window instead, with no control or logging from the GUI |
-| **Colorization Steps**   | Diffusion steps per frame (lower = faster). LongCat recommends 8 steps, Qwen 2 steps, qwen21-viggle 6 steps (its LoRA's native step count; step schedules `2`/`4`/`6`/`8` — `6` gives the most accurate colors, `2` is the fastest) |
-| **Fast Pipeline**        | Faster colorization mode. qwen21-viggle / qwen21-turbo / qwen-2511 (gguf-qwen): **cached-TE split flow** (conditioning cached per frame in `ref_te/` / `ref_te_edit/`, then sampled — roughly 2× faster on qwen21-viggle, ~1.4× on qwen-2511: 7.3 vs ~10.5 s/frame at 2 steps). A config with **`fast_split_TE`** pairs consecutive frames inside the split flow (merged before the text encoder, split back after the transformer — one pass per two frames); **`split_TE_resolution`** sets the split-TE working budget (default 1024: more detail at a higher time cost — the pair shares it between the two frames). nunchaku-qwen: **paired inference**, two frames in one forward pass. longcat-gguf falls back to per-image processing |
+| **Colorization Steps**   | Diffusion steps per frame (lower = faster). LongCat recommends 8 steps, Qwen 2 steps, qwen21-viggle 6 steps (its LoRA's native step count; step schedules `2`/`4`/`6`/`8` — `6` gives the most accurate colors, `2` is the fastest), flux2 2 steps (the Flux.2 Turbo LoRA's distilled count) |
+| **Fast Pipeline**        | Faster colorization mode. qwen21-viggle / qwen21-turbo / qwen-2511 (gguf-qwen) / flux2: **cached-TE split flow** (conditioning cached per frame in `ref_te/` / `ref_te_edit/`, then sampled — roughly 2× faster on qwen21-viggle, ~1.4× on qwen-2511: 7.3 vs ~10.5 s/frame at 2 steps). A config with **`fast_split_TE`** pairs consecutive frames inside the split flow (merged before the text encoder, split back after the transformer — one pass per two frames; on by default in every flux2 config); **`split_TE_resolution`** sets the split-TE working budget (default 1024: more detail at a higher time cost — the pair shares it between the two frames). nunchaku-qwen: **paired inference**, two frames in one forward pass. longcat-gguf falls back to per-image processing |
 | **Unsharp Mask**         | Pre-filter the input before colorization (unsharp mask: amount 0.50, threshold 0) — removes the film grain that can stop the model from colorizing. Radius in the field beside: **1–4**, default `2`. Applies in every mode: standard, Fast Pipeline and paired |
 | **Enhance Prompt**       | **qwen21-viggle only**: rewrites the prompt via Qwen3-VL before colorizing (image-aware, adds ~15-20s/frame) — no effect on other backends. Try a direct anti-hedging prompt first, see [Suggested Inference Steps](server_usage.md#-suggested-inference-steps) |
 | **Prompt**               | Text prompt sent to the model — keep it short for qwen-2511, detailed for qwen21-viggle / qwen21-turbo; see the prompt tips in [Suggested Inference Steps](server_usage.md#-suggested-inference-steps) |
@@ -579,9 +579,10 @@ colorization. Results are saved to `ref_qwen/`.
 Two modes are available:
 
 - **Standard**: each frame is sent individually
-- **Fast Pipeline**: with qwen21-viggle, qwen21-turbo and qwen-2511 (gguf-qwen) the frames
+- **Fast Pipeline**: with qwen21-viggle, qwen21-turbo, qwen-2511 (gguf-qwen) and
+  flux2 the frames
   are colorized in two chunked phases — first every frame's conditioning is
-  cached (text-encoder for qwen21-viggle / qwen21-turbo in `ref_te/`, the edit
+  cached (text-encoder for qwen21-viggle / qwen21-turbo / flux2 in `ref_te/`, the edit
   conditioning for qwen-2511 in `ref_te_edit/`), then the colorization
   samples from that cache. The models stay resident for the whole phase,
   which is roughly 2× faster for qwen21-viggle and ~1.4× for qwen-2511
@@ -591,7 +592,7 @@ Two modes are available:
   next run resumes from the first missing frame. With nunchaku-qwen the
   paired inference is used instead: two frames are placed side-by-side and
   colorized in a single forward pass. When the selected config sets
-  **`fast_split_TE`** (qwen21-viggle / qwen21-turbo / qwen-2511) the split
+  **`fast_split_TE`** (qwen21-viggle / qwen21-turbo / qwen-2511 / flux2) the split
   flow pairs consecutive frames instead: the two frames are merged side by
   side before the text encoder and the decoded canvas is split back after the
   transformer, so two frames cost one pass — the pair shares the single
@@ -690,7 +691,7 @@ startup and includes:
 
 - **CMNET2 / vscmnet2**: [github.com/dan64/vs-cmnet2](https://github.com/dan64/vs-cmnet2) — VapourSynth color-matching and scene-detection functions
 - **spatial_correlation_sampler**: [Pytorch-Correlation-extension](https://github.com/ClementPinard/Pytorch-Correlation-extension) — GPU correlation layer used by vscmnet2
-- **DiT Model**: [Qwen/Qwen-Image-Edit-2511](https://huggingface.co/Qwen/Qwen-Image-Edit-2511), [Qwen/Qwen-Image-2.1](https://huggingface.co/Comfy-Org/Qwen-Image-2.1) + [Viggle-Turbo LoRA](https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo), [LongCat-Image-Edit-Turbo](https://huggingface.co/meituan-longcat/LongCat-Image-Edit-Turbo)
+- **DiT Model**: [Qwen/Qwen-Image-Edit-2511](https://huggingface.co/Qwen/Qwen-Image-Edit-2511), [Qwen/Qwen-Image-2.1](https://huggingface.co/Comfy-Org/Qwen-Image-2.1) + [Viggle-Turbo LoRA](https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo), [LongCat-Image-Edit-Turbo](https://huggingface.co/meituan-longcat/LongCat-Image-Edit-Turbo), [FLUX.2-dev](https://huggingface.co/black-forest-labs/FLUX.2-dev) + [FLUX.2-small-decoder](https://huggingface.co/black-forest-labs/FLUX.2-small-decoder)
 - **VapourSynth**: [vapoursynth.com](https://www.vapoursynth.com/)
 - **x265**: [videolan.org](https://www.videolan.org/developers/x265.html)
 - **x264**: [videolan.org](https://www.videolan.org/developers/x264.html)

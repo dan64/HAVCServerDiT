@@ -1,0 +1,18 @@
+{
+    "model_name":          "flux2",
+    "unet_name":           "models/diffusion_models/flux2_dev_fp8mixed.safetensors",
+    "unet_hf_name":        "",
+    "clip_name":           "models/text_encoders/mistral_3_small_flux2_fp4_mixed.safetensors",
+    "clip_hf_name":        "",
+    "vae_name":            "flux2-vae.safetensors",
+    "vae_hf_name":         "",
+    "lora_path":           "models/loras/Flux2TurboComfyv2.safetensors",
+    "lora_hf_name":        "",
+    "steps":               2,
+    "guidance":            4.0,
+    "split_TE_resolution": 1024,
+    "hf_unet":             "Comfy-Org/flux2-dev",
+    "hf_clip":             "Comfy-Org/flux2-dev",
+    "hf_vae":              "Comfy-Org/flux2-dev",
+    "hf_lora":             "Comfy-Org/flux2-dev"
+}

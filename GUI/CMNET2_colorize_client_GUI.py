@@ -1282,6 +1282,14 @@ def orchestrator(init_values, window):
                             "by this family.")
             steps = 8
             enhance_prompt = False
+        elif model_type == "flux2":
+            # flux2 keeps the panel's step count (Flux2Scheduler derives its
+            # mu-shift schedule from it; the Turbo LoRA's native value is 2),
+            # but it has no prompt enhancer -- its encoder is a plain Mistral.
+            if enhance_prompt:
+                log_message("ℹ️ flux2: prompt enhancement is not used "
+                            "by this family.")
+            enhance_prompt = False
 
         chunks = [image_files[i:i + chunk_size]
                   for i in range(0, tot_num_images, chunk_size)]
@@ -1977,6 +1985,17 @@ def orchestrator(init_values, window):
                 do_colorize_split_pair(values, window, "edit")
             else:
                 do_colorize_split_edit(values, window)
+            return
+        if model_type == "flux2":
+            # Fast Pipeline on the flux2 family runs the single-frame split flow
+            # (phase A: Mistral text encode + VAE reference latent cached under
+            # ref_te/; phase B: sampling from the cache). The pairing flag does
+            # not apply here: this family's text encoder never sees the frame,
+            # so merging two frames would only halve their working resolution.
+            if fast_pair:
+                log_message("ℹ️ flux2: fast_split_TE is not supported (the text "
+                            "encoder is prompt-only) — running the single split flow.")
+            do_colorize_split(values, window)
             return
         gap_px = 16 if model_type == "qwen21-viggle" else 8
 
@@ -2804,7 +2823,7 @@ tab3_layout = [
           sg.Text("stopped", key="-SERVER_STATUS-", size=(45, 1), expand_x=True)],
         [sg.Text("Colorization Steps:"),
          sg.Combo(steps_values, default_value=cfg["steps"], key="-STEPS-", readonly=True, size=(6,1)),
-         sg.Checkbox("Fast Pipeline", key="-FAST_PIPE-", default=cfg["fast_pipe"], tooltip="qwen21-viggle / qwen21-turbo / qwen-2511: cached-TE split flow; other models: paired 1280px pass. A config with fast_split_TE pairs consecutive frames (merged before the TE, split after the transformer)"),
+         sg.Checkbox("Fast Pipeline", key="-FAST_PIPE-", default=cfg["fast_pipe"], tooltip="qwen21-viggle / qwen21-turbo / qwen-2511 / flux2: cached-TE split flow; other models: paired 1280px pass. A config with fast_split_TE pairs consecutive frames (merged before the TE, split after the transformer)"),
          sg.Checkbox("Unsharp Mask", key="-USM-", default=cfg.get("usm", False),
                      tooltip="Pre-filter the input before colorization (unsharp mask: amount 0.50, "
                              "threshold 0). Removes the film grain that can stop the model from "

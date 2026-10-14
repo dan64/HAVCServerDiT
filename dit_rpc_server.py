@@ -31,13 +31,19 @@ file there. Supported config formats (see config/*.json):
     qwen21-turbo:    model_name/unet_name/clip_name/vae_name/steps
                      (optional: unet_hf_name; the checkpoint carries its own
                      8-step sigma table, so steps is informational)
+    flux2:           model_name/unet_name/clip_name/vae_name/lora_path/steps
+                     (optional: guidance -- the FluxGuidance value, default 4.0
+                     -- plus unet_hf_name/clip_hf_name/vae_hf_name/lora_hf_name,
+                     which override the assumed HuggingFace download paths)
 
     The optional key "fast_split_TE": true (or "on"/"1"/"yes") makes the GUI's
     Fast Pipeline run the paired split: consecutive frames are merged before
     the text encoder and the decoded canvas is split back afterwards (one TE
-    pass + one sampling pass per two frames). Supported by every split-TE
-    family (qwen21-viggle, qwen21-turbo, gguf-qwen); the flag lives in the
-    config file and is consumed by the GUI, not by this server.
+    pass + one sampling pass per two frames). Supported by the qwen21 families
+    and gguf-qwen (qwen21-viggle, qwen21-turbo, gguf-qwen); flux2 runs the
+    single-frame split only -- its text encoder never sees the frame, so there
+    is nothing to amortize by pairing. The flag lives in the config file and is
+    consumed by the GUI, not by this server.
 
     The optional key "split_TE_resolution" (default 1024) sets the working
     area budget of the split-TE conditioning (per frame in the single flow,
@@ -79,6 +85,7 @@ try:
         load_longcat_pipeline,
         load_viggle_pipeline,
         load_qwen21_turbo_pipeline,
+        load_flux2_pipeline,
         process_image,
         process_image_pair,
         process_single_image,
@@ -98,6 +105,7 @@ except ImportError as _e:
     load_longcat_pipeline     = None
     load_viggle_pipeline      = None
     load_qwen21_turbo_pipeline = None
+    load_flux2_pipeline       = None
     process_image             = None
     process_image_pair        = None
     process_single_image      = None
@@ -247,6 +255,10 @@ class ColorizeService:
         clip_mmproj: str = "",
         clip_mmproj_hf_name: str = "",
         unet_hf_name: str = "",
+        guidance: float = 4.0,
+        clip_hf_name: str = "",
+        vae_hf_name: str = "",
+        lora_hf_name: str = "",
     ) -> dict:
         """
         Load the Nunchaku/Qwen pipeline.
@@ -256,6 +268,10 @@ class ColorizeService:
         cache_dir is optional: when empty or omitted it is not forwarded to
         load_nunchaku_pipeline, which will then use the HuggingFace default
         (~/.cache/huggingface).
+
+        guidance / clip_hf_name / vae_hf_name / lora_hf_name are flux2-only:
+        the FluxGuidance value of the pipeline and explicit overrides of the
+        assumed HuggingFace download paths (see load_flux2_pipeline).
         """
         with self._pipeline_lock:
             try:
@@ -332,6 +348,23 @@ class ColorizeService:
                         hf_clip=hf_clip,
                         hf_vae=hf_vae,
                         unet_hf_name=unet_hf_name,
+                    )
+                elif model_name == "flux2":
+                    pipe = load_flux2_pipeline(
+                        model_name=model_name,
+                        unet_path=model_precision,
+                        clip_path=model_rank,
+                        lora_path=full_model_path,
+                        vae_name=vae_name,
+                        guidance=guidance,
+                        hf_unet=hf_unet,
+                        hf_clip=hf_clip,
+                        hf_vae=hf_vae,
+                        hf_lora=hf_lora,
+                        unet_hf_name=unet_hf_name,
+                        clip_hf_name=clip_hf_name,
+                        vae_hf_name=vae_hf_name,
+                        lora_hf_name=lora_hf_name,
                     )
                 else:
                     pipe = None
@@ -1314,6 +1347,15 @@ def parse_pipeline_config(config_path: str) -> dict:
         {"model_name": "qwen21-turbo", "unet_name": "...", "clip_name": "...",
          "vae_name": "...", "lora_path": "", "steps": 8}
 
+    New format (flux2, same keys plus the FluxGuidance value):
+        {"model_name": "flux2", "unet_name": "models/unet/flux2-dev-Q3_K_M.gguf",
+         "clip_name": "models/text_encoders/mistral_3_small_flux2_fp4_mixed.safetensors",
+         "vae_name": "flux2-vae.safetensors",
+         "lora_path": "models/loras/Flux_2-Turbo-LoRA_comfyui.safetensors",
+         "steps": 2, "guidance": 4.0}
+        (optional: unet_hf_name / clip_hf_name / vae_hf_name / lora_hf_name,
+         which override the assumed HuggingFace paths of the auto-download)
+
     Legacy format (Nunchaku models):
         {"model_name": "nunchaku-qwen", "model_precision": "...",
          "model_rank": "...", "model_inference_steps": "4",
@@ -1362,7 +1404,8 @@ def parse_pipeline_config(config_path: str) -> dict:
             "unet_hf_name": cfg.get("unet_hf_name", ""),
         }
 
-    # New format (qwen21-viggle / qwen21-turbo, native ComfyUI int8 ConvRot weights)
+    # New format (qwen21-viggle / qwen21-turbo, native ComfyUI int8 ConvRot weights;
+    # flux2 uses the same shape with its own model_name)
     if "unet_name" in cfg:
         required = {"model_name", "unet_name", "clip_name", "vae_name", "lora_path", "steps"}
         missing = required - cfg.keys()
@@ -1383,6 +1426,12 @@ def parse_pipeline_config(config_path: str) -> dict:
             "clip_mmproj": cfg.get("clip_mmproj", ""),
             "clip_mmproj_hf_name": cfg.get("clip_mmproj_hf_name", ""),
             "unet_hf_name": cfg.get("unet_hf_name", ""),
+            # flux2: the FluxGuidance value and the per-artifact download-path
+            # overrides; other families ignore them.
+            "guidance": float(cfg.get("guidance", 4.0)),
+            "clip_hf_name": cfg.get("clip_hf_name", ""),
+            "vae_hf_name": cfg.get("vae_hf_name", ""),
+            "lora_hf_name": cfg.get("lora_hf_name", ""),
         }
 
     # Legacy format
@@ -1454,6 +1503,10 @@ def _load_pipeline_from_parsed(service: ColorizeService, cfg: dict,
         clip_mmproj=cfg.get("clip_mmproj", ""),
         clip_mmproj_hf_name=cfg.get("clip_mmproj_hf_name", ""),
         unet_hf_name=cfg.get("unet_hf_name", ""),
+        guidance=cfg.get("guidance", 4.0),
+        clip_hf_name=cfg.get("clip_hf_name", ""),
+        vae_hf_name=cfg.get("vae_hf_name", ""),
+        lora_hf_name=cfg.get("lora_hf_name", ""),
     )
 
 

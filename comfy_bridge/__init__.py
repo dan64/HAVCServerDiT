@@ -923,6 +923,9 @@ def load_viggle_conditioning(path):
     if meta.get("kind") == "qwen-edit-conditioning":
         raise ValueError(
             "load_viggle_conditioning: this is a qwen-edit conditioning file")
+    if meta.get("kind") == "flux2-conditioning":
+        raise ValueError(
+            "load_viggle_conditioning: this is a flux2 conditioning file")
 
     device = comfy.model_management.get_torch_device()
     context = tensors["context"].to(device)
@@ -934,5 +937,316 @@ def load_viggle_conditioning(path):
         "reference_latents": [reference_latent],
     }]]
     latent_dict = {"samples": torch.zeros_like(reference_latent)}
+
+    return {"conditioning": conditioning, "latent": latent_dict, "meta": meta}
+
+
+# ---------------------------------------------------------------------------
+# FLUX.2 family (config model_name "flux2")
+#
+# Flux.2-dev transformer (a GGUF quant through the vendored ComfyUI-GGUF
+# recipe, or the Comfy-Org fp8-mixed safetensors) + the Mistral-3 text
+# encoder (CLIPLoader type="flux2") + the Flux2 VAE, with the FLUX.2-Turbo
+# LoRA applied at runtime. Unlike the Qwen families the text encoder never
+# sees the picture: the B&W frame enters the graph as a VAE *reference
+# latent* (what the ReferenceLatent node does), and an empty Flux2 latent is
+# the thing being denoised. Recipe of the reference workflow:
+#
+#   LoaderGGUF / UNETLoader -> LoraLoaderModelOnly(Turbo LoRA) -> BasicGuider
+#   CLIPLoader(flux2) -> CLIPTextEncode -> FluxGuidance(4)
+#       -> ReferenceLatent(latent=VAEEncode(frame))
+#   Flux2Scheduler(steps, w, h) + EmptyFlux2LatentImage + RandomNoise
+#       + euler -> SamplerCustomAdvanced -> VAEDecode
+#
+# The step count is a free parameter here (the Turbo LoRA's native value is
+# 2), and the scheduler derives its mu-shift from the image sequence length,
+# so the sigmas depend on the working size -- see _flux2_sample_decode().
+# ---------------------------------------------------------------------------
+
+# FluxGuidance input of the reference workflow (Flux.2-dev's embedded
+# guidance); overridable per config with the "guidance" key.
+FLUX2_DEFAULT_GUIDANCE = 4.0
+
+_FLUX2_COND_KIND = "flux2-conditioning"
+
+
+def load_flux2_pipeline(unet_path, clip_path, vae_name="flux2-vae.safetensors", lora_path=None):
+    """Load the FLUX.2 pipeline (transformer + Mistral-3 text encoder + VAE).
+
+    unet_path may be a .gguf quant (ComfyUI-GGUF recipe, same one
+    load_viggle_pipeline() uses for the GGUF viggle checkpoints) or a
+    safetensors checkpoint (stock UNETLoader, e.g. the Comfy-Org
+    flux2_dev_fp8mixed repack).
+
+    lora_path: the FLUX.2-Turbo LoRA, applied through the stock
+    LoraLoaderModelOnly node exactly as the reference workflow does; with
+    lora_path empty/None the checkpoint is used as-is.
+
+    clip_path must be a safetensors text encoder: no GGUF repack of the
+    Mistral-3 Flux2 encoder exists and the Reboot loader has no flux2 TE
+    recipe, so a .gguf here is rejected with an explicit message.
+    """
+    import importlib
+    import nodes as cn
+
+    unet_name = os.path.basename(unet_path)
+    clip_name = os.path.basename(clip_path)
+
+    logger.info("Loading Flux2 UNet: %s", unet_name)
+    if unet_name.lower().endswith(".gguf"):
+        _gguf_loader = importlib.import_module("ComfyUI-GGUF.loader")
+        _gguf_nodes = importlib.import_module("ComfyUI-GGUF.nodes")
+        _gguf_ops = importlib.import_module("ComfyUI-GGUF.ops")
+        import comfy.sd
+        _sd, _extra = _gguf_loader.gguf_sd_loader(unet_path)
+        model = comfy.sd.load_diffusion_model_state_dict(
+            _sd, model_options={"custom_operations": _gguf_ops.GGMLOps()})
+        if model is None:
+            raise RuntimeError(f"Failed to load UNet from {unet_path}")
+        model = _gguf_nodes.GGUFModelPatcher.clone(model)
+        logger.info("UNet GGUF loaded (%s)", _extra.get("arch_str", "?"))
+    else:
+        model = get_value_at_index(cn.UNETLoader().load_unet(unet_name=unet_name, weight_dtype="default"), 0)
+
+    if lora_path and os.path.isfile(lora_path):
+        logger.info("Applying FLUX.2-Turbo LoRA: %s", os.path.basename(lora_path))
+        model = get_value_at_index(
+            cn.LoraLoaderModelOnly().load_lora_model_only(
+                model=model, lora_name=os.path.basename(lora_path), strength_model=1.0), 0)
+
+    if clip_path.lower().endswith(".gguf"):
+        raise ValueError(
+            "load_flux2_pipeline: GGUF text encoders are not supported for flux2 "
+            "(the Mistral-3 Flux2 encoder is only published as safetensors)")
+    logger.info("Loading CLIP: %s", clip_name)
+    clip = get_value_at_index(cn.CLIPLoader().load_clip(clip_name=clip_name, type="flux2", device="default"), 0)
+
+    logger.info("Loading VAE: %s", vae_name)
+    vae = get_value_at_index(cn.VAELoader().load_vae(vae_name=vae_name), 0)
+
+    return {"model": model, "clip": clip, "vae": vae}
+
+
+def _flux2_prepare(pipeline, img_tensor, prompt, resolution, guidance):
+    """The flux2 graph's positive branch for one frame: the area-budget resize
+    (same math as _viggle_encode_positive -- ~resolution^2 pixels, snapped to
+    32), the VAE encode that becomes the reference latent, the CLIPTextEncode
+    pass and the FluxGuidance value.
+
+    Returns (positive_conditioning, latent_dict), with latent_dict the empty
+    Flux2 latent the sampler denoises (EmptyFlux2LatentImage, same shape as
+    the reference latent). Mirrors the node calls of the reference workflow:
+    ReferenceLatent is reproduced with node_helpers.conditioning_set_values,
+    which is what that node's execute() does.
+    """
+    import comfy.utils
+    import node_helpers
+    from nodes import CLIPTextEncode, VAEEncode
+    from comfy_extras.nodes_flux import EmptyFlux2LatentImage, FluxGuidance
+
+    samples = img_tensor[:1].movedim(-1, 1)
+    if resolution > 0:
+        ratio = samples.shape[3] / samples.shape[2]
+        width = round(math.sqrt(resolution * resolution * ratio) / 32) * 32
+        height = round(math.sqrt(resolution * resolution / ratio) / 32) * 32
+    else:
+        width, height = round(samples.shape[3] / 32) * 32, round(samples.shape[2] / 32) * 32
+    width, height = max(32, width), max(32, height)
+    if (width, height) == (samples.shape[3], samples.shape[2]):
+        s = img_tensor[:1]
+    else:
+        s = comfy.utils.common_upscale(samples, width, height, "lanczos", "disabled").movedim(1, -1)
+
+    # VAEEncode -> ReferenceLatent (the frame conditions the transformer only
+    # through this latent; the denoised latent starts empty)
+    ref_latent = get_value_at_index(VAEEncode().encode(pixels=s, vae=pipeline["vae"]), 0)["samples"]
+
+    positive = get_value_at_index(CLIPTextEncode().encode(clip=pipeline["clip"], text=prompt), 0)
+    positive = get_value_at_index(
+        FluxGuidance().EXECUTE_NORMALIZED(conditioning=positive, guidance=float(guidance)), 0)
+    positive = node_helpers.conditioning_set_values(
+        positive, {"reference_latents": [ref_latent]}, append=True)
+
+    latent_dict = get_value_at_index(
+        EmptyFlux2LatentImage().EXECUTE_NORMALIZED(width=width, height=height, batch_size=1), 0)
+    return positive, latent_dict
+
+
+def _flux2_sample_decode(pipeline, conditioning, latent_dict, steps, seed):
+    """Sampler + decode tail of the flux2 path: Flux2Scheduler (its mu-shift
+    schedule is derived from the image sequence length, so the sigmas follow
+    the working size), BasicGuider (CFG-off: the reference workflow never
+    builds a negative conditioning), euler and the VAE decode.
+
+    Returns the colorized PIL image.
+    """
+    import nodes as cn
+    from comfy_extras.nodes_flux import Flux2Scheduler
+    from comfy_extras.nodes_custom_sampler import (BasicGuider, KSamplerSelect,
+                                                   RandomNoise, SamplerCustomAdvanced)
+
+    height = latent_dict["samples"].shape[-2] * 16
+    width = latent_dict["samples"].shape[-1] * 16
+
+    guider = get_value_at_index(
+        BasicGuider().EXECUTE_NORMALIZED(model=pipeline["model"], conditioning=conditioning), 0)
+    noise = get_value_at_index(RandomNoise().EXECUTE_NORMALIZED(noise_seed=seed), 0)
+    sampler = get_value_at_index(KSamplerSelect().EXECUTE_NORMALIZED(sampler_name="euler"), 0)
+    sigmas = get_value_at_index(
+        Flux2Scheduler().EXECUTE_NORMALIZED(steps=int(steps), width=width, height=height), 0)
+
+    sampled = SamplerCustomAdvanced().EXECUTE_NORMALIZED(
+        noise=noise, guider=guider, sampler=sampler, sigmas=sigmas, latent_image=latent_dict)
+    latent_samples = get_value_at_index(sampled, 0)
+
+    img_decoded = cn.VAEDecode().decode(samples=latent_samples, vae=pipeline["vae"])
+    img_t = get_value_at_index(img_decoded, 0)
+
+    if img_t.ndim == 4:
+        img_np = img_t[0].cpu().float().numpy()
+    else:
+        img_np = img_t.cpu().float().numpy()
+    img_np = np.clip(img_np, 0, 1)
+    if img_np.shape[-1] > 3:
+        img_np = img_np[..., :3]  # keep RGB if the VAE decode carries extra channels
+    return Image.fromarray((img_np * 255).astype(np.uint8))
+
+
+def colorize_flux2(pipeline, image, prompt, steps=2, seed=42, resolution=1024, guidance=None):
+    """FLUX.2 colorization of one image (the reference workflow's graph).
+
+    `steps` is a free parameter (the Turbo LoRA's native schedule is 2 steps);
+    `guidance` is the FluxGuidance value, defaulting to the pipeline's own
+    (config key "guidance", see load_flux2_pipeline in dit_colorize_main.py).
+    """
+    if guidance is None:
+        guidance = pipeline.get("_guidance", FLUX2_DEFAULT_GUIDANCE) if isinstance(pipeline, dict) else FLUX2_DEFAULT_GUIDANCE
+    with torch.inference_mode():
+        img_np = np.array(image.convert("RGB")).astype(np.float32) / 255.0
+        img_tensor = torch.from_numpy(img_np).unsqueeze(0)
+        positive, latent_dict = _flux2_prepare(pipeline, img_tensor, prompt, resolution, guidance)
+        result = _flux2_sample_decode(pipeline, positive, latent_dict, steps, seed)
+    return result
+
+
+def encode_flux2_conditioning(pipeline, image, prompt, resolution=1024, guidance=None):
+    """Compute the flux2 conditioning for one image (phase A of the split
+    colorize flow): the CLIPTextEncode + FluxGuidance + reference-latent
+    structure the live path hands to the sampler, without any sampling.
+
+    The text encoder is prompt-only, so phase A costs one Mistral pass plus
+    one VAE encode. Returns {"conditioning", "latent", "prompt"} (the prompt
+    is passed through unchanged: this family has no prompt enhancer).
+    """
+    if guidance is None:
+        guidance = pipeline.get("_guidance", FLUX2_DEFAULT_GUIDANCE) if isinstance(pipeline, dict) else FLUX2_DEFAULT_GUIDANCE
+    with torch.inference_mode():
+        img_np = np.array(image.convert("RGB")).astype(np.float32) / 255.0
+        img_tensor = torch.from_numpy(img_np).unsqueeze(0)
+        positive, latent_dict = _flux2_prepare(pipeline, img_tensor, prompt, resolution, guidance)
+    return {"conditioning": positive, "latent": latent_dict, "prompt": prompt}
+
+
+def colorize_flux2_from_conditioning(pipeline, conditioning, latent_dict, steps=2, seed=42):
+    """Phase B of the split-colorize flow for the flux2 family: sample + decode
+    one cached conditioning. `steps` is a free parameter (Flux2Scheduler).
+    """
+    with torch.inference_mode():
+        return _flux2_sample_decode(pipeline, conditioning, latent_dict, steps, seed)
+
+
+def save_flux2_conditioning(path, conditioning, latent_dict, prompt="", prompt_original="", meta=None):
+    """Save a flux2 conditioning as one .safetensors file.
+
+    Generic over the conditioning's option dict (the Mistral-3 encoder returns
+    an attention_mask alongside the context, so nothing here may assume the
+    viggle layout): every tensor-valued entry -- including list entries, which
+    are stored as "<key>.<index>" -- goes into the file as a tensor, scalars
+    and strings go into the metadata, None-valued keys are recorded by name and
+    anything else is rejected instead of silently dropped. The empty latent is
+    not stored: it is rebuilt as zeros with the reference latent's shape.
+
+    Returns the metadata dict written.
+    """
+    from safetensors.torch import save_file
+
+    if len(conditioning) != 1:
+        raise ValueError("save_flux2_conditioning: expected a single conditioning entry")
+    context, options = conditioning[0]
+
+    tensors = {"context": context.detach().to("cpu").contiguous()}
+    values = {}
+    none_keys = []
+    for key, value in options.items():
+        if isinstance(value, torch.Tensor):
+            tensors[key] = value.detach().to("cpu").contiguous()
+        elif isinstance(value, (list, tuple)) and len(value) and all(isinstance(t, torch.Tensor) for t in value):
+            for i, t in enumerate(value):
+                tensors[f"{key}.{i}"] = t.detach().to("cpu").contiguous()
+        elif value is None:
+            none_keys.append(key)
+        elif isinstance(value, (bool, int, float, str)):
+            values[key] = value
+        else:
+            raise ValueError(
+                f"save_flux2_conditioning: conditioning option '{key}' "
+                f"({type(value).__name__}) cannot be cached")
+
+    if "reference_latents.0" not in tensors:
+        raise ValueError("save_flux2_conditioning: conditioning has no reference_latents")
+
+    metadata = {
+        "format": "1",
+        "kind": _FLUX2_COND_KIND,
+        "prompt": str(prompt),
+        "prompt_original": str(prompt_original),
+        "values": json.dumps(values),
+        "none_keys": json.dumps(none_keys),
+    }
+    if meta:
+        metadata.update({str(k): str(v) for k, v in meta.items()})
+    save_file(tensors, path, metadata=metadata)
+    return metadata
+
+
+def load_flux2_conditioning(path):
+    """Load a conditioning saved by save_flux2_conditioning().
+
+    Returns {"conditioning", "latent", "meta"} in the same structure the live
+    path hands to the sampler: "<key>.<index>" tensors are gathered back into
+    lists, the metadata scalars are restored with their original JSON types and
+    the empty Flux2 latent is rebuilt as zeros_like(reference_latent).
+    Raises ValueError when handed a conditioning file of another family.
+    """
+    import comfy.model_management
+    from safetensors import safe_open
+
+    with safe_open(path, framework="pt", device="cpu") as f:
+        meta = dict(f.metadata() or {})
+        if meta.get("kind") != _FLUX2_COND_KIND:
+            raise ValueError(
+                "load_flux2_conditioning: not a flux2 conditioning file")
+        tensors = {k: f.get_tensor(k) for k in f.keys()}
+
+    device = comfy.model_management.get_torch_device()
+    lists = {}
+    options = json.loads(meta.get("values", "{}")) if meta.get("values") else {}
+    plain = {}
+    for key, tensor in tensors.items():
+        name, _, index = key.rpartition(".")
+        if name and index.isdigit():
+            lists.setdefault(name, {})[int(index)] = tensor.to(device)
+        elif key != "context":
+            plain[key] = tensor.to(device)
+    options.update({name: [t[i] for i in sorted(t)] for name, t in lists.items()})
+    options.update(plain)
+    for key in json.loads(meta.get("none_keys", "[]")) if meta.get("none_keys") else []:
+        options[key] = None
+
+    conditioning = [[tensors["context"].to(device), options]]
+    reference_latents = options.get("reference_latents") or []
+    if not reference_latents:
+        raise ValueError("load_flux2_conditioning: no reference_latents in file")
+    latent_dict = {"samples": torch.zeros_like(reference_latents[0])}
 
     return {"conditioning": conditioning, "latent": latent_dict, "meta": meta}

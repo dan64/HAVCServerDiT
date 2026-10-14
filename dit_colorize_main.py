@@ -495,6 +495,78 @@ def load_qwen21_turbo_pipeline(model_name: str, unet_path: str, clip_path: str,
     return pipeline
 
 
+def load_flux2_pipeline(model_name: str, unet_path: str, clip_path: str,
+                        lora_path: str = "", vae_name: str = "flux2-vae.safetensors",
+                        guidance: float = 4.0,
+                        hf_unet="unsloth/FLUX.2-dev-GGUF",
+                        hf_clip="Comfy-Org/flux2-dev",
+                        hf_vae="Comfy-Org/flux2-dev",
+                        hf_lora="Comfy-Org/flux2-dev",
+                        unet_hf_name: str = "", clip_hf_name: str = "",
+                        vae_hf_name: str = "", lora_hf_name: str = ""):
+    """
+    Load the FLUX.2 pipeline (Flux.2-dev transformer + Mistral-3 text
+    encoder + Flux2 VAE, with the FLUX.2-Turbo LoRA applied at runtime).
+
+    unet_path may be a GGUF quant (the Flux.2-dev quants under models/unet)
+    or a safetensors checkpoint (the Comfy-Org fp8-mixed repack, for cards
+    with the VRAM for it). The family is entirely ComfyUI-native -- no diffusers
+    pipeline, no mmproj: the B&W frame reaches the transformer as a VAE
+    reference latent, so the text encoder is prompt-only.
+
+    guidance : the FluxGuidance value of the reference workflow (Flux.2-dev
+    has embedded guidance; CFG stays off -- one sampling pass, like the other
+    turbo-style families). Carried on the pipeline dict and used by phase A of
+    the split flow, so it is baked into the cached conditioning.
+
+    *_hf_name : optional overrides of the assumed HuggingFace paths. The
+    defaults follow the Comfy-Org "split_files/<kind>/" layout (and the repo
+    root for GGUF UNets); set them when a config points at a differently
+    organized mirror.
+    """
+    if model_name != "flux2":
+        return None
+
+    import torch
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cudnn.allow_tf32 = True
+
+    import os as _os
+    _bridge_dir = _os.path.join(_os.path.dirname(__file__), "comfy_bridge")
+    unet_path = _os.path.join(_bridge_dir, unet_path) if not _os.path.isabs(unet_path) else unet_path
+    clip_path = _os.path.join(_bridge_dir, clip_path) if not _os.path.isabs(clip_path) else clip_path
+    if lora_path and not _os.path.isabs(lora_path):
+        lora_path = _os.path.join(_bridge_dir, lora_path)
+
+    from comfy_bridge import (load_flux2_pipeline as _comfy_load_flux2,
+                              colorize_flux2 as _colorize_flux2)
+
+    _auto = _os.environ.get("COMFY_AUTO_DOWNLOAD", "1") == "1"
+    _vae_local = _os.path.join(_bridge_dir, "models", "vae", vae_name)
+    _files = {
+        # unet: GGUF quants live at the root of their repo, the Comfy-Org
+        # safetensors repack under split_files/diffusion_models/ -- same
+        # split-by-format convention the viggle loader uses.
+        "unet": (unet_path, hf_unet, unet_hf_name or (
+            _os.path.basename(unet_path) if unet_path.lower().endswith(".gguf")
+            else "split_files/diffusion_models/" + _os.path.basename(unet_path))),
+        "clip": (clip_path, hf_clip, clip_hf_name or ("split_files/text_encoders/" + _os.path.basename(clip_path))),
+        "vae":  (_vae_local, hf_vae, vae_hf_name or ("split_files/vae/" + vae_name)),
+        "lora": (lora_path, hf_lora, lora_hf_name or ("split_files/loras/" + _os.path.basename(lora_path))) if lora_path else None,
+    }
+    if _auto:
+        _ensure_models(_files)
+
+    pipeline = _comfy_load_flux2(unet_path, clip_path, vae_name=vae_name, lora_path=lora_path)
+    pipeline["_model_type"] = "flux2"
+    pipeline["_colorize_fn"] = _colorize_flux2
+    try:
+        pipeline["_guidance"] = float(guidance)
+    except (TypeError, ValueError):
+        pipeline["_guidance"] = 4.0
+    return pipeline
+
+
 def upscale_with_lanczos(image, target_size):
     return image.resize(target_size, Image.Resampling.LANCZOS)
 
@@ -523,6 +595,12 @@ def colorize_image(pipe, img: Image, prompt:str, steps: int = 2, seed: int=42, e
 
     # Qwen-Image-2.1-Turbo pipeline (dict with _model_type marker)
     if isinstance(pipe, dict) and pipe.get("_model_type") == "qwen21-turbo":
+        _colorize_fn = pipe.get("_colorize_fn")
+        kwargs = {"resolution": resolution} if resolution is not None else {}
+        return _colorize_fn(pipe, img, prompt=prompt, steps=steps, seed=seed, **kwargs)
+
+    # FLUX.2 pipeline (dict with _model_type marker)
+    if isinstance(pipe, dict) and pipe.get("_model_type") == "flux2":
         _colorize_fn = pipe.get("_colorize_fn")
         kwargs = {"resolution": resolution} if resolution is not None else {}
         return _colorize_fn(pipe, img, prompt=prompt, steps=steps, seed=seed, **kwargs)
@@ -702,20 +780,34 @@ def _te_manifest_save(te_dir, key, frames):
     os.replace(tmp, path)
 
 
+def _split_family(pipe):
+    """The family marker of a loaded pipeline ("" for non-dict pipelines).
+
+    The single-frame split flow (encode_frame_te / colorize_frame_from_te) is
+    shared by the cached-TE families: the qwen21 pair uses the viggle
+    conditioning, flux2 uses its own (prompt-only text encoder + reference
+    latent), while the 2511 family has its own edit-conditioning functions.
+    """
+    if isinstance(pipe, dict):
+        return pipe.get("_model_type", "") or ""
+    return ""
+
+
 def encode_frame_te(pipe, img_path, te_dir, stem, prompt, resolution: int = 1024,
                     img_size: int = 0, enhance_prompt: bool = False,
                     first: bool = False, model_config: str = "",
                     usm_radius: float = 0.0) -> dict:
-    """Phase A, single frame: encode + cache the viggle conditioning of one
-    image under te_dir/<stem>.safetensors. first=True drops every loaded model
+    """Phase A, single frame: encode + cache the conditioning of one image
+    under te_dir/<stem>.safetensors. first=True drops every loaded model
     before anything else (so the TE + VAE start from a clean VRAM even when
     this frame turns out to be cached); frames already cached for the same
     prompt/settings are skipped (resume).
 
     The preprocessing mirrors process_image_standard() (dark check,
-    desaturate, optional resize); the conditioning comes from
-    comfy_bridge.encode_viggle_conditioning(). Returns
-    {"ok", "skipped", "elapsed", "msg"}.
+    desaturate, optional resize); the conditioning comes from the family's own
+    encoder -- comfy_bridge.encode_viggle_conditioning() for the qwen21
+    split-TE families, comfy_bridge.encode_flux2_conditioning() for flux2.
+    Returns {"ok", "skipped", "elapsed", "msg"}.
     """
     import logging
 
@@ -751,10 +843,19 @@ def encode_frame_te(pipe, img_path, te_dir, stem, prompt, resolution: int = 1024
     orig_w, orig_h = original.size
     img_in = resize_long_side(bw, img_size) if img_size > 0 else bw
 
-    res = comfy_bridge.encode_viggle_conditioning(
-        pipe, img_in, prompt, resolution=resolution,
-        enhance_prompt=enhance_prompt)
-    comfy_bridge.save_viggle_conditioning(
+    family = _split_family(pipe)
+    if family == "flux2":
+        # flux2: prompt-only text encoder + the frame as a VAE reference
+        # latent; no prompt enhancer in this family
+        res = comfy_bridge.encode_flux2_conditioning(
+            pipe, img_in, prompt, resolution=resolution)
+        _save = comfy_bridge.save_flux2_conditioning
+    else:
+        res = comfy_bridge.encode_viggle_conditioning(
+            pipe, img_in, prompt, resolution=resolution,
+            enhance_prompt=enhance_prompt)
+        _save = comfy_bridge.save_viggle_conditioning
+    _save(
         te_path, res["conditioning"], res["latent"],
         prompt=res["prompt"], prompt_original=prompt,
         meta={"orig_width": orig_w, "orig_height": orig_h,
@@ -800,9 +901,14 @@ def colorize_frame_from_te(pipe, te_dir, stem, out_path, steps: int = 2, seed: i
                 "msg": "no conditioning cached"}
 
     t0 = time.perf_counter()
-    loaded = comfy_bridge.load_viggle_conditioning(te_path)
-    colorized_lowres = comfy_bridge.colorize_viggle_from_conditioning(
-        pipe, loaded["conditioning"], loaded["latent"], steps=steps, seed=seed)
+    if _split_family(pipe) == "flux2":
+        loaded = comfy_bridge.load_flux2_conditioning(te_path)
+        colorized_lowres = comfy_bridge.colorize_flux2_from_conditioning(
+            pipe, loaded["conditioning"], loaded["latent"], steps=steps, seed=seed)
+    else:
+        loaded = comfy_bridge.load_viggle_conditioning(te_path)
+        colorized_lowres = comfy_bridge.colorize_viggle_from_conditioning(
+            pipe, loaded["conditioning"], loaded["latent"], steps=steps, seed=seed)
     meta = loaded["meta"]
     try:
         orig_size = (int(meta.get("orig_width")), int(meta.get("orig_height")))

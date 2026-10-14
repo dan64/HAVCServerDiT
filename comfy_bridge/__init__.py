@@ -45,8 +45,11 @@ def flush_between_units():
     return _dynamic_vram.flush_between_units()
 
 
-def load_gguf_pipeline(unet_path, clip_path, vae_name="qwen_image_vae.safetensors", lora_path=None):
-    _dynamic_vram.enable()  # DynamicVRAM before the first model load (see _dynamic_vram)
+def load_gguf_pipeline(unet_path, clip_path, vae_name="qwen_image_vae.safetensors", lora_path=None,
+                       vram_headroom=None):
+    """vram_headroom: the config's GB of VRAM aimdo must leave free (see
+    _dynamic_vram.enable / _resolve_headroom); None -> the default."""
+    _dynamic_vram.enable(vram_headroom=vram_headroom)  # DynamicVRAM before the first model load (see _dynamic_vram)
     import importlib
     _gguf_loader = importlib.import_module("ComfyUI-GGUF.loader")
     _gguf_nodes  = importlib.import_module("ComfyUI-GGUF.nodes")
@@ -325,7 +328,8 @@ def load_edit_conditioning(path):
     return {"conditioning": conditioning, "latent": latent_dict, "meta": meta}
 
 
-def load_viggle_pipeline(unet_path, clip_path, vae_name="qwen_image_2.1_vae_bf16.safetensors", lora_path=None, clip_mmproj=None):
+def load_viggle_pipeline(unet_path, clip_path, vae_name="qwen_image_2.1_vae_bf16.safetensors", lora_path=None, clip_mmproj=None,
+                         vram_headroom=None):
     """Load Qwen-Image-2.1 (native ComfyUI int8 ConvRot or GGUF-quantized).
 
     The Viggle-Turbo LoRA is applied as an unmerged runtime hook when
@@ -340,8 +344,11 @@ def load_viggle_pipeline(unet_path, clip_path, vae_name="qwen_image_2.1_vae_bf16
     (ComfyUI-GGUF-Reboot, filename-containment heuristic)
     from the same folder as clip_path; clip_mmproj isn't consumed here, it
     only exists upstream to drive the mmproj auto-download.
+
+    vram_headroom: the config's GB of VRAM aimdo must leave free (see
+    _dynamic_vram.enable / _resolve_headroom); None -> the default.
     """
-    _dynamic_vram.enable()  # DynamicVRAM before the first model load (see _dynamic_vram)
+    _dynamic_vram.enable(vram_headroom=vram_headroom)  # DynamicVRAM before the first model load (see _dynamic_vram)
     import importlib
     ViggleTurboLora = importlib.import_module("viggle_turbo").ViggleTurboLora
     import nodes as cn
@@ -991,7 +998,8 @@ FLUX2_DEFAULT_GUIDANCE = 4.0
 _FLUX2_COND_KIND = "flux2-conditioning"
 
 
-def load_flux2_pipeline(unet_path, clip_path, vae_name="flux2-vae.safetensors", lora_path=None):
+def load_flux2_pipeline(unet_path, clip_path, vae_name="flux2-vae.safetensors", lora_path=None,
+                        vram_headroom=None):
     """Load the FLUX.2 pipeline (transformer + Mistral-3 text encoder + VAE).
 
     unet_path may be a .gguf quant (ComfyUI-GGUF recipe, same one
@@ -1006,8 +1014,11 @@ def load_flux2_pipeline(unet_path, clip_path, vae_name="flux2-vae.safetensors", 
     clip_path must be a safetensors text encoder: no GGUF repack of the
     Mistral-3 Flux2 encoder exists and the Reboot loader has no flux2 TE
     recipe, so a .gguf here is rejected with an explicit message.
+
+    vram_headroom: the config's GB of VRAM aimdo must leave free (see
+    _dynamic_vram.enable / _resolve_headroom); None -> the default.
     """
-    _dynamic_vram.enable()  # DynamicVRAM before the first model load (see _dynamic_vram)
+    _dynamic_vram.enable(vram_headroom=vram_headroom)  # DynamicVRAM before the first model load (see _dynamic_vram)
     import importlib
     import nodes as cn
 

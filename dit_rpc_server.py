@@ -52,6 +52,17 @@ file there. Supported config formats (see config/*.json):
     per merged canvas in the paired flow); also consumed by the GUI. The RPC
     pair/frame methods take the resolution as a parameter, so a server-side
     caller can pass its own value instead.
+
+    The optional key "vram_headroom" (GB, default 0) is the VRAM that aimdo's
+    DynamicVRAM must leave free and unused on purpose (the same figure as the
+    --vram-headroom flag of ComfyUI). 0 is the default and the right value for
+    everything but the int4 ConvRot checkpoints: a model that *almost* fits
+    otherwise fills the card to the brim and its per-unit cost becomes a
+    lottery, while a checkpoint that cannot fit (fp8, 33 GB) or that stays in
+    VRAM is only hurt by the reservation. flux2_dev_int4.json sets it to 3.
+    The value reaches comfy_bridge/_dynamic_vram.enable() through the loader
+    of the first model loaded, so it belongs to the whole server process:
+    change config, restart the server (which is the contract anyway).
 -------------------------------------------------------------------------------
 """
 
@@ -261,6 +272,7 @@ class ColorizeService:
         clip_hf_name: str = "",
         vae_hf_name: str = "",
         lora_hf_name: str = "",
+        vram_headroom: float = 0.0,
     ) -> dict:
         """
         Load the Nunchaku/Qwen pipeline.
@@ -274,6 +286,12 @@ class ColorizeService:
         guidance / clip_hf_name / vae_hf_name / lora_hf_name are flux2-only:
         the FluxGuidance value of the pipeline and explicit overrides of the
         assumed HuggingFace download paths (see load_flux2_pipeline).
+
+        vram_headroom (GB, default 0) is the DynamicVRAM reservation forwarded
+        to the aimdo-backed loaders (gguf-qwen, qwen21-viggle, qwen21-turbo,
+        flux2); it only takes effect on the first model loaded in this
+        process, i.e. it is the config's own value that wins. See
+        comfy_bridge/_dynamic_vram.py and the module docstring.
         """
         with self._pipeline_lock:
             try:
@@ -311,6 +329,7 @@ class ColorizeService:
                         clip_mmproj=clip_mmproj,
                         clip_mmproj_hf_name=clip_mmproj_hf_name,
                         unet_hf_name=unet_hf_name,
+                        vram_headroom=vram_headroom,
                     )
                 elif model_name == "longcat-gguf":
                     pipe = load_longcat_pipeline(
@@ -339,6 +358,7 @@ class ColorizeService:
                         clip_mmproj=clip_mmproj,
                         clip_mmproj_hf_name=clip_mmproj_hf_name,
                         unet_hf_name=unet_hf_name,
+                        vram_headroom=vram_headroom,
                     )
                 elif model_name == "qwen21-turbo":
                     pipe = load_qwen21_turbo_pipeline(
@@ -350,6 +370,7 @@ class ColorizeService:
                         hf_clip=hf_clip,
                         hf_vae=hf_vae,
                         unet_hf_name=unet_hf_name,
+                        vram_headroom=vram_headroom,
                     )
                 elif model_name == "flux2":
                     pipe = load_flux2_pipeline(
@@ -367,6 +388,7 @@ class ColorizeService:
                         clip_hf_name=clip_hf_name,
                         vae_hf_name=vae_hf_name,
                         lora_hf_name=lora_hf_name,
+                        vram_headroom=vram_headroom,
                     )
                 else:
                     pipe = None
@@ -1387,6 +1409,20 @@ def parse_pipeline_config(config_path: str) -> dict:
 
     model_name = cfg.get("model_name", "")
 
+    # aimdo's per-device VRAM headroom (GB), common to every format: 0 means
+    # "no extra headroom" (aimdo's own default) and is the right value for
+    # every model but the int4 ConvRot checkpoints, which need the reservation
+    # to stop filling the card (see comfy_bridge/_dynamic_vram.py).
+    try:
+        vram_headroom = float(cfg.get("vram_headroom", 0))
+    except (TypeError, ValueError):
+        raise PipelineConfigError(
+            f"Config 'vram_headroom' must be a number of GB, got "
+            f"{cfg.get('vram_headroom')!r}") from None
+    if vram_headroom < 0:
+        raise PipelineConfigError(
+            f"Config 'vram_headroom' must be >= 0, got {vram_headroom}")
+
     # New format (gguf-qwen / nunchaku-qwen / longcat-gguf)
     if "unet_gguf" in cfg or "quant" in cfg:
         # New GGUF format
@@ -1405,6 +1441,7 @@ def parse_pipeline_config(config_path: str) -> dict:
             "hf_unet": cfg.get("hf_unet", "unsloth/Qwen-Image-Edit-2511-GGUF"),
             "hf_clip": cfg.get("hf_clip", "unsloth/Qwen2.5-VL-7B-Instruct-GGUF"),
             "hf_vae":  cfg.get("hf_vae",  "Comfy-Org/Qwen-Image_ComfyUI"),
+            "vram_headroom": vram_headroom,
             "hf_lora": cfg.get("hf_lora", "lightx2v/Qwen-Image-Edit-2511-Lightning"),
             "clip_mmproj": cfg.get("clip_mmproj", ""),
             "clip_mmproj_hf_name": cfg.get("clip_mmproj_hf_name", ""),
@@ -1439,6 +1476,7 @@ def parse_pipeline_config(config_path: str) -> dict:
             "clip_hf_name": cfg.get("clip_hf_name", ""),
             "vae_hf_name": cfg.get("vae_hf_name", ""),
             "lora_hf_name": cfg.get("lora_hf_name", ""),
+            "vram_headroom": vram_headroom,
         }
 
     # Legacy format
@@ -1472,6 +1510,7 @@ def parse_pipeline_config(config_path: str) -> dict:
             "hf_clip": "unsloth/Qwen2.5-VL-7B-Instruct-GGUF",
             "hf_vae":  "Comfy-Org/Qwen-Image_ComfyUI",
             "hf_lora": "lightx2v/Qwen-Image-Edit-2511-Lightning",
+            "vram_headroom": vram_headroom,
         }
 
     raise PipelineConfigError(f"Unknown config format in '{config_path}'")
@@ -1514,6 +1553,7 @@ def _load_pipeline_from_parsed(service: ColorizeService, cfg: dict,
         clip_hf_name=cfg.get("clip_hf_name", ""),
         vae_hf_name=cfg.get("vae_hf_name", ""),
         lora_hf_name=cfg.get("lora_hf_name", ""),
+        vram_headroom=cfg.get("vram_headroom", 0),
     )
 
 

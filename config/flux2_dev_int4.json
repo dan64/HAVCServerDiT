@@ -10,6 +10,7 @@
     "lora_hf_name":        "",
     "steps":               2,
     "guidance":            4.0,
+    "vram_headroom":       3,
     "fast_split_TE":       true,
     "split_TE_resolution": 1024,
     "hf_unet":             "Winnougan/INT4-Convrot-Comfy-Models",

@@ -84,7 +84,7 @@ def load_gguf_pipeline(model_name: str, unet_gguf_path: str, clip_gguf_path: str
                        hf_vae="Comfy-Org/Qwen-Image_ComfyUI",
                        hf_lora="lightx2v/Qwen-Image-Edit-2511-Lightning",
                        clip_mmproj: str = "", clip_mmproj_hf_name: str = "",
-                       unet_hf_name: str = ""):
+                       unet_hf_name: str = "", vram_headroom: float = None):
     """
     Load a GGUF-quantized Qwen Image Edit pipeline.
 
@@ -149,7 +149,8 @@ def load_gguf_pipeline(model_name: str, unet_gguf_path: str, clip_gguf_path: str
     if _auto:
         _ensure_models(_files)
 
-    pipeline = comfy_load_gguf(unet_gguf_path, clip_gguf_path, lora_path=lora_path, vae_name=vae_name)
+    pipeline = comfy_load_gguf(unet_gguf_path, clip_gguf_path, lora_path=lora_path, vae_name=vae_name,
+                              vram_headroom=vram_headroom)
     return pipeline
 
 
@@ -369,7 +370,7 @@ def load_viggle_pipeline(model_name: str, unet_path: str, clip_path: str,
                           hf_lora="Viggle/Qwen-Image-2.1-viggle-turbo",
                           clip_mmproj: str = "",
                           clip_mmproj_hf_name: str = "",
-                          unet_hf_name: str = ""):
+                          unet_hf_name: str = "", vram_headroom: float = None):
     """
     Load the Qwen-Image-2.1 pipeline (native ComfyUI int8 ConvRot weights).
     The Viggle-Turbo LoRA is applied as an unmerged runtime hook when
@@ -434,7 +435,8 @@ def load_viggle_pipeline(model_name: str, unet_path: str, clip_path: str,
     if _auto:
         _ensure_models(_files)
 
-    pipeline = _comfy_load_viggle(unet_path, clip_path, lora_path=lora_path, vae_name=vae_name, clip_mmproj=clip_mmproj)
+    pipeline = _comfy_load_viggle(unet_path, clip_path, lora_path=lora_path, vae_name=vae_name,
+                                  clip_mmproj=clip_mmproj, vram_headroom=vram_headroom)
     pipeline["_model_type"] = "qwen21-viggle"
     pipeline["_colorize_fn"] = _colorize_viggle
     return pipeline
@@ -445,7 +447,7 @@ def load_qwen21_turbo_pipeline(model_name: str, unet_path: str, clip_path: str,
                                 hf_unet="Comfy-Org/Qwen-Image-2.1",
                                 hf_clip="Comfy-Org/Qwen-Image-2.1",
                                 hf_vae="Comfy-Org/Qwen-Image-2.1",
-                                unet_hf_name: str = ""):
+                                unet_hf_name: str = "", vram_headroom: float = None):
     """
     Load the Qwen-Image-2.1-Turbo pipeline (native ComfyUI int8 ConvRot
     weights from the Comfy-Org repack).
@@ -489,7 +491,8 @@ def load_qwen21_turbo_pipeline(model_name: str, unet_path: str, clip_path: str,
     if _auto:
         _ensure_models(_files)
 
-    pipeline = _comfy_load_qwen21(unet_path, clip_path, vae_name=vae_name)
+    pipeline = _comfy_load_qwen21(unet_path, clip_path, vae_name=vae_name,
+                                  vram_headroom=vram_headroom)
     pipeline["_model_type"] = "qwen21-turbo"
     pipeline["_colorize_fn"] = _colorize_turbo
     return pipeline
@@ -503,7 +506,8 @@ def load_flux2_pipeline(model_name: str, unet_path: str, clip_path: str,
                         hf_vae="Comfy-Org/flux2-dev",
                         hf_lora="Comfy-Org/flux2-dev",
                         unet_hf_name: str = "", clip_hf_name: str = "",
-                        vae_hf_name: str = "", lora_hf_name: str = ""):
+                        vae_hf_name: str = "", lora_hf_name: str = "",
+                        vram_headroom: float = None):
     """
     Load the FLUX.2 pipeline (Flux.2-dev transformer + Mistral-3 text
     encoder + Flux2 VAE, with the FLUX.2-Turbo LoRA applied at runtime).
@@ -557,7 +561,8 @@ def load_flux2_pipeline(model_name: str, unet_path: str, clip_path: str,
     if _auto:
         _ensure_models(_files)
 
-    pipeline = _comfy_load_flux2(unet_path, clip_path, vae_name=vae_name, lora_path=lora_path)
+    pipeline = _comfy_load_flux2(unet_path, clip_path, vae_name=vae_name, lora_path=lora_path,
+                                 vram_headroom=vram_headroom)
     pipeline["_model_type"] = "flux2"
     pipeline["_colorize_fn"] = _colorize_flux2
     try:

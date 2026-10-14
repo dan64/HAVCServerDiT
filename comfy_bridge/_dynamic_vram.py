@@ -33,11 +33,21 @@ are honoured as well (``--cpu``, ``--highvram``, ``--disable-dynamic-vram``,
 the defaults of a plain launch this is the same configuration the reference
 workflow runs with.
 
-``HAVC_VRAM_HEADROOM`` (GB, float, >= 0) sets the same per-device figure as
-ComfyUI's ``--vram-headroom`` from the environment, which the embedded server
-needs because it does not run ComfyUI's argument parser: aimdo then keeps
-that much VRAM free and unused on purpose, capping how much of a staged model
-stays resident. Unset -> the ComfyUI default (0, i.e. no extra headroom).
+``HAVC_VRAM_HEADROOM`` (GB, float, >= 0) and the pipeline config's
+``vram_headroom`` key set the same per-device figure as ComfyUI's
+``--vram-headroom``: aimdo then keeps that much VRAM free and unused on
+purpose, capping how much of a staged model stays resident. The embedded
+server needs the config key because it never runs ComfyUI's argument parser,
+and the environment variable because a bench run must be able to move the
+knob without editing a config file. Precedence, highest first:
+``HAVC_VRAM_HEADROOM`` -> the config's ``vram_headroom`` -> ``--vram-headroom``
+-> 0 (aimdo's own default, no extra headroom).
+
+The figure belongs to the model that needs it, not to the box: it is what
+takes a checkpoint that *almost* fits out of the marginal regime where aimdo
+fills the card to the brim and the cost of every unit is a lottery. The int4
+ConvRot checkpoint is the one that needs it (see FLUX2_TURBO.md 13.6.17);
+for fp8 and for the models that stay in VRAM it only costs resident capacity.
 """
 
 import logging
@@ -250,6 +260,36 @@ def _headroom_from_env():
     return int(gb * 1024 ** 3)
 
 
+def _resolve_headroom(config_gb=None, args=None):
+    """(headroom_bytes, source) for the per-device aimdo figure.
+
+    Precedence, highest first:
+
+    * ``HAVC_VRAM_HEADROOM`` -- the operator/bench override, so an A/B run can
+      move the knob without editing a config file;
+    * ``config_gb`` -- the pipeline config's ``vram_headroom`` (the per-model
+      choice: it belongs to the checkpoint that needs it);
+    * the visible ComfyUI ``--vram-headroom`` -- 0 unless the embedding runs
+      under ComfyUI's own argument parser;
+    * 0, aimdo's own default.
+    """
+    env = _headroom_from_env()
+    if env is not None:
+        return env, "HAVC_VRAM_HEADROOM"
+    try:
+        gb = float(config_gb) if config_gb else 0.0
+    except (TypeError, ValueError):
+        logger.warning("vram_headroom=%r is not a number: using the default "
+                       "headroom", config_gb)
+        gb = 0.0
+    if gb > 0:
+        return int(gb * 1024 ** 3), "config vram_headroom"
+    arg = getattr(args, "vram_headroom", 0) or 0
+    if arg > 0:
+        return int(arg * 1024 ** 3), "--vram-headroom"
+    return 0, "default"
+
+
 def _visible_args():
     """``comfy.cli_args.args`` when that module is already imported, else None.
 
@@ -352,8 +392,14 @@ def _device_supported(model_management):
     return False
 
 
-def enable():
+def enable(vram_headroom=None):
     """Device half of the DynamicVRAM bootstrap (idempotent, never raises).
+
+    vram_headroom is the pipeline config's ``vram_headroom`` in GB (None/0 ->
+    none); it is resolved against HAVC_VRAM_HEADROOM and the ComfyUI arguments
+    by _resolve_headroom(), and the winner is logged. Only the first call
+    counts, so the value of the config that loaded the first model sets the
+    figure for the whole process -- one model per server run is the contract.
 
     Initializes comfy-aimdo for every torch device and, on success, points the
     core at ``ModelPatcherDynamic`` (``CoreModelPatcher`` + ``aimdo_enabled``),
@@ -399,11 +445,7 @@ def enable():
 
             _call_init(control, args)  # re-apply the policy with the visible args
 
-            headroom = _headroom_from_env()
-            source = "HAVC_VRAM_HEADROOM"
-            if headroom is None:
-                headroom = int(getattr(args, "vram_headroom", 0) * 1024 ** 3)
-                source = "--vram-headroom"
+            headroom, source = _resolve_headroom(vram_headroom, args)
             devices = [(d.index, headroom) for d in model_management.get_all_torch_devices()]
             if not devices:
                 logger.info("DynamicVRAM: no CUDA device found")

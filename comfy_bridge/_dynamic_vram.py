@@ -32,6 +32,12 @@ are honoured as well (``--cpu``, ``--highvram``, ``--disable-dynamic-vram``,
 ``--reserve-vram``, ``--vram-headroom``, ``--disable-nvml-pressure``); with
 the defaults of a plain launch this is the same configuration the reference
 workflow runs with.
+
+``HAVC_VRAM_HEADROOM`` (GB, float, >= 0) sets the same per-device figure as
+ComfyUI's ``--vram-headroom`` from the environment, which the embedded server
+needs because it does not run ComfyUI's argument parser: aimdo then keeps
+that much VRAM free and unused on purpose, capping how much of a staged model
+stays resident. Unset -> the ComfyUI default (0, i.e. no extra headroom).
 """
 
 import logging
@@ -218,6 +224,32 @@ def _disabled_by_env():
             in _DISABLE_VALUES)
 
 
+def _headroom_from_env():
+    """Per-device extra VRAM headroom in bytes from HAVC_VRAM_HEADROOM, or None.
+
+    The same figure as ComfyUI's ``--vram-headroom`` (GB), read from the
+    environment because the embedded server never runs ComfyUI's argument
+    parser. aimdo keeps this much VRAM free and unused on purpose, which caps
+    the resident share of a staged model -- the lever for pushing a model that
+    *almost* fits into the uniform streaming regime instead of the marginal one
+    (see FLUX2_TURBO.md 13.6.17). Unset -> None, i.e. the ComfyUI default.
+    """
+    raw = os.environ.get("HAVC_VRAM_HEADROOM", "").strip()
+    if not raw:
+        return None
+    try:
+        gb = float(raw)
+    except ValueError:
+        logger.warning("HAVC_VRAM_HEADROOM=%r is not a number: using the "
+                       "default headroom", raw)
+        return None
+    if gb < 0:
+        logger.warning("HAVC_VRAM_HEADROOM=%r is negative: using the default "
+                       "headroom", raw)
+        return None
+    return int(gb * 1024 ** 3)
+
+
 def _visible_args():
     """``comfy.cli_args.args`` when that module is already imported, else None.
 
@@ -367,11 +399,18 @@ def enable():
 
             _call_init(control, args)  # re-apply the policy with the visible args
 
-            headroom = int(getattr(args, "vram_headroom", 0) * 1024 ** 3)
+            headroom = _headroom_from_env()
+            source = "HAVC_VRAM_HEADROOM"
+            if headroom is None:
+                headroom = int(getattr(args, "vram_headroom", 0) * 1024 ** 3)
+                source = "--vram-headroom"
             devices = [(d.index, headroom) for d in model_management.get_all_torch_devices()]
             if not devices:
                 logger.info("DynamicVRAM: no CUDA device found")
                 return False
+            if headroom:
+                logger.info("DynamicVRAM: extra VRAM headroom %.2f GB (%s)",
+                            headroom / 1024 ** 3, source)
             try:
                 initialized = control.init_devices(devices)
             except TypeError:

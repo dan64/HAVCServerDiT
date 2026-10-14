@@ -38,6 +38,7 @@ import logging
 import os
 import sys
 import threading
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +49,87 @@ _lock = threading.Lock()
 _process_initialized = False
 _process_ok = False
 _enabled = None  # None = not evaluated yet, True/False once decided
+
+# ---------------------------------------------------------------------------
+# Between-units allocator flush (HAVC_UNIT_FLUSH)
+#
+# comfy-aimdo's README: "you should generally do completely flush the pytorch
+# caching allocator before each new model run, which avoids completely un-used
+# reservations from taking priority over the next models weights". Our phase-B
+# loop re-stages the UNet once per unit (one frame, or one pair canvas), so the
+# documented hygiene belongs between two units. ComfyUI's own prompt loop does
+# exactly this -- gc.collect() + soft_empty_cache(), gated to at most once per
+# 10 s (main.py, gc_collect_interval) -- and is the environment where the int4
+# checkpoint ran its batches cleanly.
+# ---------------------------------------------------------------------------
+_FLUSH_OFF = {"0", "false", "no", "off", "disable", "disabled", "never"}
+_FLUSH_ON = {"1", "true", "yes", "on", "force"}
+_DEFAULT_FLUSH_INTERVAL = 10.0  # ComfyUI's gc_collect_interval
+
+_flush_last = 0.0
+_flush_lock = threading.Lock()
+
+
+def _flush_setting():
+    """The flush interval in seconds from HAVC_UNIT_FLUSH, or None to disable.
+
+    * unset -> auto: the default interval while DynamicVRAM is active, off
+      otherwise (the comfy-aimdo advice is about its own staged weights)
+    * "0" / "off" / "false" / "no" / "disable" -> disabled
+    * "1" / "on" / "true" / "yes" / "force" -> enabled, default interval
+    * a positive number -> that interval in seconds (use a tiny value, e.g.
+      "0.001", to flush after *every* unit)
+    """
+    raw = os.environ.get("HAVC_UNIT_FLUSH", "").strip().lower()
+    if not raw:
+        return _DEFAULT_FLUSH_INTERVAL if _enabled else None
+    if raw in _FLUSH_OFF:
+        return None
+    if raw in _FLUSH_ON:
+        return _DEFAULT_FLUSH_INTERVAL
+    try:
+        secs = float(raw)
+    except ValueError:
+        logger.warning("HAVC_UNIT_FLUSH=%r is neither a switch nor a number: "
+                       "using the default", raw)
+        return _DEFAULT_FLUSH_INTERVAL if _enabled else None
+    return secs if secs > 0 else None
+
+
+def flush_interval():
+    """Seconds between allocator flushes, or None when the feature is off."""
+    return _flush_setting()
+
+
+def flush_between_units():
+    """Allocator hygiene between two units of a phase-B loop (never raises).
+
+    Mirrors ComfyUI's prompt loop (gc.collect + soft_empty_cache, at most once
+    per interval) and comfy-aimdo's advice to flush the caching allocator before
+    each new model run. Controlled by HAVC_UNIT_FLUSH (see _flush_setting):
+    default off unless DynamicVRAM is active, where it uses a 10 s gate.
+    Returns True when a flush actually ran.
+    """
+    global _flush_last
+    interval = _flush_setting()
+    if interval is None:
+        return False
+    now = time.monotonic()
+    with _flush_lock:
+        if interval > 0 and (now - _flush_last) < interval:
+            return False
+        _flush_last = now
+    try:
+        import gc
+
+        import comfy.model_management
+
+        gc.collect()
+        comfy.model_management.soft_empty_cache()
+    except Exception as exc:  # never break a colorize run for hygiene
+        logger.debug("flush_between_units: %s", exc)
+        return False
+    return True
 
 
 def _disabled_by_env():

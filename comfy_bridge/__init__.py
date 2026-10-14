@@ -35,6 +35,16 @@ def get_value_at_index(obj, index):
         return obj["result"][index]
 
 
+def flush_between_units():
+    """Allocator hygiene between two units of a phase-B loop (HAVC_UNIT_FLUSH).
+
+    Thin alias of comfy_bridge._dynamic_vram.flush_between_units(): a time-gated
+    gc.collect() + soft_empty_cache() mirroring ComfyUI's prompt loop, off
+    unless DynamicVRAM is active or HAVC_UNIT_FLUSH forces it. Never raises.
+    """
+    return _dynamic_vram.flush_between_units()
+
+
 def load_gguf_pipeline(unet_path, clip_path, vae_name="qwen_image_vae.safetensors", lora_path=None):
     _dynamic_vram.enable()  # DynamicVRAM before the first model load (see _dynamic_vram)
     import importlib

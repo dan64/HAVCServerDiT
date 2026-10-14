@@ -918,6 +918,9 @@ def colorize_frame_from_te(pipe, te_dir, stem, out_path, steps: int = 2, seed: i
     colorized_upscaled = upscale_with_lanczos(colorized_lowres, orig_size)
     colorized_upscaled.save(out_path)
     elapsed = time.perf_counter() - t0
+    # allocator hygiene for the next unit's re-staging (HAVC_UNIT_FLUSH,
+    # see comfy_bridge/_dynamic_vram.py); outside the elapsed on purpose
+    comfy_bridge.flush_between_units()
     logger.info("colorize_frame_from_te: %s", stem)
     return {"ok": True, "skipped": False, "elapsed": elapsed, "msg": ""}
 
@@ -1120,6 +1123,9 @@ def colorize_frame_edit_from_te(pipe, te_dir, stem, out_path, steps: int = 4,
     colorized_upscaled = upscale_with_lanczos(colorized_lowres, orig_size)
     colorized_upscaled.save(out_path)
     elapsed = time.perf_counter() - t0
+    # allocator hygiene for the next unit's re-staging (HAVC_UNIT_FLUSH,
+    # see comfy_bridge/_dynamic_vram.py); outside the elapsed on purpose
+    comfy_bridge.flush_between_units()
     logger.info("colorize_frame_edit_from_te: %s", stem)
     return {"ok": True, "skipped": False, "elapsed": elapsed, "msg": ""}
 
@@ -1379,6 +1385,9 @@ def colorize_pair_from_te(pipe, te_dir, stem, out1_path, out2_path="", steps: in
 
     written = _pair_split_save(colorized_lowres, geom, out1_path, out2_path)
     elapsed = time.perf_counter() - t0
+    # allocator hygiene for the next unit's re-staging (HAVC_UNIT_FLUSH),
+    # outside the elapsed on purpose -- see comfy_bridge/_dynamic_vram.py
+    comfy_bridge.flush_between_units()
     logger.info("colorize_pair_from_te: %s (mode=%s, %d out)",
                 stem, geom.get("mode"), len(written))
     return {"ok": True, "skipped": False, "elapsed": elapsed,
@@ -1493,6 +1502,9 @@ def colorize_pair_edit_from_te(pipe, te_dir, stem, out1_path, out2_path="",
         pipe, loaded["conditioning"], loaded["latent"], steps=steps, seed=seed)
     written = _pair_split_save(colorized_lowres, geom, out1_path, out2_path)
     elapsed = time.perf_counter() - t0
+    # allocator hygiene for the next unit's re-staging (HAVC_UNIT_FLUSH),
+    # outside the elapsed on purpose -- see comfy_bridge/_dynamic_vram.py
+    comfy_bridge.flush_between_units()
     logger.info("colorize_pair_edit_from_te: %s (mode=%s, %d out)",
                 stem, geom.get("mode"), len(written))
     return {"ok": True, "skipped": False, "elapsed": elapsed,

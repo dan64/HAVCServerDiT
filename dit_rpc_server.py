@@ -39,10 +39,12 @@ file there. Supported config formats (see config/*.json):
     The optional key "fast_split_TE": true (or "on"/"1"/"yes") makes the GUI's
     Fast Pipeline run the paired split: consecutive frames are merged before
     the text encoder and the decoded canvas is split back afterwards (one TE
-    pass + one sampling pass per two frames). Supported by the qwen21 families
-    and gguf-qwen (qwen21-viggle, qwen21-turbo, gguf-qwen); flux2 runs the
-    single-frame split only -- its text encoder never sees the frame, so there
-    is nothing to amortize by pairing. The flag lives in the config file and is
+    pass + one sampling pass per two frames). Supported by the split-TE
+    families: qwen21-viggle, qwen21-turbo, gguf-qwen and flux2. In flux2 the
+    text encoder never sees the frame (the canvas travels as the VAE
+    reference latent), so pairing saves the per-pair sampling pass and the
+    VAE encode, not a per-frame TE pass -- and the two frames share the
+    split_TE_resolution area budget. The flag lives in the config file and is
     consumed by the GUI, not by this server.
 
     The optional key "split_TE_resolution" (default 1024) sets the working
@@ -666,17 +668,21 @@ class ColorizeService:
                        prompt: str, resolution: int = 1024, img_size: int = 0,
                        enhance_prompt: bool = False, first: bool = False,
                        usm_radius: float = 0.0) -> dict:
-        """Phase A (one pair), qwen21-viggle / qwen21-turbo families: cache the
-        conditioning of the merged canvas under te_dir/<stem>.safetensors, the
-        pair geometry included. in2_path="" (odd trailing frame) degrades the
-        pair to a single-frame conditioning; first=True drops the loaded models
-        so the TE + VAE start clean. Already-cached pairs are skipped (resume).
+        """Phase A (one pair), qwen21-viggle / qwen21-turbo / flux2 families:
+        cache the conditioning of the merged canvas under
+        te_dir/<stem>.safetensors, the pair geometry included. in2_path=""
+        (odd trailing frame) degrades the pair to a single-frame conditioning;
+        first=True drops the loaded models so the TE + VAE start clean.
+        Already-cached pairs are skipped (resume). For flux2 the canvas is the
+        VAE reference latent of a prompt-only conditioning (the enhancer flag
+        does not apply).
         """
         if self._pipeline is None:
             return {"ok": False, "skipped": False, "elapsed": 0.0, "msg": "Pipeline not loaded"}
-        if self._pipeline_model_name not in ("qwen21-viggle", "qwen21-turbo"):
+        if self._pipeline_model_name not in ("qwen21-viggle", "qwen21-turbo", "flux2"):
             return {"ok": False, "skipped": False, "elapsed": 0.0,
-                    "msg": "encode_pair_te requires a qwen21 (split-TE) pipeline"}
+                    "msg": "encode_pair_te requires a split-TE pipeline "
+                           "(qwen21-viggle / qwen21-turbo / flux2)"}
         try:
             from dit_colorize_main import encode_pair_te as _encode_pair_te
             res = _encode_pair_te(
@@ -695,18 +701,19 @@ class ColorizeService:
     def colorize_pair_from_te(self, te_dir: str, stem: str, out1_path: str,
                               out2_path: str = "", steps: int = 2, seed: int = 42,
                               first: bool = False) -> dict:
-        """Phase B (one pair), qwen21-viggle / qwen21-turbo families: sample +
-        decode the cached pair canvas and split it back into the frames (one
-        output for a degraded pair); first=True drops the loaded models so the
-        UNet + VAE start clean. Pairs whose expected outputs all exist are
-        skipped (resume).
+        """Phase B (one pair), qwen21-viggle / qwen21-turbo / flux2 families:
+        sample + decode the cached pair canvas and split it back into the
+        frames (one output for a degraded pair); first=True drops the loaded
+        models so the UNet + VAE start clean. Pairs whose expected outputs all
+        exist are skipped (resume).
         """
         if self._pipeline is None:
             return {"ok": False, "skipped": False, "elapsed": 0.0, "written": [],
                     "msg": "Pipeline not loaded"}
-        if self._pipeline_model_name not in ("qwen21-viggle", "qwen21-turbo"):
+        if self._pipeline_model_name not in ("qwen21-viggle", "qwen21-turbo", "flux2"):
             return {"ok": False, "skipped": False, "elapsed": 0.0, "written": [],
-                    "msg": "colorize_pair_from_te requires a qwen21 (split-TE) pipeline"}
+                    "msg": "colorize_pair_from_te requires a split-TE pipeline "
+                           "(qwen21-viggle / qwen21-turbo / flux2)"}
         try:
             from dit_colorize_main import colorize_pair_from_te as _colorize_pair_from_te
             res = _colorize_pair_from_te(

@@ -783,8 +783,9 @@ def _te_manifest_save(te_dir, key, frames):
 def _split_family(pipe):
     """The family marker of a loaded pipeline ("" for non-dict pipelines).
 
-    The single-frame split flow (encode_frame_te / colorize_frame_from_te) is
-    shared by the cached-TE families: the qwen21 pair uses the viggle
+    The split flows (the single-frame encode_frame_te / colorize_frame_from_te
+    and the paired encode_pair_te / colorize_pair_from_te) are shared by the
+    cached-TE families: qwen21-viggle and qwen21-turbo use the viggle
     conditioning, flux2 uses its own (prompt-only text encoder + reference
     latent), while the 2511 family has its own edit-conditioning functions.
     """
@@ -1244,9 +1245,14 @@ def _pair_split_save(colorized, geom, out1_path, out2_path):
 def encode_pair_te(pipe, in1_path, in2_path, te_dir, stem, prompt, resolution: int = 1024,
                    img_size: int = 0, enhance_prompt: bool = False, first: bool = False,
                    model_config: str = "", usm_radius: float = 0.0) -> dict:
-    """Phase A, one pair (qwen21-viggle / qwen21-turbo conditioning format):
-    condition the merged canvas of one or two frames with a single text-encoder
-    pass and cache it under te_dir/<stem>.safetensors, geometry included.
+    """Phase A, one pair (qwen21-viggle / qwen21-turbo / flux2 conditioning
+    formats): condition the merged canvas of one or two frames with a single
+    text-encoder pass and cache it under te_dir/<stem>.safetensors, geometry
+    included.
+
+    For flux2 the canvas is the VAE reference latent of a prompt-only
+    conditioning (encode_flux2_conditioning), exactly as the single-frame
+    flow; the enhancer flag does not apply to that family.
 
     Same contract as encode_frame_te(): first=True drops the loaded models
     before anything else; a pair already cached for the same prompt/settings is
@@ -1291,10 +1297,18 @@ def encode_pair_te(pipe, in1_path, in2_path, te_dir, stem, prompt, resolution: i
         logger.info("encode_pair_te: both frames too dark, skipped: %s", stem)
         return {"ok": True, "skipped": True, "elapsed": 0.0, "msg": "too dark"}
 
-    res = comfy_bridge.encode_viggle_conditioning(
-        pipe, canvas["image"], prompt, resolution=resolution,
-        enhance_prompt=enhance_prompt)
-    comfy_bridge.save_viggle_conditioning(
+    if _split_family(pipe) == "flux2":
+        # flux2: prompt-only text encoder + the canvas as VAE reference
+        # latent; no prompt enhancer in this family
+        res = comfy_bridge.encode_flux2_conditioning(
+            pipe, canvas["image"], prompt, resolution=resolution)
+        _save = comfy_bridge.save_flux2_conditioning
+    else:
+        res = comfy_bridge.encode_viggle_conditioning(
+            pipe, canvas["image"], prompt, resolution=resolution,
+            enhance_prompt=enhance_prompt)
+        _save = comfy_bridge.save_viggle_conditioning
+    _save(
         te_path, res["conditioning"], res["latent"],
         prompt=res["prompt"], prompt_original=prompt,
         meta={"source": os.path.basename(src), "model_config": model_config,
@@ -1309,11 +1323,11 @@ def encode_pair_te(pipe, in1_path, in2_path, te_dir, stem, prompt, resolution: i
 
 def colorize_pair_from_te(pipe, te_dir, stem, out1_path, out2_path="", steps: int = 2,
                           seed: int = 42, first: bool = False) -> dict:
-    """Phase B, one pair (qwen21-viggle / qwen21-turbo conditioning format):
-    sample + decode the cached pair canvas, split it back into the frames and
-    save each at its original size (one output for a degraded pair). Same
-    contract as colorize_frame_from_te(): first=True drops the loaded models
-    first; a pair whose expected outputs all exist is skipped. Returns
+    """Phase B, one pair (qwen21-viggle / qwen21-turbo / flux2 conditioning
+    formats): sample + decode the cached pair canvas, split it back into the
+    frames and save each at its original size (one output for a degraded pair).
+    Same contract as colorize_frame_from_te(): first=True drops the loaded
+    models first; a pair whose expected outputs all exist is skipped. Returns
     {"ok", "skipped", "elapsed", "msg", "written"}.
     """
     import logging
@@ -1348,16 +1362,21 @@ def colorize_pair_from_te(pipe, te_dir, stem, out1_path, out2_path="", steps: in
 
     t0 = time.perf_counter()
     try:
-        loaded = comfy_bridge.load_viggle_conditioning(te_path)
+        if _split_family(pipe) == "flux2":
+            loaded = comfy_bridge.load_flux2_conditioning(te_path)
+            colorized_lowres = comfy_bridge.colorize_flux2_from_conditioning(
+                pipe, loaded["conditioning"], loaded["latent"], steps=steps, seed=seed)
+        else:
+            loaded = comfy_bridge.load_viggle_conditioning(te_path)
+            colorized_lowres = comfy_bridge.colorize_viggle_from_conditioning(
+                pipe, loaded["conditioning"], loaded["latent"], steps=steps, seed=seed)
     except ValueError as exc:
-        # a conditioning of the other family left in this folder (same stem):
+        # a conditioning of another family left in this folder (same stem):
         # skip instead of sampling a mismatched structure
         logger.warning("colorize_pair_from_te: %s: %s", stem, exc)
         return {"ok": True, "skipped": True, "elapsed": 0.0, "written": [],
                 "msg": str(exc)}
 
-    colorized_lowres = comfy_bridge.colorize_viggle_from_conditioning(
-        pipe, loaded["conditioning"], loaded["latent"], steps=steps, seed=seed)
     written = _pair_split_save(colorized_lowres, geom, out1_path, out2_path)
     elapsed = time.perf_counter() - t0
     logger.info("colorize_pair_from_te: %s (mode=%s, %d out)",

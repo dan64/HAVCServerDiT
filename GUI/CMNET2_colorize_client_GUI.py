@@ -1458,8 +1458,8 @@ def orchestrator(init_values, window):
         canvas is split back *after* the transformer -- one TE pass and one
         sampling pass per two frames.
 
-        family is "te" (qwen21-viggle / qwen21-turbo conditioning format) or
-        "edit" (qwen-2511). Same chunk/resume/cleanup scheme as
+        family is "te" (qwen21-viggle / qwen21-turbo / flux2 conditioning
+        format) or "edit" (qwen-2511). Same chunk/resume/cleanup scheme as
         do_colorize_split(): phase A caches the pair conditioning with the TE +
         VAE resident, phase B samples with the UNet + VAE resident, and a
         chunk's cache is dropped once its frames are colorized. The pair cache
@@ -1537,6 +1537,14 @@ def orchestrator(init_values, window):
                 log_message("ℹ️ qwen21-turbo: prompt enhancement is not used "
                             "by this family.")
             steps = 8
+            enhance_prompt = False
+        elif model_type == "flux2":
+            # flux2 keeps the panel's step count in the paired flow too
+            # (Flux2Scheduler derives its mu-shift schedule from it; the Turbo
+            # LoRA's native value is 2) and has no prompt enhancer.
+            if enhance_prompt:
+                log_message("ℹ️ flux2: prompt enhancement is not used "
+                            "by this family.")
             enhance_prompt = False
 
         chunks = [todo[i:i + chunk_size] for i in range(0, len(todo), chunk_size)]
@@ -1987,15 +1995,18 @@ def orchestrator(init_values, window):
                 do_colorize_split_edit(values, window)
             return
         if model_type == "flux2":
-            # Fast Pipeline on the flux2 family runs the single-frame split flow
-            # (phase A: Mistral text encode + VAE reference latent cached under
-            # ref_te/; phase B: sampling from the cache). The pairing flag does
-            # not apply here: this family's text encoder never sees the frame,
-            # so merging two frames would only halve their working resolution.
+            # Fast Pipeline on the flux2 family runs the split flow (phase A:
+            # Mistral text encode + VAE reference latent cached under ref_te/;
+            # phase B: sampling from the cache). With the config key
+            # fast_split_TE the pairing flag merges consecutive frames into one
+            # canvas (ref_te_pair/): the canvas becomes the reference latent of
+            # a single conditioning, so a pair costs one VAE encode + one
+            # sampling pass instead of two — the two frames share the
+            # split_TE_resolution area budget.
             if fast_pair:
-                log_message("ℹ️ flux2: fast_split_TE is not supported (the text "
-                            "encoder is prompt-only) — running the single split flow.")
-            do_colorize_split(values, window)
+                do_colorize_split_pair(values, window, "te")
+            else:
+                do_colorize_split(values, window)
             return
         gap_px = 16 if model_type == "qwen21-viggle" else 8
 

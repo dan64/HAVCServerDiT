@@ -129,7 +129,88 @@ def flush_between_units():
     except Exception as exc:  # never break a colorize run for hygiene
         logger.debug("flush_between_units: %s", exc)
         return False
+    if os.environ.get("HAVC_AIMDO_PROBE"):
+        logger.info("aimdo probe [flush]: allocator flushed between units")
     return True
+
+
+# ---------------------------------------------------------------------------
+# Residency probe (HAVC_AIMDO_PROBE=1)
+#
+# Diagnostic for the DynamicVRAM staging tail: aimdo faults weights in on
+# demand and, once a page has been evicted, sets a watermark so that weights
+# above it fail the fault and get copied to a temporary buffer at every layer
+# call instead of staying resident (see comfy-aimdo's README). Which of the two
+# regimes a unit lands in is what makes the same pass take 7 s or 18 s. This
+# logs, around the sampling and the decode, the VBAR's own counters plus the
+# driver's free VRAM and the pytorch allocator's figures, so the two regimes
+# can be told apart from a log instead of guessed from timings.
+#
+# Off unless HAVC_AIMDO_PROBE is set: no behaviour change, no cost.
+# ---------------------------------------------------------------------------
+
+
+def probe_vram():
+    """(driver_free_mb, driver_total_mb, torch_reserved_mb, torch_alloc_mb)."""
+    try:
+        import torch
+
+        if not torch.cuda.is_available():
+            return None
+        free_b, total_b = torch.cuda.mem_get_info()
+        dev = torch.cuda.current_device()
+        return (free_b / 2 ** 20, total_b / 2 ** 20,
+                torch.cuda.memory_reserved(dev) / 2 ** 20,
+                torch.cuda.memory_allocated(dev) / 2 ** 20)
+    except Exception:
+        return None
+
+
+def probe_residency(model, label=""):
+    """Log the aimdo VBAR stats of one ModelPatcher (HAVC_AIMDO_PROBE only).
+
+    Reports: VBAR loaded bytes / watermark / resident pages, the driver's free
+    VRAM and the pytorch allocator's reserved+allocated bytes. Returns the dict
+    it logged, or None when the probe is off or the model has no VBAR.
+    """
+    if not os.environ.get("HAVC_AIMDO_PROBE"):
+        return None
+    info = {"label": label}
+    try:
+        vbars = getattr(getattr(model, "model", None), "dynamic_vbars", None) or {}
+        vbar = None
+        device = getattr(model, "load_device", None)
+        if vbars:
+            vbar = vbars.get(device)
+            if vbar is None:
+                vbar = next(iter(vbars.values()))
+        if vbar is not None:
+            vbar_loaded = vbar.loaded_size()
+            total_pages = vbar.get_nr_pages()
+            resident = sum(1 for f in vbar.get_residency() if f & 1)
+            info.update(vbar_loaded_mb=vbar_loaded / 2 ** 20,
+                        vbar_watermark_mb=vbar.get_watermark() / 2 ** 20,
+                        vbar_pages=total_pages, vbar_resident_pages=resident)
+        vr = probe_vram()
+        if vr is not None:
+            info.update(driver_free_mb=vr[0], driver_total_mb=vr[1],
+                        torch_reserved_mb=vr[2], torch_alloc_mb=vr[3])
+    except Exception as exc:  # never break a run for a diagnostic
+        logger.debug("probe_residency: %s", exc)
+        return None
+    parts = []
+    if "vbar_loaded_mb" in info:
+        parts.append("vbar %.0f MB loaded, watermark %.0f MB, resident %d/%d pages"
+                     % (info["vbar_loaded_mb"], info["vbar_watermark_mb"],
+                        info["vbar_resident_pages"], info["vbar_pages"]))
+    if "driver_free_mb" in info:
+        parts.append("driver free %.0f/%.0f MB"
+                     % (info["driver_free_mb"], info["driver_total_mb"]))
+        parts.append("torch reserved %.0f MB, alloc %.0f MB"
+                     % (info["torch_reserved_mb"], info["torch_alloc_mb"]))
+    if parts:
+        logger.info("aimdo probe [%s]: %s", label, " | ".join(parts))
+    return info
 
 
 def _disabled_by_env():

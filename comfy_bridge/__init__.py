@@ -1120,9 +1120,11 @@ def _flux2_sample_decode(pipeline, conditioning, latent_dict, steps, seed):
     sampled = SamplerCustomAdvanced().EXECUTE_NORMALIZED(
         noise=noise, guider=guider, sampler=sampler, sigmas=sigmas, latent_image=latent_dict)
     latent_samples = get_value_at_index(sampled, 0)
+    _dynamic_vram.probe_residency(pipeline.get("model"), "flux2 after-sample")
 
     img_decoded = cn.VAEDecode().decode(samples=latent_samples, vae=pipeline["vae"])
     img_t = get_value_at_index(img_decoded, 0)
+    _dynamic_vram.probe_residency(pipeline.get("model"), "flux2 after-decode")
 
     if img_t.ndim == 4:
         img_np = img_t[0].cpu().float().numpy()

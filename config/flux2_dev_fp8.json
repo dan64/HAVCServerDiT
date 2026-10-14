@@ -10,6 +10,7 @@
     "lora_hf_name":        "",
     "steps":               2,
     "guidance":            4.0,
+    "fast_split_TE":       true,
     "split_TE_resolution": 1024,
     "hf_unet":             "Comfy-Org/flux2-dev",
     "hf_clip":             "Comfy-Org/flux2-dev",

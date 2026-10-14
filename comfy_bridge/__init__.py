@@ -3,11 +3,20 @@ comfy_bridge  :  ComfyUI-native GGUF inference, self-contained.
 No dependency on external ComfyUI installation.
 """
 
-import sys, os, torch, logging, json, math, numpy as np
-from PIL import Image
+import sys, os
 
 # Bootstrap: make comfy_bridge importable as top-level
 from . import _bootstrap
+
+# DynamicVRAM (comfy-aimdo): the process half runs before torch is imported,
+# like the same block in ComfyUI's main.py; the device half --
+# _dynamic_vram.enable() -- is called by the pipeline loaders below, before
+# the first model load. Set HAVC_DYNAMIC_VRAM=0 to keep the legacy patcher.
+from . import _dynamic_vram
+_dynamic_vram.init_process()
+
+import torch, logging, json, math, numpy as np
+from PIL import Image
 
 # Opt-in per-image profiler for the Qwen-Image-Edit path (HAVC_EDIT_PROFILE=1)
 from . import edit_profile as _edit_profile
@@ -27,6 +36,7 @@ def get_value_at_index(obj, index):
 
 
 def load_gguf_pipeline(unet_path, clip_path, vae_name="qwen_image_vae.safetensors", lora_path=None):
+    _dynamic_vram.enable()  # DynamicVRAM before the first model load (see _dynamic_vram)
     import importlib
     _gguf_loader = importlib.import_module("ComfyUI-GGUF.loader")
     _gguf_nodes  = importlib.import_module("ComfyUI-GGUF.nodes")
@@ -321,6 +331,7 @@ def load_viggle_pipeline(unet_path, clip_path, vae_name="qwen_image_2.1_vae_bf16
     from the same folder as clip_path; clip_mmproj isn't consumed here, it
     only exists upstream to drive the mmproj auto-download.
     """
+    _dynamic_vram.enable()  # DynamicVRAM before the first model load (see _dynamic_vram)
     import importlib
     ViggleTurboLora = importlib.import_module("viggle_turbo").ViggleTurboLora
     import nodes as cn
@@ -986,6 +997,7 @@ def load_flux2_pipeline(unet_path, clip_path, vae_name="flux2-vae.safetensors", 
     Mistral-3 Flux2 encoder exists and the Reboot loader has no flux2 TE
     recipe, so a .gguf here is rejected with an explicit message.
     """
+    _dynamic_vram.enable()  # DynamicVRAM before the first model load (see _dynamic_vram)
     import importlib
     import nodes as cn
 

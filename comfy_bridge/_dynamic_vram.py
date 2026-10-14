@@ -1,0 +1,232 @@
+"""DynamicVRAM (comfy-aimdo) bootstrap for the embedded ComfyUI core.
+
+ComfyUI's ``main.py`` switches the allocator over to comfy-aimdo when that
+package is installed and the platform supports it::
+
+    comfy_aimdo.control.init(...)                # process setup (pre-torch)
+    ...
+    comfy_aimdo.control.init_devices(...)        # per-device hooks
+    comfy.model_patcher.CoreModelPatcher = comfy.model_patcher.ModelPatcherDynamic
+    comfy.memory_management.aimdo_enabled = True
+
+With that in place a model is staged in RAM and its weights are faulted into
+VRAM on demand (``ModelPatcherDynamic``) instead of going through the classic
+lowvram patch streaming of the legacy ``ModelPatcher``. A server that embeds
+the core without running ``main.py`` -- this one -- keeps the legacy path,
+which is measurably slower on a VRAM-constrained card: on the RTX 5070 Ti
+16 GB the same FLUX.2 fp8 2-step pass runs at 4.4 s/step in ComfyUI v0.37
+("Model Flux2 prepared for dynamic VRAM loading. 33813MB Staged") against the
+6.5 s/step of the legacy path ("loaded partially; ... lowvram patches: 115"),
+with a byte-identical core (2026-10-14 logs).
+
+``init_process()`` mirrors the process half of that bootstrap and runs before
+torch is imported (``comfy_bridge/__init__.py`` calls it); ``enable()``
+mirrors the device half and must run before the first model is loaded (the
+pipeline loaders call it). Both are idempotent and never raise: any failure
+leaves the legacy ``ModelPatcher`` in place, exactly like the "No working
+comfy-aimdo install detected" branch of ``main.py``.
+
+Set ``HAVC_DYNAMIC_VRAM=0`` to skip both steps -- the equivalent of ComfyUI's
+``--disable-dynamic-vram``. When the ComfyUI CLI arguments are visible they
+are honoured as well (``--cpu``, ``--highvram``, ``--disable-dynamic-vram``,
+``--reserve-vram``, ``--vram-headroom``, ``--disable-nvml-pressure``); with
+the defaults of a plain launch this is the same configuration the reference
+workflow runs with.
+"""
+
+import logging
+import os
+import sys
+import threading
+
+logger = logging.getLogger(__name__)
+
+# HAVC_DYNAMIC_VRAM values that keep the legacy ModelPatcher.
+_DISABLE_VALUES = {"0", "false", "no", "off", "disable", "disabled"}
+
+_lock = threading.Lock()
+_process_initialized = False
+_process_ok = False
+_enabled = None  # None = not evaluated yet, True/False once decided
+
+
+def _disabled_by_env():
+    return (os.environ.get("HAVC_DYNAMIC_VRAM", "").strip().lower()
+            in _DISABLE_VALUES)
+
+
+def _visible_args():
+    """``comfy.cli_args.args`` when that module is already imported, else None.
+
+    Never imports ``comfy.cli_args``: ``init_process()`` runs while the
+    embedding is still free to hand the core its own argv (the offline probes
+    set "--cpu" there), and importing the module would freeze the parse.
+    Without it the ComfyUI defaults are assumed -- ``reserve_vram`` unset and
+    NVML pressure on -- which is what the reference workflow runs with.
+    """
+    mod = sys.modules.get("comfy.cli_args")
+    return getattr(mod, "args", None) if mod is not None else None
+
+
+def _aimdo_version():
+    try:
+        import importlib.metadata
+        return importlib.metadata.version("comfy-aimdo")
+    except Exception:
+        return "?"
+
+
+def _call_init(control, args=None):
+    """``comfy_aimdo.control.init(...)`` with main.py's protocol fallbacks.
+
+    Returns True when the comfy-aimdo library is loaded (its older protocols
+    do not all report a return value).
+    """
+    reserve = getattr(args, "reserve_vram", None)
+    simple_headroom = None if reserve is None else int(reserve * 1024 ** 3)
+    nvml_pressure = not bool(getattr(args, "disable_nvml_pressure", False))
+    try:
+        control.init(simple_vram_headroom=simple_headroom, nvml_pressure=nvml_pressure)
+    except TypeError:
+        try:
+            # comfy-aimdo 0.4.10 protocol (no NVML toggle)
+            control.init(simple_vram_headroom=simple_headroom)
+        except TypeError:
+            # comfy-aimdo 0.4.9 protocol
+            control.init()
+    return getattr(control, "lib", None) is not None
+
+
+def init_process():
+    """Process half of the DynamicVRAM bootstrap (pre-torch, idempotent).
+
+    Loads the comfy-aimdo library and applies the VRAM headroom / NVML
+    pressure policy. Returns True when the library is available; never raises.
+    """
+    global _process_initialized, _process_ok
+    if _process_initialized:
+        return _process_ok
+    with _lock:
+        if _process_initialized:
+            return _process_ok
+        _process_initialized = True
+        _process_ok = False
+
+        # ComfyUI parity: the Windows mimalloc purge delay is set before torch
+        # (and its allocator) is loaded. Unconditional there, unconditional here.
+        if os.name == "nt":
+            os.environ.setdefault("MIMALLOC_PURGE_DELAY", "0")
+
+        if _disabled_by_env():
+            logger.info("DynamicVRAM: disabled by HAVC_DYNAMIC_VRAM")
+            return False
+
+        args = _visible_args()
+        if args is not None:
+            try:
+                from comfy.cli_args import enables_dynamic_vram
+                if not enables_dynamic_vram():
+                    logger.info("DynamicVRAM: disabled by the ComfyUI arguments")
+                    return False
+            except Exception:
+                pass
+
+        try:
+            import comfy_aimdo.control as control
+        except Exception as exc:
+            logger.debug("DynamicVRAM: comfy-aimdo not importable (%s)", exc)
+            return False
+
+        try:
+            _process_ok = bool(_call_init(control, args))
+        except Exception as exc:
+            logger.debug("DynamicVRAM: comfy-aimdo process init failed (%s)", exc)
+            _process_ok = False
+        return _process_ok
+
+
+def _device_supported(model_management):
+    """main.py's dynamic_vram_supported(): Nvidia, or AMD with ROCm >= 7.14."""
+    try:
+        if model_management.is_nvidia():
+            return True
+        if model_management.is_amd() and model_management.rocm_version >= (7, 14):
+            return True
+    except Exception:
+        pass
+    return False
+
+
+def enable():
+    """Device half of the DynamicVRAM bootstrap (idempotent, never raises).
+
+    Initializes comfy-aimdo for every torch device and, on success, points the
+    core at ``ModelPatcherDynamic`` (``CoreModelPatcher`` + ``aimdo_enabled``),
+    exactly like the block after ``dynamic_vram_supported()`` in main.py.
+    Call it before the first model is loaded. Returns True when DynamicVRAM
+    ended up enabled.
+    """
+    global _enabled
+    if _enabled is not None:
+        return _enabled
+    with _lock:
+        if _enabled is not None:
+            return _enabled
+        _enabled = False
+
+        if not init_process():
+            return False
+
+        try:
+            import comfy.memory_management as memory_management
+            import comfy.model_management as model_management
+            import comfy.model_patcher as model_patcher
+            import comfy_aimdo.control as control
+
+            args = _visible_args()
+            if args is not None:
+                from comfy.cli_args import enables_dynamic_vram
+                if not enables_dynamic_vram():
+                    logger.info("DynamicVRAM: disabled by the ComfyUI arguments "
+                                "(cpu/highvram/gpu-only/novram/--disable-dynamic-vram)")
+                    return False
+
+            explicit = bool(getattr(args, "enable_dynamic_vram", False))
+            if not explicit and not _device_supported(model_management):
+                logger.info("DynamicVRAM: no supported device "
+                            "(Nvidia, or AMD with ROCm >= 7.14)")
+                return False
+            if not explicit and model_management.torch_version_numeric < (2, 8):
+                logger.warning("DynamicVRAM: pytorch %s < 2.8 - keeping the "
+                               "legacy ModelPatcher",
+                               ".".join(str(p) for p in model_management.torch_version_numeric))
+                return False
+
+            _call_init(control, args)  # re-apply the policy with the visible args
+
+            headroom = int(getattr(args, "vram_headroom", 0) * 1024 ** 3)
+            devices = [(d.index, headroom) for d in model_management.get_all_torch_devices()]
+            if not devices:
+                logger.info("DynamicVRAM: no CUDA device found")
+                return False
+            try:
+                initialized = control.init_devices(devices)
+            except TypeError:
+                # comfy-aimdo 0.4.9 protocol (no per-device headroom)
+                initialized = control.init_devices([d for d, _ in devices])
+            if not initialized:
+                logger.warning("DynamicVRAM: comfy-aimdo could not initialize the "
+                               "device - keeping the legacy ModelPatcher")
+                return False
+
+            model_patcher.CoreModelPatcher = model_patcher.ModelPatcherDynamic
+            memory_management.aimdo_enabled = True
+            _enabled = True
+            logger.info("DynamicVRAM enabled (comfy-aimdo %s): staged weights, "
+                        "ModelPatcherDynamic", _aimdo_version())
+            return True
+        except Exception as exc:
+            logger.warning("DynamicVRAM: bootstrap failed (%s) - keeping the "
+                           "legacy ModelPatcher", exc)
+            logger.debug("DynamicVRAM bootstrap traceback", exc_info=True)
+            return False

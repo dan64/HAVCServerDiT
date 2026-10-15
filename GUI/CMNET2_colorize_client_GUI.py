@@ -373,6 +373,8 @@ def load_all_configs():
         "mux_all_streams": False,
         "hf_cache":       "",
         "prompt":         "Add colors to this black-and-white image, not to hedge about what colors might be present. For any subject, garment, object, or setting whose color is a matter of common knowledge or strong convention, assign the expected color directly and confidently. Colorize this image using natural colors. Strictly preserve all shapes, edges and background details.",
+        "color_prompt_max":   "30",
+        "color_prompts":      [],   # empty = seeded from "prompt" at startup
         "shutdown_on_complete": False,
         "dupe_first_frame":     False,
         "do_step1":       False,
@@ -630,6 +632,7 @@ state = {
                                   # (aborted when the app is closed)
     "total_frames":    -1,
     "fix_prompts":     [],
+    "color_prompts":   [],      # tab 2 preset prompt list (Spinbox browses it)
     "fix_batch_paths": [],         # list of full paths for batch processing
     "fix_batch_index": -1,        # current index during batch colorization
     "fix_batch_outputs": [],      # list of (orig_path, PIL_image) tuples during batch
@@ -920,6 +923,16 @@ def _launch_pipeline(window, run_values):
     """Actually start the batch pipeline (orchestrator thread) - shared by
     the immediate path in the "-RUN-" handler and the deferred path that
     waits for an auto-started DiT server to come online first."""
+    # Register the tab-2 prompt in the preset list before launching
+    # (main thread; same history semantics as tab 4's fix_prompts).
+    _p = run_values.get("-PROMPT-") or ""
+    if remember_color_prompt(state["color_prompts"], _p,
+                             int(run_values.get("-PROMPT_MAX-", 30) or 30)):
+        cfg["color_prompts"] = state["color_prompts"]
+        save_all_configs(cfg)
+        window["-PROMPT_IDX-"].update(
+            values=color_prompt_range(len(state["color_prompts"])),
+            value=str(state["color_prompts"].index(_p) + 1))
     window["-RUN-"].update(disabled=True)
     window["-STOP-"].update(disabled=False)
     window["-LOG_BOX-"].update("--- STARTING BATCH ---\n")
@@ -2497,11 +2510,48 @@ def orchestrator(init_values, window):
         state["is_running"] = False
 
 
+# ---------------------------------------------------------------------------
+# TAB 2 PRESET PROMPT LIST - pure helpers. The list is kept internally
+# (settings key "color_prompts"); the Spinbox on tab 2 browses it by index
+# and shows the selected prompt in the Multiline. Index 0 is the protected
+# default, mirroring tab 4's fix_prompts history.
+# ---------------------------------------------------------------------------
+def color_prompt_range(n):
+    """Spinbox values for a preset list of n prompts ("1".."n")."""
+    return [str(i) for i in range(1, max(1, n) + 1)]
+
+
+def remember_color_prompt(prompts, prompt, max_prompts):
+    """Register a new prompt in the tab-2 preset list: keep index 0 (the
+    default), trim when at/over the max, append, then sort everything after
+    the default. Returns True if the list changed."""
+    if not prompt or prompt in prompts:
+        return False
+    while len(prompts) > 1 and len(prompts) >= max_prompts:
+        prompts.pop(1)
+    prompts.append(prompt)
+    if len(prompts) > 2:
+        prompts[1:] = sorted(prompts[1:], key=str.lower)
+    return True
+
+
+def color_prompt_index(prompts, idx_value):
+    """Parse a Spinbox value into a clamped 0-based list index."""
+    try:
+        idx = int(idx_value) - 1
+    except (TypeError, ValueError):
+        idx = 0
+    return max(0, min(idx, len(prompts) - 1))
+
+
 # ===========================================================================
 # GUI LAYOUT
 # ===========================================================================
 cfg = load_all_configs()
 state["fix_prompts"] = cfg.get("fix_prompts", ["color this image, natural colors."])
+state["color_prompts"] = cfg.get("color_prompts") or [cfg["prompt"]]
+_color_prompt_init = (str(state["color_prompts"].index(cfg["prompt"]) + 1)
+                      if cfg["prompt"] in state["color_prompts"] else "1")
 sg.theme("DarkBlue14")
 
 merge_values:      list[str] = [f"{x/100:.2f}" for x in range(20, 75, 5)]
@@ -2845,6 +2895,16 @@ tab3_layout = [
     ], expand_x=True)],
     [sg.Text("Prompt:"), sg.Multiline(cfg["prompt"], key="-PROMPT-", expand_x=True, size=(80,4), no_scrollbar=True),
      sg.Checkbox("Enhance Prompt", key="-ENHANCE_PROMPT-", default=cfg.get("enhance_prompt", False))],
+    [sg.Text("Preset #:"),
+     sg.Spin(color_prompt_range(len(state["color_prompts"])),
+             initial_value=_color_prompt_init,
+             key="-PROMPT_IDX-", enable_events=True, size=(4, 1),
+             tooltip="Browse the internal prompt list: pick a number to show that\nprompt in the field above. Add / Update / Delete / Clear manage the\nlist; preset #1 is the protected default. A prompt used in a run is\nadded automatically (up to Max)."),
+     sg.Button("Add", key="-PROMPT_ADD-"),
+     sg.Button("Update", key="-PROMPT_UPDATE-"),
+     sg.Button("Delete", key="-PROMPT_DEL-"),
+     sg.Button("Clear", key="-PROMPT_CLEAR-"),
+     sg.Text("Max:"), sg.Input(cfg.get("color_prompt_max", "30"), key="-PROMPT_MAX-", size=(4,1))],
     [sg.Column([
         [sg.Text("B&W Input")],
         [sg.Image(data=b'', key="-IMG_BW-", size=(370, 350), background_color="black")],
@@ -3721,6 +3781,36 @@ while True:
                                          value=state["fix_prompts"][0],
                                          size=(40, None))
 
+    # ---- tab 2 preset prompt list (Spinbox browses the internal list) ----
+    if event == "-PROMPT_IDX-":
+        idx = color_prompt_index(state["color_prompts"], values["-PROMPT_IDX-"])
+        window["-PROMPT-"].update(value=state["color_prompts"][idx])
+
+    if event in ("-PROMPT_ADD-", "-PROMPT_UPDATE-", "-PROMPT_DEL-", "-PROMPT_CLEAR-"):
+        prompts = state["color_prompts"]
+        text = values["-PROMPT-"]
+        idx = color_prompt_index(prompts, values["-PROMPT_IDX-"])
+        if event == "-PROMPT_ADD-":
+            max_prompts = int(values.get("-PROMPT_MAX-", 30) or 30)
+            if remember_color_prompt(prompts, text, max_prompts):
+                idx = prompts.index(text)
+        elif event == "-PROMPT_UPDATE-":
+            if text:
+                prompts[idx] = text
+        elif event == "-PROMPT_DEL-":
+            if idx != 0:  # keep the default at index 0
+                prompts.pop(idx)
+                idx = min(idx, len(prompts) - 1)
+        else:  # -PROMPT_CLEAR-
+            state["color_prompts"] = prompts = [(cfg.get("color_prompts") or [cfg["prompt"]])[0]]
+            idx = 0
+        window["-PROMPT_IDX-"].update(values=color_prompt_range(len(prompts)),
+                                      value=str(idx + 1))
+        window["-PROMPT-"].update(value=prompts[idx])
+        cfg["color_prompts"] = prompts
+        cfg["color_prompt_max"] = values.get("-PROMPT_MAX-", "30")
+        save_all_configs(cfg)
+
     if event == "-FIX_COLORIZE-":
         do_fix_colorize(values, window, seed=42)
 
@@ -4396,6 +4486,8 @@ while True:
             "mkv_path":              values["-MKV_PATH-"],
             "hf_cache":              values["-CACHE_DIR-"],
             "prompt":                values["-PROMPT-"],
+            "color_prompts":         state["color_prompts"],
+            "color_prompt_max":      values["-PROMPT_MAX-"],
             "shutdown_on_complete":  values["-SHUTDOWN-"],
             "dupe_first_frame":      values["-DUPE_FIRST_FRAME-"],
             "do_step1":              values["-DO_STEP1-"],

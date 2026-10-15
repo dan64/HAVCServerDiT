@@ -161,4 +161,9 @@ argument it starts `int4`.
 > background details."* Longer or more emphatic prompts can steer it the
 > wrong way (a "vibrant colors" variant colored some subjects noticeably
 > wrong in a side-by-side test), so start simple and only add words when the
-> output calls for it.
+> output calls for it. The sensitivity is per-wording and not monotonic:
+> some very terse prompts (*"Color this image, natural colors."*) can make
+> it duplicate the subject on portrait frames — see
+> [Troubleshooting](troubleshooting.md). A wording that stays clean on such
+> frames: *"Colorize this image, natural skin tones, vibrant environment.
+> Maintain consistency and details."*

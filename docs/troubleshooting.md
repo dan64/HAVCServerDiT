@@ -21,6 +21,23 @@ Subsequent runs load from the local cache.
 **Colors look faded or grayish**
 Increase the number of **Colorization Steps** and/or disable **Fast Pipeline**, then re-run — **LongCat** in particular is calibrated for 8 steps, and at 4 steps the colors are faded. See [Suggested Inference Steps](server_usage.md#-suggested-inference-steps) for the recommended per-model values.
 
+**qwen-2511: the output duplicates the subject or leaves part of the frame gray**
+Prompt sensitivity, not an installation bug: some wordings make Qwen-Image-Edit 2511 hallucinate — a second copy of the person appears and part of the frame stays uncolored. It reproduces identically in plain ComfyUI with the same workflow, seed and input file; only the prompt wording fixes it. Same frame, same settings:
+
+`Colorize this image, natural skin tones, vibrant environment. Maintain consistency and details.`
+
+![Clean result with a working prompt](../assets/qwen2511_prompt_working.jpg)
+
+`Color this image, natural colors.`
+
+![Same frame and seed, the subject is duplicated](../assets/qwen2511_prompt_bad.jpg)
+
+The sensitivity is per-wording and not monotonic: long emphatic prompts can color some subjects wrong, and some very terse ones (like the second above) can trigger the duplication. A wording that stays clean on portrait frames:
+
+> Colorize this image, natural skin tones, vibrant environment. Maintain consistency and details.
+
+(Grainy film sources are a separate known trigger — the model can leave them fully B&W; use the **Unsharp Mask** pre-filter, see [GUI usage](gui_usage.md).)
+
 **FLUX.2-dev int4 on a 16 GB card: per-frame times swing a lot (e.g. 7 s to 50 s)**
 The int4 checkpoint (18.3 GB) almost fits a 16 GB card, and without a reserve
 aimdo's DynamicVRAM fills the VRAM to the brim, leaving nothing for the

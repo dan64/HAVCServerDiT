@@ -926,8 +926,8 @@ def _launch_pipeline(window, run_values):
     # Register the tab-2 prompt in the preset list before launching
     # (main thread; same history semantics as tab 4's fix_prompts).
     _p = run_values.get("-PROMPT-") or ""
-    if remember_color_prompt(state["color_prompts"], _p,
-                             int(run_values.get("-PROMPT_MAX-", 30) or 30)):
+    if run_values.get("-DO_STEP3-") and remember_color_prompt(
+            state["color_prompts"], _p, prompt_max_of(run_values, "-PROMPT_MAX-")):
         cfg["color_prompts"] = state["color_prompts"]
         save_all_configs(cfg)
         window["-PROMPT_IDX-"].update(
@@ -2544,6 +2544,14 @@ def color_prompt_index(prompts, idx_value):
     return max(0, min(idx, len(prompts) - 1))
 
 
+def prompt_max_of(values, key):
+    """Max-preset input parsed defensively: garbage or empty -> 30."""
+    try:
+        return max(1, int(values.get(key, 30) or 30))
+    except (TypeError, ValueError):
+        return 30
+
+
 # ===========================================================================
 # GUI LAYOUT
 # ===========================================================================
@@ -2640,7 +2648,7 @@ def _fix_colorize_worker(values, window, seed, pil_in=None):
         # Register new prompt in the history list if not already present
         # (state only here - the widgets are refreshed by -FIX_DONE-)
         remember_color_prompt(state["fix_prompts"], prompt,
-                              int(values.get("-FIX_PROMPT_MAX-", 30) or 30))
+                              prompt_max_of(values, "-FIX_PROMPT_MAX-"))
         steps  = int(values["-FIX_STEPS-"])
         usm_radius = usm_radius_of(values, "-FIX_USM-", "-FIX_USM_RADIUS-")
         host   = values["-RPC_HOST-"].strip()
@@ -3775,7 +3783,7 @@ while True:
         text = values["-FIX_PROMPT-"]
         idx = color_prompt_index(prompts, values["-FIX_PROMPT_IDX-"])
         if event == "-FIX_PROMPT_ADD-":
-            max_prompts = int(values.get("-FIX_PROMPT_MAX-", 30) or 30)
+            max_prompts = prompt_max_of(values, "-FIX_PROMPT_MAX-")
             if remember_color_prompt(prompts, text, max_prompts):
                 idx = prompts.index(text)
         elif event == "-FIX_PROMPT_UPDATE-":
@@ -3805,7 +3813,7 @@ while True:
         text = values["-PROMPT-"]
         idx = color_prompt_index(prompts, values["-PROMPT_IDX-"])
         if event == "-PROMPT_ADD-":
-            max_prompts = int(values.get("-PROMPT_MAX-", 30) or 30)
+            max_prompts = prompt_max_of(values, "-PROMPT_MAX-")
             if remember_color_prompt(prompts, text, max_prompts):
                 idx = prompts.index(text)
         elif event == "-PROMPT_UPDATE-":

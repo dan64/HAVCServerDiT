@@ -2,6 +2,8 @@
 
 Six backends, one API — pick the one that fits your hardware.
 
+Each backend below shows a side-by-side comparison on the **same frame**: the ground-truth (color) source on the left, and that backend's colorization of it on the right — a quick way to judge how well each model colors known objects.
+
 > ¹ Measured with **Fast Pipeline** — for `qwen21-viggle`, `qwen21-turbo`, `gguf-qwen` and `flux2` the cached text-encoder split (paired for `qwen21-turbo`'s fast variant and for `flux2`), for `nunchaku-qwen` paired inference (two frames per forward pass) — at the backend's fastest recommended step count, warm-up excluded. ² `longcat-gguf` has no Fast Pipeline path (falls back to per-image processing, see [What's New](whats-new.md)) — its figure is a genuine single-image time, not directly comparable to the Fast Pipeline figures above.
 
 > **Recommended**: **nunchaku-qwen** and **qwen21-viggle** are both recommended for production use, nunchaku-qwen at the fastest usable step count (`steps=2`) has an inference speed of about **4 sec/frame** using _Fast Pipeline_, **qwen21-viggle** at fastest usable step count (`steps=2`) has an inference speed of about **6 sec/frame**; using _Fast Pipeline_ the speed improves to about **3 sec/frame** (the cached text-encoder split, see the `⚠️ Fast Pipeline` note below). `qwen21-viggle` needs meaningfully less hardware (14GB+ VRAM / 32GB+ RAM vs. 16GB+ VRAM / 64GB+ RAM; with _Fast Pipeline_ it runs in **12 GB** of VRAM). **`gguf-qwen`** (Qwen-Image-Edit 2511) now also supports the cached-TE split: **~7.3 sec/frame** against ~10.5 sec/frame for the standard path (~1.4×, 17-frame test at 2 steps), on a 16 GB+ GPU / 48 GB+ RAM for the recommended `qwen-2511_int8` config (12 GB+ with `qwen-2511_q3`). **`qwen21-turbo`** is the rendition-maximizing option — **~4.5 sec/frame** on the single split, **~2.3** with the paired `fast_split_TE` one — richer colors than the viggle family, but noticeably less stable between similar frames (see the field verdict below). `longcat-gguf` remain the choice for VRAM-constrained setups where neither of the above fits, at a real speed cost (see the `⚠️ Experimental` note under GGUF below). **`flux2`** (2.6.0) adds the FLUX.2-dev family: 16 GB+ VRAM / 64 GB+ RAM, **~4.0 s/frame** on the int4 config with `"vram_headroom": 3` (~5.5 on fp8 mixed) — see its section below.
@@ -18,6 +20,13 @@ Choose the backend that matches your hardware:
 
 ### nunchaku-qwen : 4 sec/frame (FP4/INT4)
 
+<table>
+<tr>
+<td align="center"><img src="../assets/0_Flags_Ground_Truth.jpg" alt="Ground truth" width="220"><br><sub>Ground truth</sub></td>
+<td align="center"><img src="../assets/1_Flags_qwen-nunchaku.jpg" alt="nunchaku-qwen result" width="220"><br><sub>nunchaku-qwen</sub></td>
+</tr>
+</table>
+
 | Requirement      | Details                            |
 | ---------------- | ---------------------------------- |
 | **GPU**          | NVIDIA RTX 30/40/50  (16 GB+ VRAM) |
@@ -29,6 +38,13 @@ Choose the backend that matches your hardware:
 > Requires Nunchaku 1.2.1 and `diffusers==0.37.0.dev0` (wheel published in the release assets).
 
 ### qwen-2511 (gguf-qwen) : ~7.3 sec/frame with Fast Pipeline, ~10.5 without (int8 ConvRot 16 GB+ / Q3_K_S 12 GB+)
+
+<table>
+<tr>
+<td align="center"><img src="../assets/0_Flags_Ground_Truth.jpg" alt="Ground truth" width="220"><br><sub>Ground truth</sub></td>
+<td align="center"><img src="../assets/2_Flags_qwen2511_int8.jpg" alt="qwen-2511 int8 result" width="220"><br><sub>qwen-2511 (int8 ConvRot)</sub></td>
+</tr>
+</table>
 
 | Requirement | Details                                |
 | ----------- | -------------------------------------- |
@@ -61,6 +77,13 @@ Choose the backend that matches your hardware:
 
 ### longcat-gguf : 12 sec/frame (Q3–Q8) — Best Quality
 
+<table>
+<tr>
+<td align="center"><img src="../assets/0_Flags_Ground_Truth.jpg" alt="Ground truth" width="220"><br><sub>Ground truth</sub></td>
+<td align="center"><img src="../assets/5_Flags_longcat_q3.jpg" alt="longcat-gguf Q3 result" width="220"><br><sub>longcat-gguf (Q3_K_S)</sub></td>
+</tr>
+</table>
+
 | Requirement | Details                            |
 | ----------- | ---------------------------------- |
 | **GPU**     | NVIDIA RTX 30/40/50  (12 GB+ VRAM) |
@@ -79,6 +102,13 @@ Choose the backend that matches your hardware:
 > Launch with `run_server_longcat.cmd` (Q4_K_M) or `start_server.cmd longcat|longcat-q3|...`.
 
 ### qwen21-viggle : ~3 sec/frame with Fast Pipeline, ~6 without (Qwen-Image-2.1 int8 ConvRot)
+
+<table>
+<tr>
+<td align="center"><img src="../assets/0_Flags_Ground_Truth.jpg" alt="Ground truth" width="220"><br><sub>Ground truth</sub></td>
+<td align="center"><img src="../assets/3_Flags_qwen21-viggle.jpg" alt="qwen21-viggle result" width="220"><br><sub>qwen21-viggle</sub></td>
+</tr>
+</table>
 
 | Requirement | Details                            |
 | ----------- | ----------------------------------- |
@@ -102,6 +132,13 @@ Choose the backend that matches your hardware:
 
 ### qwen21-turbo : ~4.5 sec/frame single split, ~2.3 with the paired split (Qwen-Image-2.1-Turbo int8 ConvRot)
 
+<table>
+<tr>
+<td align="center"><img src="../assets/0_Flags_Ground_Truth.jpg" alt="Ground truth" width="220"><br><sub>Ground truth</sub></td>
+<td align="center"><img src="../assets/4_Flags_qwen21-turbo.jpg" alt="qwen21-turbo result" width="220"><br><sub>qwen21-turbo</sub></td>
+</tr>
+</table>
+
 | Requirement | Details                            |
 | ----------- | ---------------------------------- |
 | **GPU**     | NVIDIA RTX 30/40/50  (14 GB+ VRAM; **12 GB+** with Fast Pipeline) |
@@ -122,6 +159,13 @@ Choose the backend that matches your hardware:
 > `qwen21_turbo-fast_int8`; launch with `start_server.cmd qwen21_turbo_int8`.
 
 ### flux2 : ~4.0 sec/frame paired (FLUX.2-dev int4 ConvRot), ~5.5 (fp8 mixed) — FLUX-family colors
+
+<table>
+<tr>
+<td align="center"><img src="../assets/0_Flags_Ground_Truth.jpg" alt="Ground truth" width="220"><br><sub>Ground truth</sub></td>
+<td align="center"><img src="../assets/6_Flags_Flux2_dev.jpg" alt="flux2 result" width="220"><br><sub>flux2 (FLUX.2-dev)</sub></td>
+</tr>
+</table>
 
 | Requirement | Details                            |
 | ----------- | ---------------------------------- |

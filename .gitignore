@@ -192,6 +192,7 @@ manager/.vs/
 
 # Private local documents - never publish
 /AGENTS.md
+/AGENT_LOG.md
 /MANUAL_INSTALLER.md
 
 # Private installer specifications (Italian) - never publish

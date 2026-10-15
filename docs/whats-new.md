@@ -1,5 +1,29 @@
 # What's New
 
+### 2026-10-15 — qwen-2511 prompt sensitivity (troubleshooting) + prompt preset lists in the GUI
+
+**Prompt-dependent artifacts on qwen-2511 solved.** The intermittent "duplicated
+subject / half the frame left gray" output of `qwen-2511_int8` and
+`qwen-2511_q3` is **prompt wording, not the stack** — it reproduces identically
+in plain ComfyUI with the same workflow, seed and input. Some terse wordings
+(*"Color this image, natural colors."*) trigger the hallucination; *"Colorize
+this image, natural skin tones, vibrant environment. Maintain consistency and
+details."* stays clean. See the new **Troubleshooting** entry (with before/after
+images) and the refined qwen-2511 prompt tip.
+
+**GUI prompt preset lists (tabs 2 and 4).** No single prompt works well for
+every backend, so both colorization tabs now keep an internal preset list
+browsed with a **Preset #** spinbox — picking a number shows that preset's full
+text in the prompt field (the old tab-4 dropdown was dropped: long prompts were
+unreadable in a one-line list). **Add / Update / Delete / Clear** and **Max**
+manage the list; preset **#1** is the protected default (shipped as the
+skin-tones-safe wording above), and a prompt actually used in a run is added
+automatically.
+
+Housekeeping: the redundant `longcat_gguf_q8.json` config was removed
+(`q3`–`q6` remain; a hand-added `config\longcat_gguf_q8.json` still works —
+the config folder is the source of truth).
+
 ### 2026-10-14 — FLUX.2-dev family added (flux2); `vram_headroom` for the int4 checkpoint
 
 A sixth backend joins the stack: **`flux2`** — **FLUX.2-dev** (Black Forest

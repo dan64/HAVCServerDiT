@@ -61,12 +61,16 @@ NVENC = {
 # (int8 ConvRot), the Reboot v26-10-11 update (Qwen3-VL mmproj sidecar
 # lookup) and the models/diffusion_models skeleton; the NEW FILE NAME is
 # what makes existing installs re-extract it (the `.source` marker only
-# tracks the name). Bucket: HAVC Assets v1.0.3.
+# tracks the name).
+# v0.34 (2026-10-15): DynamicVRAM (comfy-aimdo) in the embedded core, the
+# paired cached-TE split for the flux2 family, the BFL small decoder as the
+# family's default VAE and the vram_headroom config key. Bucket: HAVC Assets
+# v1.0.4.
 COMFY_BRIDGE = {
-    "name": "comfy_bridge_v0.33.zip",
-    "url": "https://github.com/dan64/HAVCServerDiT/releases/download/v1.0.3/comfy_bridge_v0.33.zip",
-    "sha256": "3700fc0a457cd4cb064a2799fac1f91836b0980bc47076e7260e3adbdf556202",
-    "size": 10681093,
+    "name": "comfy_bridge_v0.34.zip",
+    "url": "https://github.com/dan64/HAVCServerDiT/releases/download/v1.0.4/comfy_bridge_v0.34.zip",
+    "sha256": "d9190e4a132e74fa446dbef49931efdb953fef7983412484849f9952567d7183",
+    "size": 10691380,
 }
 
 # cmnet2 assets (plugins + weights) — pinned; sha256 also verified against
@@ -276,12 +280,11 @@ if /i "%WHICH%"=="longcat-q3" set "CFG=longcat_gguf_q3.json"
 if /i "%WHICH%"=="longcat-q4" set "CFG=longcat_gguf_q4.json"
 if /i "%WHICH%"=="longcat-q5" set "CFG=longcat_gguf_q5.json"
 if /i "%WHICH%"=="longcat-q6" set "CFG=longcat_gguf_q6.json"
-if /i "%WHICH%"=="longcat-q8" set "CFG=longcat_gguf_q8.json"
 rem The config folder is the source of truth: a matching config\<name>.json
 rem wins over the shortcuts above, so a new model only needs a new file there.
 if exist "%HERE%config\%WHICH%.json" set "CFG=%WHICH%.json"
 if "%CFG%"=="" (
-    echo [ERROR] Unknown model "%WHICH%". Available: fp4 int4 q3 int8 longcat longcat-q3 longcat-q4 longcat-q5 longcat-q6 longcat-q8, or any config name in the config folder.
+    echo [ERROR] Unknown model "%WHICH%". Available: fp4 int4 q3 int8 longcat longcat-q3 longcat-q4 longcat-q5 longcat-q6, or any config name in the config folder.
     pause
     exit /b 1
 )

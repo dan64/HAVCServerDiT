@@ -2511,10 +2511,10 @@ def orchestrator(init_values, window):
 
 
 # ---------------------------------------------------------------------------
-# TAB 2 PRESET PROMPT LIST - pure helpers. The list is kept internally
-# (settings key "color_prompts"); the Spinbox on tab 2 browses it by index
-# and shows the selected prompt in the Multiline. Index 0 is the protected
-# default, mirroring tab 4's fix_prompts history.
+# PRESET PROMPT LIST - pure helpers, shared by tab 2 ("color_prompts") and
+# tab 4 ("fix_prompts"). The list is kept internally (no dropdown - long
+# prompts don't fit list widgets); the Spinbox browses it by index and shows
+# the selected prompt in the Multiline. Index 0 is the protected default.
 # ---------------------------------------------------------------------------
 def color_prompt_range(n):
     """Spinbox values for a preset list of n prompts ("1".."n")."""
@@ -2522,7 +2522,7 @@ def color_prompt_range(n):
 
 
 def remember_color_prompt(prompts, prompt, max_prompts):
-    """Register a new prompt in the tab-2 preset list: keep index 0 (the
+    """Register a new prompt in a preset list: keep index 0 (the
     default), trim when at/over the max, append, then sort everything after
     the default. Returns True if the list changed."""
     if not prompt or prompt in prompts:
@@ -2638,15 +2638,9 @@ def _fix_colorize_worker(values, window, seed, pil_in=None):
 
         prompt = values["-FIX_PROMPT-"]
         # Register new prompt in the history list if not already present
-        if prompt and prompt not in state["fix_prompts"]:
-            max_prompts = int(values.get("-FIX_PROMPT_MAX-", 30) or 30)
-            # Keep the default at index 0; trim oldest after it if over limit
-            while len(state["fix_prompts"]) > 1 and len(state["fix_prompts"]) >= max_prompts:
-                state["fix_prompts"].pop(1)
-            state["fix_prompts"].append(prompt)
-            # Sort alphabetically (default at index 0 stays)
-            if len(state["fix_prompts"]) > 2:
-                state["fix_prompts"][1:] = sorted(state["fix_prompts"][1:], key=str.lower)
+        # (state only here - the widgets are refreshed by -FIX_DONE-)
+        remember_color_prompt(state["fix_prompts"], prompt,
+                              int(values.get("-FIX_PROMPT_MAX-", 30) or 30))
         steps  = int(values["-FIX_STEPS-"])
         usm_radius = usm_radius_of(values, "-FIX_USM-", "-FIX_USM_RADIUS-")
         host   = values["-RPC_HOST-"].strip()
@@ -2989,10 +2983,15 @@ tab5_layout = [
               key="-FIX_USM_RADIUS-", readonly=True, size=(4, 1)),
      sg.Checkbox("Enhance Prompt", key="-FIX_ENHANCE_PROMPT-", default=cfg.get("fix_enhance_prompt", False))],
     [sg.Text("Prompt:"),
-     sg.Combo(state["fix_prompts"], default_value=state["fix_prompts"][0],
-              key="-FIX_PROMPT-", expand_x=True, size=(40,1)),
-      sg.Button("Clear", key="-FIX_PROMPT_CLEAR-"),
+     sg.Multiline(state["fix_prompts"][0], key="-FIX_PROMPT-", expand_x=True, size=(80,4), no_scrollbar=True)],
+    [sg.Text("Preset #:"),
+     sg.Spin(color_prompt_range(len(state["fix_prompts"])), initial_value="1",
+             key="-FIX_PROMPT_IDX-", enable_events=True, size=(4, 1),
+             tooltip="Browse the internal prompt list: pick a number to show that\nprompt in the field above. Add / Update / Delete / Clear manage the\nlist; preset #1 is the protected default. A prompt used in a run is\nadded automatically (up to Max)."),
+     sg.Button("Add", key="-FIX_PROMPT_ADD-"),
+     sg.Button("Update", key="-FIX_PROMPT_UPDATE-"),
      sg.Button("Delete", key="-FIX_PROMPT_DEL-"),
+     sg.Button("Clear", key="-FIX_PROMPT_CLEAR-"),
      sg.Text("Max:"), sg.Input(cfg.get("fix_prompt_max", "30"), key="-FIX_PROMPT_MAX-", size=(4,1))],
 
     [sg.Checkbox("Enable batch processing", key="-FIX_BATCH-", default=False,
@@ -3766,20 +3765,35 @@ while True:
             window["-FIX_PATH-"].update(value="[swapped from output]")
             window["-FIX_STATUS-"].update("Swapped: output → input")
 
-    if event == "-FIX_PROMPT_CLEAR-":
-        state["fix_prompts"] = [cfg.get("fix_prompts", ["color this image, natural colors."])[0]]
-        window["-FIX_PROMPT-"].update(values=state["fix_prompts"],
-                                     value=state["fix_prompts"][0],
-                                     size=(40, None))
+    # ---- tab 4 preset prompt list (Spinbox browses the internal list) ----
+    if event == "-FIX_PROMPT_IDX-":
+        idx = color_prompt_index(state["fix_prompts"], values["-FIX_PROMPT_IDX-"])
+        window["-FIX_PROMPT-"].update(value=state["fix_prompts"][idx])
 
-    if event == "-FIX_PROMPT_DEL-":
-        cur = values["-FIX_PROMPT-"]
-        # keep the default prompt at index 0
-        if cur in state["fix_prompts"] and state["fix_prompts"].index(cur) != 0:
-            state["fix_prompts"].remove(cur)
-            window["-FIX_PROMPT-"].update(values=state["fix_prompts"],
-                                         value=state["fix_prompts"][0],
-                                         size=(40, None))
+    if event in ("-FIX_PROMPT_ADD-", "-FIX_PROMPT_UPDATE-", "-FIX_PROMPT_DEL-", "-FIX_PROMPT_CLEAR-"):
+        prompts = state["fix_prompts"]
+        text = values["-FIX_PROMPT-"]
+        idx = color_prompt_index(prompts, values["-FIX_PROMPT_IDX-"])
+        if event == "-FIX_PROMPT_ADD-":
+            max_prompts = int(values.get("-FIX_PROMPT_MAX-", 30) or 30)
+            if remember_color_prompt(prompts, text, max_prompts):
+                idx = prompts.index(text)
+        elif event == "-FIX_PROMPT_UPDATE-":
+            if text:
+                prompts[idx] = text
+        elif event == "-FIX_PROMPT_DEL-":
+            if idx != 0:  # keep the default at index 0
+                prompts.pop(idx)
+                idx = min(idx, len(prompts) - 1)
+        else:  # -FIX_PROMPT_CLEAR-
+            state["fix_prompts"] = prompts = [cfg.get("fix_prompts", ["color this image, natural colors."])[0]]
+            idx = 0
+        window["-FIX_PROMPT_IDX-"].update(values=color_prompt_range(len(prompts)),
+                                          value=str(idx + 1))
+        window["-FIX_PROMPT-"].update(value=prompts[idx])
+        cfg["fix_prompts"] = prompts
+        cfg["fix_prompt_max"] = values.get("-FIX_PROMPT_MAX-", "30")
+        save_all_configs(cfg)
 
     # ---- tab 2 preset prompt list (Spinbox browses the internal list) ----
     if event == "-PROMPT_IDX-":
@@ -3886,7 +3900,12 @@ while True:
         buf = io.BytesIO()
         _preview.save(buf, format="PNG")
         window["-FIX_IMG_CLR-"].update(data=buf.getvalue())
-        window["-FIX_PROMPT-"].update(values=state["fix_prompts"], value=prompt, size=(40, None))
+        window["-FIX_PROMPT-"].update(value=prompt)
+        _fx_idx = (state["fix_prompts"].index(prompt) + 1
+                   if prompt in state["fix_prompts"] else None)
+        window["-FIX_PROMPT_IDX-"].update(
+            values=color_prompt_range(len(state["fix_prompts"])),
+            value=(str(_fx_idx) if _fx_idx else None))
         # Auto-save prompts to config
         cfg["fix_prompts"] = state["fix_prompts"]
         save_all_configs(cfg)

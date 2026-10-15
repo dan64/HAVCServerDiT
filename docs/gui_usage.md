@@ -415,8 +415,8 @@ Supports both SHM (same-host) and PNG-over-RPC (remote server) transport.
 | **Enhance Prompt**       | **qwen21-viggle only**: rewrites the prompt via Qwen3-VL before colorizing — no effect on other backends |
 | **Convert in B&W**       | Convert the input to grayscale before colorization (useful for re‑colorizing) |
 | **Unsharp Mask**         | Pre-filter the input before colorization (unsharp mask: amount 0.50, threshold 0), radius **1–4** (default `2`) — for grainy sources the model would otherwise leave B&W |
-| **Prompt**               | Text prompt for the model (combo with history) — keep it short for qwen-2511, detailed for qwen21-viggle / qwen21-turbo, see [Suggested Inference Steps](server_usage.md#-suggested-inference-steps) |
-| **Max / Delete / Clear** | Prompt history management                                                     |
+| **Prompt**               | Text prompt for the model — keep it short for qwen-2511, detailed for qwen21-viggle / qwen21-turbo, see [Suggested Inference Steps](server_usage.md#-suggested-inference-steps) |
+| **Preset #**             | Same prompt preset list as tab 2 (separate list stored under `fix_prompts`): spinbox browses it by index and the selected text appears in the Prompt field; **Add / Update / Delete / Clear** + **Max** manage the list. Preset **#1** is the protected default; a prompt actually used in a Fix run is added automatically |
 | **Load Image**           | Load image via the ComboBox, drag‑and‑drop, or Browse                         |
 | **Colorize**             | Run colorization with fixed seed (42)                                         |
 | **Colorize (Random)**    | Run colorization with random seed for variation                               |

@@ -155,8 +155,78 @@ def load_gguf_pipeline(model_name: str, unet_gguf_path: str, clip_gguf_path: str
 
 
 # ----------------------------
+# Nunchaku checkpoint precision (safetensors metadata)
+# ----------------------------
+def _read_safetensors_metadata(path: str) -> dict:
+    """__metadata__ of a safetensors file, read from the header only (no weights)."""
+    import struct
+    with open(path, "rb") as f:
+        n = struct.unpack("<Q", f.read(8))[0]
+        header = json.loads(f.read(n))
+    return header.get("__metadata__") or {}
+
+
+def _detect_nunchaku_precision(path: str) -> str:
+    """Kernel precision ('int4' or 'nvfp4') required by a nunchaku checkpoint.
+
+    Nunchaku 1.2.1's Qwen loader calls get_precision() with the default
+    "auto", which picks nvfp4 on SM120/121 (Blackwell) and int4 elsewhere --
+    regardless of the checkpoint file (the flux loader instead validates via
+    check_hardware_compatibility). On Blackwell an int4 checkpoint was
+    therefore initialized with fp4 kernels: group-size 16 float8_e4m3fn
+    wscales against the checkpoint's group-size 64 bfloat16 ones -- 480
+    shape mismatches on this family. load_qwen_pipeline now forces the
+    precision the checkpoint declares. The old workaround that resized the
+    fp4-shaped wscales and loaded the int4 scales into them is what turned
+    that mismatch into a silent all-black output (bf16 scale bytes reinterpreted
+    as fp8 -> garbage weights -> NaN latents).
+
+    Raises ValueError when the file carries no parsable quantization_config.
+    """
+    import logging
+    meta = _read_safetensors_metadata(path)
+    qcfg = json.loads(meta.get("quantization_config") or "{}")
+    dtype = (qcfg.get("weight") or {}).get("dtype")
+    group = (qcfg.get("weight") or {}).get("group_size")
+    if dtype == "int4":
+        return "int4"
+    if dtype == "fp4_e2m1_all" and group == 16:
+        return "nvfp4"
+    raise ValueError(
+        f"Unrecognized nunchaku quantization_config in {path}: "
+        f"weight.dtype={dtype!r}, group_size={group!r}"
+    )
+
+
+class _force_nunchaku_precision:
+    """Context manager: pin nunchaku's get_precision during the Qwen load.
+
+    Patches the symbol as used by NunchakuQwenImageTransformer2DModel.
+    from_pretrained (which calls it with no arguments); restored on exit.
+    """
+
+    def __init__(self, precision: str):
+        self.precision = precision
+        self._saved = None
+
+    def __enter__(self):
+        import nunchaku.models.transformers.transformer_qwenimage as _tq
+        self._saved = _tq.get_precision
+        _tq.get_precision = lambda *a, **k: self.precision
+        return self
+
+    def __exit__(self, *exc):
+        import nunchaku.models.transformers.transformer_qwenimage as _tq
+        _tq.get_precision = self._saved
+        return False
+
+
+# ----------------------------
 # Load SVDQuant FP4 pipeline
 # ----------------------------
+# model_precision/model_rank only select the checkpoint FILE; the kernel
+# precision is read from the file's quantization_config inside
+# load_qwen_pipeline (so an int4 file loads as int4 even on Blackwell).
 def load_nunchaku_pipeline(model_name: str, model_precision: str, model_rank, model_inference_steps,
                            cache_dir: str = "", base_model_path: str = "", full_model_path: str = "",
                            torch_compile=False, device="cuda", vae_name="qwen_image_vae.safetensors",
@@ -179,6 +249,21 @@ def load_nunchaku_pipeline(model_name: str, model_precision: str, model_rank, mo
 
 def load_qwen_pipeline(model_path: str, cache_dir: str, model_precision: str = "fp4", torch_compile=False, device="cuda"):
     print(f"Loading SVDQuant {model_precision.upper()} transformer from: {model_path}")
+
+    import logging
+    _log = logging.getLogger(__name__)
+
+    # Kernel precision comes from the checkpoint itself, not from the GPU:
+    # see _detect_nunchaku_precision. model_precision only selects the file.
+    ckpt_path = Path(model_path)
+    if not ckpt_path.is_file():
+        from huggingface_hub import hf_hub_download
+        repo_id, filename = ckpt_path.parts[0] + "/" + ckpt_path.parts[1], "/".join(ckpt_path.parts[2:])
+        cache = cache_dir or None
+        ckpt_path = Path(hf_hub_download(repo_id=repo_id, filename=filename, cache_dir=cache))
+    forced_precision = _detect_nunchaku_precision(str(ckpt_path))
+    _log.info(f"Nunchaku checkpoint declares {forced_precision} weights; "
+              f"forcing that precision for loading")
 
     import torch
     # Nunchaku (SVDQuant transformer)
@@ -210,48 +295,27 @@ def load_qwen_pipeline(model_path: str, cache_dir: str, model_precision: str = "
     }
     scheduler = FlowMatchEulerDiscreteScheduler.from_config(scheduler_config)
 
-    # 2. Initialize the Transformer
+    # 2. Initialize the Transformer.
     #
-    # For int4: nunchaku always initializes wscales with fp4 group-size (16) regardless
-    # of the precision argument, then load_state_dict fails because int4 checkpoints use
-    # group-size 64 (4× fewer scale rows).  The fix temporarily patches load_state_dict
-    # to resize every wscales parameter to match the checkpoint shape before loading.
-    if model_precision == "int4":
-        _original_load_sd = NunchakuQwenImageTransformer2DModel.load_state_dict
-
-        def _int4_load_state_dict(self, state_dict, strict=True, **kwargs):
-            for name, ckpt_tensor in state_dict.items():
-                if "wscales" not in name:
-                    continue
-                parts = name.split(".")
-                module = self
-                try:
-                    for part in parts[:-1]:
-                        module = getattr(module, part)
-                    param_name = parts[-1]
-                    current = getattr(module, param_name)
-                    if current.shape != ckpt_tensor.shape:
-                        setattr(module, param_name, torch.nn.Parameter(
-                            torch.zeros(ckpt_tensor.shape,
-                                        dtype=current.dtype,
-                                        device=current.device)
-                        ))
-                except AttributeError:
-                    pass
-
-            return _original_load_sd(self, state_dict, strict=strict, **kwargs)
-
-        NunchakuQwenImageTransformer2DModel.load_state_dict = _int4_load_state_dict
-
+    # The precision is forced from the checkpoint's quantization_config (see
+    # _detect_nunchaku_precision): stock nunchaku 1.2.1 would initialize an
+    # int4 checkpoint with nvfp4 kernels on Blackwell (get_precision auto ->
+    # fp4 on SM120/121), which the old wscales-resize workaround silently
+    # turned into garbage weights. int4 on SM120 loads correctly but its
+    # kernels are not an upstream-supported Blackwell path -- if inference
+    # fails there, the checkpoint is for RTX 30/40-class cards and this card
+    # wants the fp4 sibling.
     try:
-        transformer = NunchakuQwenImageTransformer2DModel.from_pretrained(
-            model_path,
-            torch_dtype=torch.bfloat16,
-            device=device,
-        )
-    finally:
-        if model_precision == "int4":
-            NunchakuQwenImageTransformer2DModel.load_state_dict = _original_load_sd
+        with _force_nunchaku_precision(forced_precision):
+            transformer = NunchakuQwenImageTransformer2DModel.from_pretrained(
+                model_path,
+                torch_dtype=torch.bfloat16,
+                device=device,
+            )
+    except Exception:
+        _log.exception(f"Nunchaku load failed (forced precision: {forced_precision}, "
+                       f"checkpoint: {model_path})")
+        raise
 
     # 3. Load the Pipeline
     # This will automatically download the correct VAE and VL Encoder

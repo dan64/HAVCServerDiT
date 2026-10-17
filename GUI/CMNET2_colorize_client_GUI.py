@@ -3523,6 +3523,24 @@ def do_fixc_colorize(values, window):
 # ---------------------------------------------------------------------------
 # FIX VIDEO — Recolor thread
 # ---------------------------------------------------------------------------
+def fixv_reference_problems(first_path, last_path):
+    """Problems with the Fix Video reference images (empty list = usable).
+
+    The references are forwarded to the encode graph as RefStart/RefEnd; a
+    blank one makes VapourSynth fail deep inside the filter chain, long after
+    the user could connect the error to the two image fields. The paths come
+    from state["fixv_*_original_path"], i.e. the images that were actually
+    loaded (the fields above them are read-only)."""
+    problems = []
+    for label, path in (("First", first_path), ("Last", last_path)):
+        path = str(path or "").strip()
+        if not path:
+            problems.append(f"{label}: no reference image loaded")
+        elif not os.path.isfile(path):
+            problems.append(f"{label}: file not found\n  {path}")
+    return problems
+
+
 def _fixv_recolor_thread(values, window):
     """Background thread: re-encode video with colorization via NVEnc."""
     log_file = None
@@ -4099,10 +4117,18 @@ while True:
         window["-FIXV_VIDEO_DROPDOWN-"].update(values=vids, value=selected)
 
     if event == "-FIXV_RECOLOR-":
+        ref_problems = fixv_reference_problems(
+            state.get("fixv_first_original_path", ""),
+            state.get("fixv_last_original_path", ""))
         if state["fixv_is_running"] or state["is_running"]:
             sg.popup_error("Another task is already running.")
         elif not values["-FIXV_VIDEO_DROPDOWN-"]:
             sg.popup_error("Select a video file first.")
+        elif ref_problems:
+            sg.popup_error(
+                "Load both reference images before running Recolor.\n\n"
+                + "\n".join(ref_problems),
+                title="References missing")
         else:
             # Check NVEncC64.exe
             nvenc_exe = os.path.join(Path(values["-X265-"]).parent.parent, "NVEncC", "NVEncC64.exe")

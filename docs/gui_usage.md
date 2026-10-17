@@ -508,16 +508,18 @@ using the selected video, encode script, and two reference images.
 | **Backbone**        | CMNET2 key-encoder backbone: `dinov3` (default, best quality) or `dinov2` (legacy) |
 | **First Reference** | Load a reference image (drag & drop or Browse) for the start of the clip         |
 | **Last Reference**  | Load a reference image (drag & drop or Browse) for the end of the clip           |
-| **Recolor**         | Runs the VapourSynth → NVEnc pipeline in a background thread                     |
+| **Recolor**         | Runs the VapourSynth → NVEnc pipeline in a background thread. Both **First** and **Last Reference** must be loaded: pressing Recolor with one of them missing (or with a file that no longer exists) shows an error naming the missing one and does not start |
 
 The two reference images guide the recoloring script: they are passed to the
 VapourSynth script as `RefStart` and `RefEnd` parameters. The `RefDir`
 parameter is automatically set to the folder containing the first reference
 image. Only the frames between **RefStart / RefEnd** will be recolored. 
 
-**Startup check**: before launching, the tab verifies that `NVEncC64.exe` exists
-next to `x265.exe` (derived from the x265 path configured in Tab 3). If
-missing, an error popup instructs the user to install NVEncC in `tools\NVEncC`.
+**Startup check**: before launching, the tab verifies that both reference
+images are loaded and on disk, then that `NVEncC64.exe` exists next to
+`x265.exe` (derived from the x265 path configured in Tab 3). If a reference is
+missing, an error popup names it (**First** / **Last**); if NVEncC is missing,
+an error popup instructs the user to install it in `tools\NVEncC`.
 
 The output file is named `[video]_cmnet2_dt-recolor.mkv` and is saved in the
 video directory. The `.h265` intermediate is automatically converted to `.mkv`

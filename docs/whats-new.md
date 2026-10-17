@@ -1,5 +1,46 @@
 # What's New
 
+### 2026-10-17 — Per-model prompts in the configs, and a GUI pass (title, tooltips, presets)
+
+**Every model config now carries its own prompt.** `config/*.json` gained an
+optional `"prompt"` key with a wording tuned for that model: the short
+skin-tones-safe formula for the 2511 family (`gguf-qwen`, `qwen25-nunchaku`
+2511), the detailed anti-hedging text for `qwen21-viggle` / `qwen21-turbo`, the
+plain short wording for `flux2`, `longcat-gguf`, `qwen25-nunchaku` 2509 and
+`nunchaku-qwen`. Tab 2 has a new **Enable Prompt Config** checkbox: while
+checked the Prompt field shows that text **read-only**, the preset list is
+disabled, and the run sends the config's wording (the text is never added to
+the preset list). Switching Model Config refreshes it; a config without a
+`"prompt"` key is reported and **Run refuses to start**. Clearing the box
+brings back your own prompt, which stays saved in the settings.
+
+The rest of the GUI pass, in the same release:
+
+* **Window title** shows the model the **server** reports as loaded (new RPC
+  `get_pipeline_config`, config stem with the model family as fallback). It is
+  neutral while no server is connected, so a GUI attached to a **remote**
+  server running another config shows the server's model, not the local
+  selection. Refreshed on connect and after a run.
+* **Prompt presets** are now a compact **Combo** with one-line numbered
+  previews (`1. …`); the full prompt stays in the field above, and
+  Add / Update / Delete / Clear / Max sit on the same row. This supersedes the
+  Spinbox introduced on 15-10.
+* **Tooltips on every interactive control** (128 of them), worded from this
+  documentation: Dashboard, Extraction, Colorization, Encode/Merge and the
+  three standalone tabs.
+* **Fix Video**: *Recolor* now requires **both** reference images — a missing or
+  deleted one is named in an error popup and the run does not start — and every
+  exit path of the recolor thread (including missing input and failures)
+  releases the Recolor/Stop buttons instead of leaving the tab stuck.
+* **Model Config** combo widened to fit the longest shipped config name, and
+  its dropdown now opens with 12 rows instead of one.
+
+**Config set** also changed on this line: two `fast_split_TE` variants added
+(`qwen-2511-fast_q3`, `qwen21_viggle-soft-fast_q4`), and three quant extremes
+retired — `flux2_dev_q2` (Q2 is below the usable floor), `longcat_gguf_q5` and
+`longcat_gguf_q6` (anyone with the RAM for them is better off on another
+backend). A hand-added config keeps working: `config/` is the source of truth.
+
 ### 2026-10-17 — Qwen-Image-Edit on the ComfyUI-nunchaku node (`qwen25-nunchaku`)
 
 A seventh backend: **`qwen25-nunchaku`** runs Qwen-Image-Edit 2509/2511 through

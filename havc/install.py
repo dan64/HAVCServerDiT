@@ -66,11 +66,16 @@ NVENC = {
 # paired cached-TE split for the flux2 family, the BFL small decoder as the
 # family's default VAE and the vram_headroom config key. Bucket: HAVC Assets
 # v1.0.4.
+# v0.35 (2026-10-17): the qwen25-nunchaku family (Qwen-Image-Edit 2509/2511 on
+# the ComfyUI-nunchaku node, SVDQuant fp4) with its two vendorized packages
+# (ComfyUI-nunchaku core v1.2.1 + the QwenImage LoRA loader), the nunchaku
+# precision fix for Blackwell and the 2511 log hygiene. Bucket: HAVC Assets
+# v1.0.5.
 COMFY_BRIDGE = {
-    "name": "comfy_bridge_v0.34.zip",
-    "url": "https://github.com/dan64/HAVCServerDiT/releases/download/v1.0.4/comfy_bridge_v0.34.zip",
-    "sha256": "d9190e4a132e74fa446dbef49931efdb953fef7983412484849f9952567d7183",
-    "size": 10691380,
+    "name": "comfy_bridge_v0.35.zip",
+    "url": "https://github.com/dan64/HAVCServerDiT/releases/download/v1.0.5/comfy_bridge_v0.35.zip",
+    "sha256": "62ffe05852044a00d5cd4ac2c12db6201f01285b2b25bf411edee5479610e277",
+    "size": 10737559,
 }
 
 # cmnet2 assets (plugins + weights) — pinned; sha256 also verified against

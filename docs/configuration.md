@@ -102,9 +102,9 @@ The LoRA file `Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors` enab
 
 The LoRA is merged statically (not applied as an adapter), so there is no runtime overhead.
 
-### Qwen-Image-Edit on the Nunchaku node : `config/qwen-2511-nunchaku_fp4.json` & `config/qwen-2509-nunchaku_fp4.json`
+### Qwen-Image-Edit on the Nunchaku node : `config/qwen-2511-nunchaku*.json` & `config/qwen-2509-nunchaku*.json`
 
-These two configs run Qwen-Image-Edit through the **ComfyUI-nunchaku node**
+These configs run Qwen-Image-Edit through the **ComfyUI-nunchaku node**
 (SVDQuant) instead of a diffusers pipeline — the same graph ComfyUI itself
 executes: `TextEncodeQwenImageEditPlus` → `ModelSamplingAuraFlow(shift=3)` →
 `CFGNorm` → `KSampler` (4 steps, cfg 1, euler/simple). They are separate from
@@ -117,6 +117,12 @@ the diffusers `nunchaku-qwen` family above, which still loads the official
 * **`qwen-2511-nunchaku_fp4`** — the QuantFunc 2511 checkpoint
   (`balance`, r128) **plus** the Lightning LoRA, composed into the quantized
   low-rank buffers at load time. There is no official 2511 SVDQuant release.
+* **`qwen-2509-nunchaku-fast_fp4`** / **`qwen-2511-nunchaku-fast_fp4`** — the
+  same two checkpoints with **`fast_split_TE: true`**: Fast Pipeline merges
+  consecutive frames into one pair canvas (one text-encoder pass and one
+  sampling pass per two frames) instead of caching per frame. Measured on the
+  RTX 5070 Ti: **4.1–4.4 s/frame** against 7.4–9.2 single — at half the working
+  area per frame, since the pair shares the 1 Mpx budget.
 
 ```json
 {
@@ -379,7 +385,6 @@ in the UNet only. Example (`config/flux2_dev_int4.json`):
 | `flux2_dev_int4`   | int4 ConvRot `.safetensors`       | 18.3 GB |
 | `flux2_dev_fp8`    | fp8-mixed `.safetensors`          | 33 GB   |
 | `flux2_dev_q3`     | GGUF `Q3_K_M`                     | 15.8 GB |
-| `flux2_dev_q2`     | GGUF `Q2_K`                       | 12.9 GB |
 
 > **`unet_hf_name`** matters for the int4 config: the community repack keeps
 > the checkpoint at the **repo root**, while the loader's default download

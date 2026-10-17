@@ -7,7 +7,7 @@ the **ComfyUI-nunchaku node** (SVDQuant) — the same graph ComfyUI executes
 (`TextEncodeQwenImageEditPlus` → `AuraFlow shift 3` → `CFGNorm` → `KSampler`, 4
 steps at cfg 1) — instead of a diffusers pipeline.
 
-Two configs ship:
+Two checkpoints ship, each with a plain and a `-fast` config:
 
 * **`qwen-2509-nunchaku_fp4`** — the official nunchaku-ai 2509 checkpoint,
   Lightning **fused** (no LoRA).
@@ -17,8 +17,16 @@ Two configs ship:
   weights**: there is no official 2511 release, and the QuantFunc checkpoints
   do not ship the Lightning LoRA fused.
 
+Plus their **`-fast` variants** (`qwen-2509-nunchaku-fast_fp4`,
+`qwen-2511-nunchaku-fast_fp4`), identical but with `fast_split_TE: true`: the
+paired split merges consecutive frames into one canvas, one text-encoder and one
+sampling pass per two frames. Measured **4.1–4.4 s/frame** against 7.4–9.2 for
+the per-frame configs, at half the working area per frame (the pair shares the
+1 Mpx budget).
+
 Measured on an RTX 5070 Ti 16 GB, one 1184×880 frame at the 1 Mpx budget,
-4 steps, warm-up excluded: **~9.2 s/frame** live and **~8.7 s/frame** with
+4 steps, warm-up excluded (single-frame path): **~9.2 s/frame** live and
+**~8.7 s/frame** with
 Fast Pipeline (the cached-edit-conditioning split the `gguf-qwen` family uses);
 the 2509 config runs at **~7.4 s/frame**. Sampling is ~1.5–1.7 s/step; the
 first step of a fresh model costs 4–5 s more, and the first load of a cold

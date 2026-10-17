@@ -75,18 +75,21 @@ Choose the backend that matches your hardware:
 > Uses ComfyUI-native code : no ComfyUI GUI installation needed.
 > Both configs live in the `config/` folder.
 
-### qwen25-nunchaku : ~8.7 sec/frame with Fast Pipeline, ~9.2 without (Qwen-Image-Edit 2509/2511 on the Nunchaku node)
+### qwen25-nunchaku : ~4.1–4.4 sec/frame paired, ~8.7 with the split, ~9.2 without (Qwen-Image-Edit 2509/2511 on the Nunchaku node)
 
 The same Qwen-Image-Edit models as `nunchaku-qwen` and `gguf-qwen`, run
 through the **ComfyUI-nunchaku node** (SVDQuant) instead of a diffusers
 pipeline or the GGUF dequantizer — the exact graph ComfyUI executes
 (`TextEncodeQwenImageEditPlus` → `AuraFlow shift 3` → `CFGNorm` →
-`KSampler`, 4 steps at cfg 1). Two configs shipped:
+`KSampler`, 4 steps at cfg 1). Four configs shipped — the two checkpoints, each
+with a plain and a `-fast` (paired split) variant:
 
-| Config                       | Checkpoint                                   | LoRA                |
-| ---------------------------- | -------------------------------------------- | ------------------- |
-| `qwen-2509-nunchaku_fp4`     | official nunchaku-ai 2509 FP4 (r32)          | fused (none)        |
-| `qwen-2511-nunchaku_fp4`     | QuantFunc 2511 FP4 `balance` (r128)          | Lightning 4-step    |
+| Config                       | Checkpoint                                   | LoRA                | Fast Pipeline |
+| ---------------------------- | -------------------------------------------- | ------------------- | ------------- |
+| `qwen-2509-nunchaku_fp4`     | official nunchaku-ai 2509 FP4 (r32)          | fused (none)        | per-frame TE cache |
+| `qwen-2511-nunchaku_fp4`     | QuantFunc 2511 FP4 `balance` (r128)          | Lightning 4-step    | per-frame TE cache |
+| `qwen-2509-nunchaku-fast_fp4`| same as above                                | fused (none)        | **paired** (`fast_split_TE`) |
+| `qwen-2511-nunchaku-fast_fp4`| same as above                                | Lightning 4-step    | **paired** (`fast_split_TE`) |
 
 | Requirement | Details |
 | ----------- | ------- |
@@ -107,6 +110,14 @@ pipeline or the GGUF dequantizer — the exact graph ComfyUI executes
 > first step of a fresh model costs 4–5 s more (initialization), and the
 > first load of a cold checkpoint ~4–5 minutes from an HDD (one-time, per
 > server session).
+>
+> **The `-fast` configs** pair consecutive frames: **4.4 s/frame** for 2511
+> and **4.1 s/frame** for 2509 (two 1480×1080 frames per 8.9 s / 8.3 s unit) —
+> about twice the throughput, at half the working area per frame, since the
+> pair canvas shares the same 1 Mpx budget. Output stays clean and coherent
+> in the frames inspected; it is visibly softer than the single-frame path.
+> Use them for long video runs; keep the plain configs when detail matters
+> more than speed.
 >
 > **`cpu_offload`**: the Nunchaku transformer streams its blocks from host
 > RAM; the shipped configs force `enable` because upstream's `auto` disables
@@ -225,7 +236,7 @@ pipeline or the GGUF dequantizer — the exact graph ComfyUI executes
 > and the paired split gains a whole sampling pass (plus a VAE encode) per
 > two frames.
 
-Four configs ship, all with `steps: 2` (the Turbo LoRA's distilled step
+Three configs ship, all with `steps: 2` (the Turbo LoRA's distilled step
 count), `guidance: 4.0` and the **paired split** on (`fast_split_TE`):
 
 | Config                          | UNet                              | Size    | Notes                                                        |
@@ -233,14 +244,11 @@ count), `guidance: 4.0` and the **paired split** on (`fast_split_TE`):
 | `flux2_dev_int4.json`           | int4 ConvRot `.safetensors` (community repack) | 18.3 GB | **recommended on 16 GB** with `vram_headroom: 3` — see below   |
 | `flux2_dev_fp8.json`            | fp8-mixed `.safetensors` (Comfy-Org) | 33 GB   | streams from RAM/disk; the 64 GB of RAM is the real requirement |
 | `flux2_dev_q3.json`             | GGUF `Q3_K_M`                     | 15.8 GB | lighter, GGUF path (no native kernels: slower)               |
-| `flux2_dev_q2.json`             | GGUF `Q2_K`                       | 12.9 GB | lightest, GGUF path                                          |
 
 > **Measured** (RTX 5070 Ti 16 GB, pairs of frames, 2 steps, 1024 area
 > budget, warm-up excluded): **int4 with `vram_headroom: 3` → ~4.0 s/frame**
 > steady (3.98–4.09 s/frame across three runs; the two 3 GB runs 0.4% apart)
-> — **~1.35× the fp8 config** (~5.5 s/frame) and as stable; `Q2_K` →
-> **~9.3 s/frame** (the GGUF quants
-> still run through the legacy patcher, no native kernels — light but slow);
+> — **~1.35× the fp8 config** (~5.5 s/frame) and as stable;
 > `Q3_K_M` not yet measured. Single-frame (non-paired) runs cost about
 > twice as much per frame. On an 8-frame run the first frame pays the
 > one-time warm-up (~3 min) on every config.

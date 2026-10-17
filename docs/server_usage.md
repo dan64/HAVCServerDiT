@@ -84,7 +84,6 @@ historical); select its configs by name:
 start_server.cmd flux2_dev_int4    # FLUX.2-dev int4 ConvRot, 16 GB (recommended)
 start_server.cmd flux2_dev_fp8     # FLUX.2-dev fp8-mixed, 33 GB streamed
 start_server.cmd flux2_dev_q3      # FLUX.2-dev GGUF Q3_K_M
-start_server.cmd flux2_dev_q2      # FLUX.2-dev GGUF Q2_K
 ```
 
 The Qwen-Image-Edit family on the Nunchaku node follows the same rule:
@@ -92,6 +91,8 @@ The Qwen-Image-Edit family on the Nunchaku node follows the same rule:
 ```
 start_server.cmd qwen-2511-nunchaku_fp4   # 2511 QuantFunc FP4 + Lightning LoRA
 start_server.cmd qwen-2509-nunchaku_fp4   # 2509 official FP4 (Lightning fused)
+start_server.cmd qwen-2511-nunchaku-fast_fp4   # same, paired split (Fast Pipeline)
+start_server.cmd qwen-2509-nunchaku-fast_fp4   # same, paired split (Fast Pipeline)
 ```
 
 Any file in the `config/` folder can also be selected directly by its name

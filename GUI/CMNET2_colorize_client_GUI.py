@@ -1561,9 +1561,17 @@ def orchestrator(init_values, window):
             enhance_prompt = False
 
         chunks = [todo[i:i + chunk_size] for i in range(0, len(todo), chunk_size)]
-        log_message(f"ℹ️ {sum(len(u) for u in todo)} frames, {len(todo)} pair(s), "
-                    f"{len(chunks)} chunk(s) of max {chunk_size} — paired split "
-                    f"colorize (TE cache @ {resolution}px, then infer).")
+        if family == "edit":
+            # the edit pair conditions the merged canvas through the EditPlus
+            # node: its working budget is the fixed 1 Mpx of the family, so
+            # split_TE_resolution does not apply (and is not read)
+            log_message(f"ℹ️ {sum(len(u) for u in todo)} frames, {len(todo)} pair(s), "
+                        f"{len(chunks)} chunk(s) of max {chunk_size} — paired split "
+                        f"colorize (edit conditioning pair cache, then infer).")
+        else:
+            log_message(f"ℹ️ {sum(len(u) for u in todo)} frames, {len(todo)} pair(s), "
+                        f"{len(chunks)} chunk(s) of max {chunk_size} — paired split "
+                        f"colorize (TE cache @ {resolution}px, then infer).")
 
         # the bar spans the whole video, not just this run's remainder: the
         # pairs already colorized seed it (one cache + one infer step each)

@@ -55,8 +55,6 @@ if /i "%ARG%"=="int8" ( set CONFIG_FILE=config\qwen-2511_int8.json    & set BACK
 if /i "%ARG%"=="longcat"     ( set CONFIG_FILE=config\longcat_gguf_q4.json    & set BACKEND=LongCat Q4_K_M )
 if /i "%ARG%"=="longcat-q3"  ( set CONFIG_FILE=config\longcat_gguf_q3.json    & set BACKEND=LongCat Q3_K_M )
 if /i "%ARG%"=="longcat-q4"  ( set CONFIG_FILE=config\longcat_gguf_q4.json    & set BACKEND=LongCat Q4_K_M )
-if /i "%ARG%"=="longcat-q5"  ( set CONFIG_FILE=config\longcat_gguf_q5.json    & set BACKEND=LongCat Q5_K_M )
-if /i "%ARG%"=="longcat-q6"  ( set CONFIG_FILE=config\longcat_gguf_q6.json    & set BACKEND=LongCat Q6_K  )
 
 :: ---------------------------------------------------------------------------
 :: RESOLVE PATHS
@@ -74,7 +72,7 @@ if exist "%SERVER_DIR%\config\%ARG%.json" (
 )
 
 if "%CONFIG_FILE%"=="" (
-    echo [ERROR] Unknown argument: "%ARG%". Use "int8" ^(default^), "q3", "fp4", "int4", "longcat", "longcat-q3", "longcat-q5", "longcat-q6", or the name of a config file in config\.
+    echo [ERROR] Unknown argument: "%ARG%". Use "int8" ^(default^), "q3", "fp4", "int4", "longcat", "longcat-q3", "longcat-q4", or the name of a config file in config\.
     pause
     exit /b 1
 )

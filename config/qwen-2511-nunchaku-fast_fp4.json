@@ -1,0 +1,18 @@
+{
+    "model_name":          "qwen25-nunchaku",
+    "unet_name":           "models/diffusion_models/nunchaku_qwen_image_edit_2511_balance_fp4.safetensors",
+    "unet_hf_name":        "nunchaku_qwen_image_edit_2511_balance_fp4.safetensors",
+    "clip_name":           "models/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors",
+    "vae_name":            "qwen_image_vae.safetensors",
+    "lora_path":           "models/loras/Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors",
+    "lora_strength":       1.0,
+    "steps":               4,
+    "cpu_offload":         "enable",
+    "num_blocks_on_gpu":   1,
+    "use_pin_memory":      "disable",
+    "fast_split_TE":       true,
+    "hf_unet":             "QuantFunc/Nunchaku-Qwen-Image-EDIT-2511",
+    "hf_clip":             "Comfy-Org/Qwen-Image_ComfyUI",
+    "hf_vae":              "Comfy-Org/Qwen-Image_ComfyUI",
+    "hf_lora":             "lightx2v/Qwen-Image-Edit-2511-Lightning"
+}

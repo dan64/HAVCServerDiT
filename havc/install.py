@@ -278,13 +278,11 @@ if /i "%WHICH%"=="int8"       set "CFG=qwen-2511_int8.json"
 if /i "%WHICH%"=="longcat"    set "CFG=longcat_gguf_q4.json"
 if /i "%WHICH%"=="longcat-q3" set "CFG=longcat_gguf_q3.json"
 if /i "%WHICH%"=="longcat-q4" set "CFG=longcat_gguf_q4.json"
-if /i "%WHICH%"=="longcat-q5" set "CFG=longcat_gguf_q5.json"
-if /i "%WHICH%"=="longcat-q6" set "CFG=longcat_gguf_q6.json"
 rem The config folder is the source of truth: a matching config\<name>.json
 rem wins over the shortcuts above, so a new model only needs a new file there.
 if exist "%HERE%config\%WHICH%.json" set "CFG=%WHICH%.json"
 if "%CFG%"=="" (
-    echo [ERROR] Unknown model "%WHICH%". Available: fp4 int4 q3 int8 longcat longcat-q3 longcat-q4 longcat-q5 longcat-q6, or any config name in the config folder.
+    echo [ERROR] Unknown model "%WHICH%". Available: fp4 int4 q3 int8 longcat longcat-q3 longcat-q4, or any config name in the config folder.
     pause
     exit /b 1
 )

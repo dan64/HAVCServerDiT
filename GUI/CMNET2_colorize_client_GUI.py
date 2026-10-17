@@ -3542,8 +3542,23 @@ def fixv_reference_problems(first_path, last_path):
 
 
 def _fixv_recolor_thread(values, window):
-    """Background thread: re-encode video with colorization via NVEnc."""
+    """Background thread: re-encode video with colorization via NVEnc.
+
+    Every exit path - success, failure, an early return on missing input, or
+    an unexpected exception - must post exactly one -FIXV_DONE-, because that
+    is what re-enables the Recolor/Stop buttons. A missed event leaves the tab
+    stuck on "Recoloring..." with no way back, so the guarantee lives in the
+    finally block rather than in each return."""
     log_file = None
+    done_posted = False
+
+    def _done(ok):
+        nonlocal done_posted
+        if done_posted:
+            return
+        done_posted = True
+        window.write_event_value("-FIXV_DONE-", bool(ok))
+
     try:
         state["fixv_is_running"] = True
         state["stop_requested"] = False
@@ -3673,7 +3688,7 @@ def _fixv_recolor_thread(values, window):
         if p < 90 or proc.returncode != 0:
             update_status(window, "Status: Recolor Failed", "error")
             _log(f"[FAILED] Recolor completed only {curr_frame}/{total_frames}")
-            window.write_event_value("-FIXV_DONE-", False)
+            _done(False)
         else:
             update_status(window, "Status: OK", "success")
             _log(f"[COMPLETED] Recolor: {orig_video_path} @ {fps_detected} fps")
@@ -3686,12 +3701,15 @@ def _fixv_recolor_thread(values, window):
                 _log(f"MKV created: {out_mkv_path}")
             else:
                 _log(f"MKV not created, keeping .h265: {out_video_file}")
-            window.write_event_value("-FIXV_DONE-", True)
+            _done(True)
 
     except Exception as e:
         window.write_event_value("-LOG-", f"[Recolor] Fatal error: {e}")
-        window.write_event_value("-FIXV_DONE-", False)
+        _done(False)
     finally:
+        # Safety net for the early returns above (and for anything raised
+        # before them): the tab must never stay disabled.
+        _done(False)
         if log_file:
             status = "STOPPED" if state["stop_requested"] else "COMPLETED"
             print(f"--- RECOLOR SESSION {status}: {time.strftime('%Y-%m-%d %H:%M:%S')} ---\n",

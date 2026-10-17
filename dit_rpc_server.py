@@ -467,12 +467,8 @@ class ColorizeService:
             logging.error(str(exc))
             return {"ok": False, "msg": str(exc)}
         logging.info(f"Loading pipeline from config: {path}")
-        result = _load_pipeline_from_parsed(self, cfg, cache_dir)
-        if result.get("ok"):
-            # Remember the config file (stem): the split-colorize cache key must
-            # tell apart configs that share a model_name but load a different
-            # text encoder (e.g. GGUF vs int8 for the same UNet).
-            self._pipeline_config_name = name[:-len(".json")]
+        result = _load_pipeline_from_parsed(self, cfg, cache_dir,
+                                            config_name=name[:-len(".json")])
         return result
 
     def is_pipeline_loaded(self) -> bool:
@@ -482,6 +478,16 @@ class ColorizeService:
     def get_pipeline_model(self) -> str:
         """Return the name of the currently loaded model, or empty string."""
         return self._pipeline_model_name
+
+    def get_pipeline_config(self) -> str:
+        """Return the config the loaded pipeline came from (file stem), or the
+        model family name when it was loaded without a config file.
+
+        Empty string when nothing is in memory - the GUI shows this in the
+        window title, so a stale name after unload_pipeline() would lie."""
+        if self._pipeline is None:
+            return ""
+        return self._pipeline_config_name or self._pipeline_model_name
 
     def unload_pipeline(self) -> dict:
         """Release the pipeline from VRAM (useful for debugging / reset)."""
@@ -1581,14 +1587,17 @@ def _load_pipeline_config(config_path: str) -> dict:
 
 
 def _load_pipeline_from_parsed(service: ColorizeService, cfg: dict,
-                               cache_dir: str = "") -> dict:
+                               cache_dir: str = "", config_name: str = "") -> dict:
     """Load a normalized config (parse_pipeline_config) into the service.
     cache_dir overrides the config's own value when non-empty (Nunchaku
-    only; the other backends ignore it)."""
+    only; the other backends ignore it). config_name records which config
+    file the pipeline came from (file stem): the split-colorize cache key
+    must tell apart configs sharing a model_name, and the GUI shows it in
+    the window title."""
     effective_cache = cache_dir.strip() if cache_dir else ""
     if not effective_cache:
         effective_cache = str(cfg.get("cache_dir", "") or "")
-    return service.load_pipeline(
+    result = service.load_pipeline(
         model_name=cfg["model_name"],
         model_precision=cfg["unet_gguf"],
         model_rank=cfg["clip_gguf"],
@@ -1614,6 +1623,9 @@ def _load_pipeline_from_parsed(service: ColorizeService, cfg: dict,
         lora_strength=cfg.get("lora_strength", 1.0),
         resolution=cfg.get("resolution", 0),
     )
+    if result.get("ok") and config_name:
+        service._pipeline_config_name = config_name
+    return result
 
 
 def main():
@@ -1686,7 +1698,8 @@ def main():
     if args.load_pipeline:
         cfg = _load_pipeline_config(args.pipeline_config)
         logging.info(f"Loading pipeline from config: {args.pipeline_config}")
-        result = _load_pipeline_from_parsed(service, cfg)
+        config_stem = os.path.splitext(os.path.basename(args.pipeline_config))[0]
+        result = _load_pipeline_from_parsed(service, cfg, config_name=config_stem)
         if not result["ok"]:
             logging.error(f"Failed to load pipeline: {result['msg']}")
             sys.exit(1)

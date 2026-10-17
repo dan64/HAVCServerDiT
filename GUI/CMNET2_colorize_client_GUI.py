@@ -126,6 +126,17 @@ class CMNET2RpcClient:
     def is_pipeline_loaded(self) -> bool:
         return bool(self._proxy_fast.is_pipeline_loaded())
 
+    def get_pipeline_config(self) -> str:
+        """Config/model the server has loaded ("" when none).
+
+        Returns "" also against a server built before this call existed
+        (the RPC would raise a Fault), so the GUI keeps working when it is
+        connected to an older remote server."""
+        try:
+            return str(self._proxy_fast.get_pipeline_config() or "")
+        except Exception:
+            return ""
+
     def request_stop(self) -> bool:
         return bool(self._proxy_fast.request_stop())
 
@@ -825,6 +836,50 @@ def _serve_gui_read(window, token, key):
 # ---------------------------------------------------------------------------
 _RPC_MAX_RETRIES = 5   # attempts before giving up
 _RPC_RETRY_DELAY = 2   # seconds between attempts
+
+# Window title: it shows the model the SERVER reports as loaded, never the
+# local "Model Config" selection - the GUI can be connected to a remote server
+# running a different config. Neutral until a connected server reports one.
+WINDOW_TITLE = "HAVC DiT Server GUI"
+_title_seq = 0   # invalidates a title refresh that is still in flight
+
+
+def _set_window_title(window, model=""):
+    """Show the server-reported model in the window title (neutral if empty)."""
+    global _title_seq
+    _title_seq += 1   # any pending -TITLE_UPDATE- is now stale
+    model = str(model or "").strip()
+    window.set_title(f"{WINDOW_TITLE} - {model}" if model else WINDOW_TITLE)
+
+
+def _refresh_window_title(window):
+    """Ask the connected server which model it has loaded, then update the
+    title on the main thread via -TITLE_UPDATE-.
+
+    The RPC runs in a worker thread: the main thread must never block on the
+    network (an unresponsive server would freeze the GUI for the 5s timeout).
+    With no client (or on any RPC error) the title goes back to neutral.
+
+    The event carries a sequence number: if the server is stopped (or another
+    refresh lands) while this one is in flight, its reply is dropped instead
+    of showing a model the server no longer has."""
+    global _title_seq
+    rpc = state.get("rpc_client")
+    if rpc is None:
+        _set_window_title(window)
+        return
+
+    _title_seq += 1
+    seq = _title_seq
+
+    def work():
+        try:
+            model = rpc.get_pipeline_config()
+        except Exception:  # noqa: BLE001 - title is cosmetic, never fatal
+            model = ""
+        window.write_event_value("-TITLE_UPDATE-", (seq, model))
+
+    threading.Thread(target=work, daemon=True).start()
 
 
 def _connect_thread(host: str, port: int, window):
@@ -3206,7 +3261,7 @@ layout = [
      sg.Button("Exit")],
 ]
 
-window = sg.Window("HAVC DiT Server GUI", layout, finalize=True,
+window = sg.Window(WINDOW_TITLE, layout, finalize=True,
                    resizable=True, size=(cfg["window_w"], cfg["window_h"]),
                    enable_close_attempted_event=True)
 
@@ -4415,6 +4470,7 @@ while True:
         # the connection indicator too, it's no longer valid.
         state["rpc_client"] = None
         state["rpc_connected"] = False
+        _set_window_title(window)   # no server -> neutral title
         window["-CONNECT-"].update(disabled=False)
         window["-RPC_LED-"].update("●", text_color="red")
         window["-RPC_STATUS_TEXT-"].update("Disconnected", text_color="red")
@@ -4438,10 +4494,12 @@ while True:
             window["-RPC_LED-"].update("●", text_color="lime")
             window["-RPC_STATUS_TEXT-"].update("✅ OK", text_color="lime")
             update_status(window, "Status: RPC Server connected", "info")
+            _refresh_window_title(window)   # title = what the SERVER loaded
         else:
             window["-RPC_LED-"].update("●", text_color="red")
             window["-RPC_STATUS_TEXT-"].update("❌ Error", text_color="red")
             update_status(window, "Status: RPC connection failed", "error")
+            _set_window_title(window)
 
         pending = state.get("pending_run_values")
         if pending is not None:
@@ -4455,6 +4513,11 @@ while True:
                 sg.popup_error(
                     "Failed to connect to the auto-started DiT server:\n"
                     f"{err_msg}\n\nPipeline not started.")
+
+    if event == "-TITLE_UPDATE-":
+        _seq, _model = values["-TITLE_UPDATE-"]
+        if _seq == _title_seq:   # ignore replies from a superseded request
+            _set_window_title(window, _model)
 
     # ---- Update script combos when dir changes ----
     if event == "-SCRIPT_DIR-":
@@ -4661,6 +4724,10 @@ while True:
     if event == "-FINISHED-":
         window["-RUN-"].update(disabled=False)
         window["-STOP-"].update(disabled=True)
+        # A pipeline may have been loaded on the server during this run (the
+        # GUI can be connected to a server that started without one): refresh
+        # the title now that the server is idle again.
+        _refresh_window_title(window)
         if values["-FINISHED-"]:
             window["-LOG_BOX-"].print(
                 "\n[COMPLETED] All tasks completed.", text_color="green")

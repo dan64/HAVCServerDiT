@@ -1,10 +1,10 @@
 # Backends
 
-Six backends, one API — pick the one that fits your hardware.
+Seven backends, one API — pick the one that fits your hardware.
 
 Each backend below shows a side-by-side comparison on the **same frame**: the ground-truth (color) source on the left, and that backend's colorization of it on the right — a quick way to judge how well each model colors known objects.
 
-> ¹ Measured with **Fast Pipeline** — for `qwen21-viggle`, `qwen21-turbo`, `gguf-qwen` and `flux2` the cached text-encoder split (paired for `qwen21-turbo`'s fast variant and for `flux2`), for `nunchaku-qwen` paired inference (two frames per forward pass) — at the backend's fastest recommended step count, warm-up excluded. ² `longcat-gguf` has no Fast Pipeline path (falls back to per-image processing, see [What's New](whats-new.md)) — its figure is a genuine single-image time, not directly comparable to the Fast Pipeline figures above.
+> ¹ Measured with **Fast Pipeline** — for `qwen21-viggle`, `qwen21-turbo`, `gguf-qwen`, `qwen25-nunchaku` and `flux2` the cached text-encoder split (paired for `qwen21-turbo`'s fast variant and for `flux2`), for `nunchaku-qwen` paired inference (two frames per forward pass) — at the backend's fastest recommended step count, warm-up excluded. ² `longcat-gguf` has no Fast Pipeline path (falls back to per-image processing, see [What's New](whats-new.md)) — its figure is a genuine single-image time, not directly comparable to the Fast Pipeline figures above.
 
 > **Recommended**: **qwen21-viggle** and **nunchaku-qwen** are both recommended for production use. Thanks to recent code optimizations — Dynamic VRAM and the text-encoder (TE) split — **qwen21-viggle** is now the fastest backend: **1.7 sec/frame** with _Fast Pipeline_ (~3.5 sec/frame at the fastest usable step count, `steps=2`, without it; see the `⚠️ Fast Pipeline` note below) — and has the **lowest minimum hardware requirements**: **12 GB VRAM / 32 GB RAM** (14GB+ VRAM on the standard path). The other backends that also fit a 12 GB card are far slower — `qwen-2511_q3` at ~7 sec/frame, `longcat-gguf` at ~12 sec/frame — so at that VRAM class viggle is not just the fastest, it is in a different league. `nunchaku-qwen` runs at about **4 sec/frame** using its paired _Fast Pipeline_ (`steps=2`) and needs 16GB+ VRAM / 64GB+ RAM. **`gguf-qwen`** (Qwen-Image-Edit 2511) now also supports the cached-TE split: **~7.3 sec/frame** against ~10.5 sec/frame for the standard path (~1.4×, 17-frame test at 2 steps), on a 16 GB+ GPU / 48 GB+ RAM for the recommended `qwen-2511_int8` config (12 GB+ with `qwen-2511_q3`). **`qwen21-turbo`** is the rendition-maximizing option — **~4.5 sec/frame** on the single split, **~2.3** with the paired `fast_split_TE` one — richer colors than the viggle family, but noticeably less stable between similar frames (see the field verdict below). `longcat-gguf` remain the choice for VRAM-constrained setups where neither of the above fits, at a real speed cost (see the `⚠️ Experimental` note under GGUF below). **`flux2`** (2.6.0) adds the FLUX.2-dev family: 16 GB+ VRAM / 64 GB+ RAM, **~4.0 s/frame** on the int4 config with `"vram_headroom": 3` (~5.5 on fp8 mixed) — see its section below.
 >
@@ -74,6 +74,48 @@ Choose the backend that matches your hardware:
 > offloaded; measured process RAM ~40 GB working set / ~50 GB committed).
 > Uses ComfyUI-native code : no ComfyUI GUI installation needed.
 > Both configs live in the `config/` folder.
+
+### qwen25-nunchaku : ~8.7 sec/frame with Fast Pipeline, ~9.2 without (Qwen-Image-Edit 2509/2511 on the Nunchaku node)
+
+The same Qwen-Image-Edit models as `nunchaku-qwen` and `gguf-qwen`, run
+through the **ComfyUI-nunchaku node** (SVDQuant) instead of a diffusers
+pipeline or the GGUF dequantizer — the exact graph ComfyUI executes
+(`TextEncodeQwenImageEditPlus` → `AuraFlow shift 3` → `CFGNorm` →
+`KSampler`, 4 steps at cfg 1). Two configs shipped:
+
+| Config                       | Checkpoint                                   | LoRA                |
+| ---------------------------- | -------------------------------------------- | ------------------- |
+| `qwen-2509-nunchaku_fp4`     | official nunchaku-ai 2509 FP4 (r32)          | fused (none)        |
+| `qwen-2511-nunchaku_fp4`     | QuantFunc 2511 FP4 `balance` (r128)          | Lightning 4-step    |
+
+| Requirement | Details |
+| ----------- | ------- |
+| **GPU**     | NVIDIA RTX 50-Series (FP4). 16 GB+ VRAM — the 2511 checkpoint is 13 GB, the 2509 one 12 GB |
+| **RAM**     | 32 GB+ |
+| **CUDA**    | 13.0 or newer |
+
+> **When to pick it**: it is the only path to **Qwen-Image-Edit 2511 with
+> SVDQuant weights** (there is no official 2511 release), and it runs the
+> **Lightning LoRA on quantized weights** (the QuantFunc checkpoints do not
+> have it fused). The diffusers `nunchaku-qwen` family stays the reference for
+> the official 2509 Lightning checkpoint.
+>
+> **Measured** (RTX 5070 Ti 16 GB, 2026-10-17, one 1184×880 frame at the
+> 1 Mpx budget, `steps=4`, warm-up excluded): **2511 ~9.2 s/frame** live and
+> **~8.7 s/frame** on the split (1.8 s conditioning + 6.9 s sampling);
+> **2509 ~7.4 s/frame**. Sampling itself runs at **~1.5–1.7 s/step**; the
+> first step of a fresh model costs 4–5 s more (initialization), and the
+> first load of a cold checkpoint ~4–5 minutes from an HDD (one-time, per
+> server session).
+>
+> **`cpu_offload`**: the Nunchaku transformer streams its blocks from host
+> RAM; the shipped configs force `enable` because upstream's `auto` disables
+> offload on a 16 GB card (it reports 15 GiB) — measured on the RTX 5070 Ti
+> that costs **~1.9×** (10.5 s vs 5.4 s per frame at 2 steps). On 24 GB+
+> cards `disable` can be tried; `enable` remains the safe default.
+
+> Launch with `start_server.cmd qwen-2511-nunchaku_fp4` (or the 2509 name) —
+> see [Server Usage](server_usage.md).
 
 ### longcat-gguf : 12 sec/frame (Q3–Q8) — Best Quality
 

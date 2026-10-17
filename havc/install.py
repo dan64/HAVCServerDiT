@@ -342,6 +342,16 @@ call "%~dp0start_server.cmd" q3
 :: run_server_int8.cmd : launch the server with Qwen-Image-Edit 2511 int8 ConvRot (16 GB VRAM)
 call "%~dp0start_server.cmd" int8
 """,
+    "run_server_qwen2511n.cmd": r"""@echo off
+:: run_server_qwen2511n.cmd : launch the server with Qwen-Image-Edit 2511 on
+:: the ComfyUI-nunchaku node (QuantFunc SVDQuant FP4 + Lightning LoRA)
+call "%~dp0start_server.cmd" qwen-2511-nunchaku_fp4
+""",
+    "run_server_qwen2509n.cmd": r"""@echo off
+:: run_server_qwen2509n.cmd : launch the server with Qwen-Image-Edit 2509 on
+:: the ComfyUI-nunchaku node (official nunchaku FP4, Lightning fused)
+call "%~dp0start_server.cmd" qwen-2509-nunchaku_fp4
+""",
     "HAVC-Doctor.cmd": r"""@echo off
 setlocal
 set "HERE=%~dp0"

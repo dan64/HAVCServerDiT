@@ -1,5 +1,37 @@
 # What's New
 
+### 2026-10-17 — Qwen-Image-Edit on the ComfyUI-nunchaku node (`qwen25-nunchaku`)
+
+A seventh backend: **`qwen25-nunchaku`** runs Qwen-Image-Edit 2509/2511 through
+the **ComfyUI-nunchaku node** (SVDQuant) — the same graph ComfyUI executes
+(`TextEncodeQwenImageEditPlus` → `AuraFlow shift 3` → `CFGNorm` → `KSampler`, 4
+steps at cfg 1) — instead of a diffusers pipeline.
+
+Two configs ship:
+
+* **`qwen-2509-nunchaku_fp4`** — the official nunchaku-ai 2509 checkpoint,
+  Lightning **fused** (no LoRA).
+* **`qwen-2511-nunchaku_fp4`** — the QuantFunc 2511 checkpoint
+  (`balance` r128) **plus** the Lightning LoRA, composed into the quantized
+  low-rank buffers at load time. This is the only path to **2511 with SVDQuant
+  weights**: there is no official 2511 release, and the QuantFunc checkpoints
+  do not ship the Lightning LoRA fused.
+
+Measured on an RTX 5070 Ti 16 GB, one 1184×880 frame at the 1 Mpx budget,
+4 steps, warm-up excluded: **~9.2 s/frame** live and **~8.7 s/frame** with
+Fast Pipeline (the cached-edit-conditioning split the `gguf-qwen` family uses);
+the 2509 config runs at **~7.4 s/frame**. Sampling is ~1.5–1.7 s/step; the
+first step of a fresh model costs 4–5 s more, and the first load of a cold
+checkpoint takes a few minutes from an HDD (one-time per server session).
+
+Notes: on a 16 GB card the configs force `cpu_offload: enable` — upstream's
+`auto` rule disables offload there (the card reports 15 GiB) and measured
+~1.9× slower (10.5 s vs 5.4 s per frame at 2 steps). The family has the
+same Fast Pipeline shape as `gguf-qwen`, and the diffusers `nunchaku-qwen`
+family stays the reference for the official 2509 Lightning pipeline.
+
+See [Backends](backends.md) and [Configuration](configuration.md).
+
 ### 2026-10-15 — qwen-2511 prompt sensitivity (troubleshooting) + prompt preset lists in the GUI
 
 **Prompt-dependent artifacts on qwen-2511 solved.** The intermittent "duplicated

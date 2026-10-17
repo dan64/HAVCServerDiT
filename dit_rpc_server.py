@@ -98,6 +98,7 @@ try:
         load_longcat_pipeline,
         load_viggle_pipeline,
         load_qwen21_turbo_pipeline,
+        load_qwen25_nunchaku_pipeline,
         load_flux2_pipeline,
         process_image,
         process_image_pair,
@@ -118,6 +119,7 @@ except ImportError as _e:
     load_longcat_pipeline     = None
     load_viggle_pipeline      = None
     load_qwen21_turbo_pipeline = None
+    load_qwen25_nunchaku_pipeline = None
     load_flux2_pipeline       = None
     process_image             = None
     process_image_pair        = None
@@ -273,6 +275,11 @@ class ColorizeService:
         vae_hf_name: str = "",
         lora_hf_name: str = "",
         vram_headroom: float = 0.0,
+        cpu_offload: str = "auto",
+        num_blocks_on_gpu: int = 1,
+        use_pin_memory: str = "disable",
+        lora_strength: float = 1.0,
+        resolution: int = 0,
     ) -> dict:
         """
         Load the Nunchaku/Qwen pipeline.
@@ -289,9 +296,17 @@ class ColorizeService:
 
         vram_headroom (GB, default 0) is the DynamicVRAM reservation forwarded
         to the aimdo-backed loaders (gguf-qwen, qwen21-viggle, qwen21-turbo,
-        flux2); it only takes effect on the first model loaded in this
-        process, i.e. it is the config's own value that wins. See
+        qwen25-nunchaku, flux2); it only takes effect on the first model loaded
+        in this process, i.e. it is the config's own value that wins. See
         comfy_bridge/_dynamic_vram.py and the module docstring.
+
+        cpu_offload / num_blocks_on_gpu / use_pin_memory are qwen25-nunchaku
+        only: the Nunchaku loader's offload policy (see
+        load_qwen25_nunchaku_pipeline). lora_strength is the weight of the
+        LoRA composed into the quantized buffers (qwen25-nunchaku); it
+        defaults to 1.0, the strength of the shipped configs. resolution is
+        the long-side budget of the qwen25-nunchaku family (0 -> the
+        reference 1 Mpx).
         """
         with self._pipeline_lock:
             try:
@@ -369,6 +384,25 @@ class ColorizeService:
                         hf_unet=hf_unet,
                         hf_clip=hf_clip,
                         hf_vae=hf_vae,
+                        unet_hf_name=unet_hf_name,
+                        vram_headroom=vram_headroom,
+                    )
+                elif model_name == "qwen25-nunchaku":
+                    pipe = load_qwen25_nunchaku_pipeline(
+                        model_name=model_name,
+                        unet_path=model_precision,
+                        clip_path=model_rank,
+                        lora_path=full_model_path,
+                        lora_strength=lora_strength,
+                        vae_name=vae_name,
+                        cpu_offload=cpu_offload,
+                        num_blocks_on_gpu=num_blocks_on_gpu,
+                        use_pin_memory=use_pin_memory,
+                        resolution=resolution,
+                        hf_unet=hf_unet,
+                        hf_clip=hf_clip,
+                        hf_vae=hf_vae,
+                        hf_lora=hf_lora,
                         unet_hf_name=unet_hf_name,
                         vram_headroom=vram_headroom,
                     )
@@ -638,9 +672,10 @@ class ColorizeService:
         """
         if self._pipeline is None:
             return {"ok": False, "skipped": False, "elapsed": 0.0, "msg": "Pipeline not loaded"}
-        if self._pipeline_model_name != "gguf-qwen":
+        if self._pipeline_model_name not in ("gguf-qwen", "qwen25-nunchaku"):
             return {"ok": False, "skipped": False, "elapsed": 0.0,
-                    "msg": "encode_frame_edit requires the qwen-2511 (gguf-qwen) pipeline"}
+                    "msg": "encode_frame_edit requires an edit-family pipeline "
+                           "(gguf-qwen / qwen25-nunchaku)"}
         try:
             from dit_colorize_main import encode_frame_edit as _encode_frame_edit
             res = _encode_frame_edit(
@@ -665,9 +700,10 @@ class ColorizeService:
         """
         if self._pipeline is None:
             return {"ok": False, "skipped": False, "elapsed": 0.0, "msg": "Pipeline not loaded"}
-        if self._pipeline_model_name != "gguf-qwen":
+        if self._pipeline_model_name not in ("gguf-qwen", "qwen25-nunchaku"):
             return {"ok": False, "skipped": False, "elapsed": 0.0,
-                    "msg": "colorize_frame_edit_from_te requires the qwen-2511 (gguf-qwen) pipeline"}
+                    "msg": "colorize_frame_edit_from_te requires an edit-family "
+                           "pipeline (gguf-qwen / qwen25-nunchaku)"}
         try:
             from dit_colorize_main import colorize_frame_edit_from_te as _colorize_frame_edit_from_te
             res = _colorize_frame_edit_from_te(
@@ -758,9 +794,10 @@ class ColorizeService:
         """
         if self._pipeline is None:
             return {"ok": False, "skipped": False, "elapsed": 0.0, "msg": "Pipeline not loaded"}
-        if self._pipeline_model_name != "gguf-qwen":
+        if self._pipeline_model_name not in ("gguf-qwen", "qwen25-nunchaku"):
             return {"ok": False, "skipped": False, "elapsed": 0.0,
-                    "msg": "encode_pair_edit requires the qwen-2511 (gguf-qwen) pipeline"}
+                    "msg": "encode_pair_edit requires an edit-family pipeline "
+                           "(gguf-qwen / qwen25-nunchaku)"}
         try:
             from dit_colorize_main import encode_pair_edit as _encode_pair_edit
             res = _encode_pair_edit(
@@ -785,9 +822,10 @@ class ColorizeService:
         if self._pipeline is None:
             return {"ok": False, "skipped": False, "elapsed": 0.0, "written": [],
                     "msg": "Pipeline not loaded"}
-        if self._pipeline_model_name != "gguf-qwen":
+        if self._pipeline_model_name not in ("gguf-qwen", "qwen25-nunchaku"):
             return {"ok": False, "skipped": False, "elapsed": 0.0, "written": [],
-                    "msg": "colorize_pair_edit_from_te requires the qwen-2511 (gguf-qwen) pipeline"}
+                    "msg": "colorize_pair_edit_from_te requires an edit-family "
+                           "pipeline (gguf-qwen / qwen25-nunchaku)"}
         try:
             from dit_colorize_main import colorize_pair_edit_from_te as _colorize_pair_edit_from_te
             res = _colorize_pair_edit_from_te(
@@ -842,7 +880,7 @@ class ColorizeService:
         if self._pipeline is None:
             return {"ok": False, "elapsed": 0.0, "msg": "Pipeline not loaded"}
         # GGUF does not support paired inference: fall back to single-image processing
-        if self._pipeline_model_name in ("gguf-qwen", "longcat-gguf"):
+        if self._pipeline_model_name in ("gguf-qwen", "longcat-gguf", "qwen25-nunchaku"):
             return self._colorize_pair_fallback_file(img1_path, img2_path, out_dir, prompt, gap_px, steps, enhance_prompt, usm_radius)
         try:
             elapsed = process_image_pair(
@@ -1028,7 +1066,7 @@ class ColorizeService:
                     "elapsed": 0.0, "skipped1": False, "skipped2": False,
                     "msg": "Pipeline not loaded"}
         # GGUF does not support paired inference: fall back to individual colorization
-        if self._pipeline_model_name in ("gguf-qwen", "longcat-gguf"):
+        if self._pipeline_model_name in ("gguf-qwen", "longcat-gguf", "qwen25-nunchaku"):
             return self._colorize_pair_fallback_mem(img1_data, img2_data, prompt, steps, enhance_prompt)
         try:
             orig1 = _bytes_to_pil(img1_data)
@@ -1236,7 +1274,7 @@ class ColorizeService:
             return {"ok": False, "elapsed": 0.0, "skipped1": False,
                     "skipped2": False, "msg": "Pipeline not loaded"}
         # GGUF does not support paired inference: fall back to individual colorization
-        if self._pipeline_model_name in ("gguf-qwen", "longcat-gguf"):
+        if self._pipeline_model_name in ("gguf-qwen", "longcat-gguf", "qwen25-nunchaku"):
             return self._colorize_pair_fallback_shm(
                 shm_in1_name, shm_out1_name, height1, width1,
                 shm_in2_name, shm_out2_name, height2, width2,
@@ -1376,6 +1414,15 @@ def parse_pipeline_config(config_path: str) -> dict:
         {"model_name": "qwen21-turbo", "unet_name": "...", "clip_name": "...",
          "vae_name": "...", "lora_path": "", "steps": 8}
 
+    New format (qwen25-nunchaku, Nunchaku SVDQuant checkpoint on the Comfy node):
+        {"model_name": "qwen25-nunchaku", "unet_name": "...", "clip_name": "...",
+         "vae_name": "...", "lora_path": "...", "steps": 4,
+         "cpu_offload": "enable", "num_blocks_on_gpu": 1,
+         "use_pin_memory": "disable", "lora_strength": 1.0}
+        (optional: resolution, the long-side budget; 0/absent = the reference
+         1 Mpx. cpu_offload/num_blocks_on_gpu/use_pin_memory/lora_strength
+         are ignored by the other families.)
+
     New format (flux2, same keys plus the FluxGuidance value):
         {"model_name": "flux2", "unet_name": "models/unet/flux2-dev-Q3_K_M.gguf",
          "clip_name": "models/text_encoders/mistral_3_small_flux2_fp4_mixed.safetensors",
@@ -1477,6 +1524,13 @@ def parse_pipeline_config(config_path: str) -> dict:
             "vae_hf_name": cfg.get("vae_hf_name", ""),
             "lora_hf_name": cfg.get("lora_hf_name", ""),
             "vram_headroom": vram_headroom,
+            # qwen25-nunchaku: the Nunchaku loader's offload policy and the
+            # LoRA weight (ignored by the other families).
+            "cpu_offload": cfg.get("cpu_offload", "auto"),
+            "num_blocks_on_gpu": int(cfg.get("num_blocks_on_gpu", 1)),
+            "use_pin_memory": cfg.get("use_pin_memory", "disable"),
+            "lora_strength": float(cfg.get("lora_strength", 1.0)),
+            "resolution": int(cfg.get("resolution", 0)),
         }
 
     # Legacy format
@@ -1554,6 +1608,11 @@ def _load_pipeline_from_parsed(service: ColorizeService, cfg: dict,
         vae_hf_name=cfg.get("vae_hf_name", ""),
         lora_hf_name=cfg.get("lora_hf_name", ""),
         vram_headroom=cfg.get("vram_headroom", 0),
+        cpu_offload=cfg.get("cpu_offload", "auto"),
+        num_blocks_on_gpu=cfg.get("num_blocks_on_gpu", 1),
+        use_pin_memory=cfg.get("use_pin_memory", "disable"),
+        lora_strength=cfg.get("lora_strength", 1.0),
+        resolution=cfg.get("resolution", 0),
     )
 
 

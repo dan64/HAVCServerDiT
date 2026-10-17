@@ -2007,6 +2007,15 @@ def orchestrator(init_values, window):
             else:
                 do_colorize_split_edit(values, window)
             return
+        if model_type == "qwen25-nunchaku":
+            # Same shape as gguf-qwen: the Nunchaku edit family (2509/2511 on
+            # the Comfy node) caches the EditPlus conditioning and samples
+            # from it. Its own config folder entries drive the rest.
+            if fast_pair:
+                do_colorize_split_pair(values, window, "edit")
+            else:
+                do_colorize_split_edit(values, window)
+            return
         if model_type == "flux2":
             # Fast Pipeline on the flux2 family runs the split flow (phase A:
             # Mistral text encode + VAE reference latent cached under ref_te/;
@@ -2886,7 +2895,7 @@ tab3_layout = [
           sg.Text("stopped", key="-SERVER_STATUS-", size=(45, 1), expand_x=True)],
         [sg.Text("Colorization Steps:"),
          sg.Combo(steps_values, default_value=cfg["steps"], key="-STEPS-", readonly=True, size=(6,1)),
-         sg.Checkbox("Fast Pipeline", key="-FAST_PIPE-", default=cfg["fast_pipe"], tooltip="qwen21-viggle / qwen21-turbo / qwen-2511 / flux2: cached-TE split flow; other models: paired 1280px pass. A config with fast_split_TE pairs consecutive frames (merged before the TE, split after the transformer)"),
+         sg.Checkbox("Fast Pipeline", key="-FAST_PIPE-", default=cfg["fast_pipe"], tooltip="qwen21-viggle / qwen21-turbo / qwen-2511 / qwen25-nunchaku / flux2: cached-TE split flow; other models: paired 1280px pass. A config with fast_split_TE pairs consecutive frames (merged before the TE, split after the transformer)"),
          sg.Checkbox("Unsharp Mask", key="-USM-", default=cfg.get("usm", False),
                      tooltip="Pre-filter the input before colorization (unsharp mask: amount 0.50, "
                              "threshold 0). Removes the film grain that can stop the model from "

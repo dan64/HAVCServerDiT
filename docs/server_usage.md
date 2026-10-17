@@ -87,6 +87,13 @@ start_server.cmd flux2_dev_q3      # FLUX.2-dev GGUF Q3_K_M
 start_server.cmd flux2_dev_q2      # FLUX.2-dev GGUF Q2_K
 ```
 
+The Qwen-Image-Edit family on the Nunchaku node follows the same rule:
+
+```
+start_server.cmd qwen-2511-nunchaku_fp4   # 2511 QuantFunc FP4 + Lightning LoRA
+start_server.cmd qwen-2509-nunchaku_fp4   # 2509 official FP4 (Lightning fused)
+```
+
 Any file in the `config/` folder can also be selected directly by its name
 (a name matching a file there wins over the shortcuts above):
 
@@ -107,6 +114,8 @@ same list is what the GUI shows as **Model Config** (Tab 2).
 | `run_server_fp4.cmd`     | `start_server.cmd fp4`     | Nunchaku FP4                   |
 | `run_server_int4.cmd`    | `start_server.cmd int4`    | Nunchaku INT4                  |
 | `run_server_longcat.cmd` | `start_server.cmd longcat` | LongCat Q4_K_M                 |
+| `run_server_qwen2511n.cmd` | `start_server.cmd qwen-2511-nunchaku_fp4` | Qwen-Image-Edit 2511, Nunchaku node |
+| `run_server_qwen2509n.cmd` | `start_server.cmd qwen-2509-nunchaku_fp4` | Qwen-Image-Edit 2509, Nunchaku node |
 
 `run_server_qwen21.cmd` is a **standalone launcher** for the shipped default
 (`qwen21-turbo`) — it does not take an argument and always launches with
@@ -133,6 +142,7 @@ argument it starts `int4`.
 | Qwen-Image-2.1 (qwen21-viggle) | **6**       | LoRA step schedules: `2`/`4`/`6`/`8` — `6` (the LoRA's native step count) gives the most accurate colors, `2` is the fastest |
 | Qwen-Image-2.1-Turbo (qwen21-turbo) | **8**  | Fixed by the checkpoint's own sigma table (its `sample_sigmas`); the GUI steps setting does not apply. `config/qwen21_turbo_int8.json` sets `fast_split_TE` — Fast Pipeline pairs consecutive frames |
 | FLUX.2-dev (flux2)       | **2**             | The Flux.2 Turbo LoRA's distilled step count (all four configs ship `steps: 2`); the panel's setting applies. Paired split on by default, `guidance` 4.0 |
+| Qwen-Image-Edit, Nunchaku node (qwen25-nunchaku) | **4** | `qwen-2511-nunchaku_fp4` / `qwen-2509-nunchaku_fp4` — the Lightning distilled step count (2509 fused, 2511 via LoRA); the config files ship `steps: 4` |
 
 > **Prompt tip (qwen21-viggle)**: on subjects with a strong color convention
 > (e.g. a well-known costume), the model can leave the color ambiguous and

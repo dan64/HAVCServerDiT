@@ -102,6 +102,63 @@ The LoRA file `Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors` enab
 
 The LoRA is merged statically (not applied as an adapter), so there is no runtime overhead.
 
+### Qwen-Image-Edit on the Nunchaku node : `config/qwen-2511-nunchaku_fp4.json` & `config/qwen-2509-nunchaku_fp4.json`
+
+These two configs run Qwen-Image-Edit through the **ComfyUI-nunchaku node**
+(SVDQuant) instead of a diffusers pipeline — the same graph ComfyUI itself
+executes: `TextEncodeQwenImageEditPlus` → `ModelSamplingAuraFlow(shift=3)` →
+`CFGNorm` → `KSampler` (4 steps, cfg 1, euler/simple). They are separate from
+the diffusers `nunchaku-qwen` family above, which still loads the official
+2509 Lightning pipeline through `diffusers`.
+
+* **`qwen-2509-nunchaku_fp4`** — the official nunchaku-ai 2509 checkpoint,
+  **Lightning already fused** (no LoRA). `num_blocks_on_gpu: 20` mirrors the
+  validated headless run.
+* **`qwen-2511-nunchaku_fp4`** — the QuantFunc 2511 checkpoint
+  (`balance`, r128) **plus** the Lightning LoRA, composed into the quantized
+  low-rank buffers at load time. There is no official 2511 SVDQuant release.
+
+```json
+{
+    "model_name":          "qwen25-nunchaku",
+    "unet_name":           "models/diffusion_models/nunchaku_qwen_image_edit_2511_balance_fp4.safetensors",
+    "unet_hf_name":        "nunchaku_qwen_image_edit_2511_balance_fp4.safetensors",
+    "clip_name":           "models/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors",
+    "vae_name":            "qwen_image_vae.safetensors",
+    "lora_path":           "models/loras/Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors",
+    "lora_strength":       1.0,
+    "steps":               4,
+    "cpu_offload":         "enable",
+    "num_blocks_on_gpu":   1,
+    "use_pin_memory":      "disable",
+    "hf_unet":             "QuantFunc/Nunchaku-Qwen-Image-EDIT-2511",
+    "hf_clip":             "Comfy-Org/Qwen-Image_ComfyUI",
+    "hf_vae":              "Comfy-Org/Qwen-Image_ComfyUI",
+    "hf_lora":             "lightx2v/Qwen-Image-Edit-2511-Lightning"
+}
+```
+
+Family-specific keys (ignored by the other backends):
+
+| Key | Meaning |
+| --- | --- |
+| `cpu_offload` | `enable` / `disable` / `auto`. The Nunchaku transformer keeps only a few blocks on the GPU and streams the rest; `auto` follows upstream's rule (on below 15 GiB) and therefore **disables** offload on a 16 GB card, which measured ~1.9× slower (10.5 s vs 5.4 s per frame at 2 steps) — the shipped configs ask for `enable`. |
+| `num_blocks_on_gpu` | Blocks kept resident when offload is on. `1` for the 2511 balance checkpoint, `20` for the smaller 2509 one. |
+| `use_pin_memory` | `enable` / `disable` pinned host memory for the offloaded blocks. |
+| `lora_strength` | Weight of the composed LoRA (1.0 in the shipped configs). |
+| `resolution` | Optional long-side budget of the working image; `0`/absent keeps the reference **1 Mpx** (`ImageScaleToTotalPixels`, lanczos). |
+
+> **VRAM / speed** (RTX 5070 Ti 16 GB, measured 2026-10-17): 4 steps at
+> ~1.5–1.7 s/step, **~7.5–9 s per 1 Mpx frame** end to end (text encoder,
+> sampling and decode included). The 2511 checkpoint is 13 GB, hence
+> `cpu_offload: enable`; the 2509 one is 12 GB.
+
+> **Fast Pipeline** works on this family too: phase A caches the EditPlus
+> conditioning (`ref_te_edit/`), phase B samples from it — the same edit split
+> the `gguf-qwen` family uses. Because the text encoder sees each frame's
+> image, the cache does not carry across frames: the split mainly separates
+> the VRAM phases, not the work.
+
 ### qwen21-viggle Backend : `config/qwen21_viggle.json` & `qwen21_viggle-{soft,sharp}_{int8,q4}.json`
 
 The default config uses the int8 ConvRot UNet with the Viggle-Turbo LoRA
@@ -370,13 +427,13 @@ It only pays off for the **int4 flux2 checkpoint**, so only
 
 | Key                                       | Required | Description                                                                                  |
 | ----------------------------------------- | -------- | -------------------------------------------------------------------------------------------- |
-| `model_name`                              | ✅        | `"nunchaku-qwen"`, `"gguf-qwen"`, `"longcat-gguf"`, `"qwen21-viggle"`, `"qwen21-turbo"` or `"flux2"`                     |
+| `model_name`                              | ✅        | `"nunchaku-qwen"`, `"gguf-qwen"`, `"longcat-gguf"`, `"qwen21-viggle"`, `"qwen21-turbo"`, `"flux2"` or `"qwen25-nunchaku"`                     |
 | `quant`                                   |          | **GGUF only**: quantization level (`"q3"`, `"q4"`, `"q5"`, `"q6"`, `"q8"`). Default: `"q4"`  |
 | `model_precision`                         | ✅        | **Nunchaku**: `"fp4"` (RTX 50) or `"int4"` (RTX 30/40). **GGUF/qwen21-viggle**: not used     |
 | `unet_gguf` / `clip_gguf`                 | ✅        | **GGUF only**: local paths to the GGUF model files                                           |
-| `unet_name` / `clip_name`                 | ✅        | **qwen21-viggle / qwen21-turbo / flux2**: local paths to the model files — `unet_name` can be `.safetensors` or `.gguf` (GGUF quants load through the same ComfyUI-GGUF recipe as the gguf backends), `clip_name` can be `.safetensors` or `.gguf` (flux2: safetensors only, the Mistral-3 encoder) |
+| `unet_name` / `clip_name`                 | ✅        | **qwen21-viggle / qwen21-turbo / flux2 / qwen25-nunchaku**: local paths to the model files — `unet_name` can be `.safetensors` or `.gguf` (GGUF quants load through the same ComfyUI-GGUF recipe as the gguf backends), `clip_name` can be `.safetensors` or `.gguf` (flux2: safetensors only, the Mistral-3 encoder; qwen25-nunchaku: the Qwen2.5-VL fp8 scaled safetensors) |
 | `clip_mmproj` / `clip_mmproj_hf_name`     |          | **GGUF/qwen21-viggle-with-GGUF-CLIP**: local path to the mmproj (vision tower) file / its filename on HuggingFace if different from the local one. Required for a GGUF CLIP to see images at all — without it the vision tower silently isn't loaded |
-| `unet_hf_name`                            |          | **qwen21-viggle / qwen21-turbo / flux2**: UNet filename on HuggingFace when it differs from the default download path (`diffusion_models/<local filename>`, the Comfy-Org layout) — e.g. merged checkpoints kept at the repo root, like the flux2 int4 repack. Only used by auto-download |
+| `unet_hf_name`                            |          | **qwen21-viggle / qwen21-turbo / flux2 / qwen25-nunchaku**: UNet filename on HuggingFace when it differs from the default download path (`diffusion_models/<local filename>`, the Comfy-Org layout) — e.g. merged checkpoints kept at the repo root, like the flux2 int4 repack, or the 2509 official file under `lightning-251115/`. Only used by auto-download |
 | `model_rank`                              |          | **Nunchaku**: SVD rank (`"32"`). **GGUF/qwen21-viggle**: not used                            |
 | `model_inference_steps`                   |          | **Nunchaku**: diffusion steps (`"4"`). **GGUF/qwen21-viggle**: not used at load time          |
 | `cache_dir`                               |          | HuggingFace cache directory. Leave empty to use the default `~/.cache/huggingface`           |
@@ -384,9 +441,12 @@ It only pays off for the **int4 flux2 checkpoint**, so only
 | `clip_hf_name` / `vae_hf_name` / `lora_hf_name` |    | **flux2**: same idea as `unet_hf_name` for the text encoder, the VAE and the LoRA (`vae_hf_name` maps the local `flux2_encoder_small_decoder.safetensors` onto BFL's `full_encoder_small_decoder.safetensors`). Only used by auto-download |
 | `guidance`                                |          | **flux2**: the FluxGuidance value of the reference workflow (default `4.0`), baked into the cached conditioning of the split flow |
 | `vram_headroom`                           |          | **aimdo-backed backends** (gguf-qwen / qwen21-viggle / qwen21-turbo / flux2): GB of VRAM DynamicVRAM keeps free and unused (default `0`). Set to `3` only in `flux2_dev_int4` — see the section above; for the other backends a reservation only costs speed |
-| `lora_path`                               |          | **GGUF/qwen21-viggle/flux2**: path to the LoRA (`.safetensors`). Omit (or empty) to skip LoRA merging — e.g. GGUF, or a qwen21-viggle checkpoint with the LoRA already merged in |
+| `lora_path`                               |          | **GGUF/qwen21-viggle/flux2/qwen25-nunchaku**: path to the LoRA (`.safetensors`). Omit (or empty) to skip LoRA merging — e.g. GGUF, a qwen21-viggle checkpoint with the LoRA already merged in, or the 2509 nunchaku checkpoint (Lightning fused) |
+| `cpu_offload` / `num_blocks_on_gpu` / `use_pin_memory` | | **qwen25-nunchaku**: the Nunchaku transformer's CPU-offload policy (`auto`/`enable`/`disable`; blocks kept on the GPU when offloading, default 1; pinned host memory). See the family's section above |
+| `lora_strength`                           |          | **qwen25-nunchaku**: weight of the LoRA composed into the quantized low-rank buffers (default `1.0`) |
+| `resolution`                              |          | **qwen25-nunchaku**: optional long-side budget of the working image; `0`/absent keeps the reference **1 Mpx** (`ImageScaleToTotalPixels`, lanczos) |
 | `steps`                                   |          | **GGUF**: inference steps (`4` with LoRA, `20` without). **qwen21-viggle**: documents the native step count only, not consumed at load time. **qwen21-turbo**: fixed at 8 by the checkpoint's own schedule. **flux2**: documents the Turbo LoRA's distilled count (`2`) |
 | `vae_name`                                |          | **GGUF / qwen21-viggle / qwen21-turbo / flux2**: VAE filename (flux2 default: the small decoder)                                                    |
 | `hf_*`                                    |          | **GGUF / qwen21-viggle / qwen21-turbo / flux2**: HuggingFace repo names for auto-download                        |
-| `fast_split_TE`                           |          | **Split-TE families** (`qwen21-viggle` / `qwen21-turbo` / `gguf-qwen` / `flux2`): `true` (or `"on"`/`"1"`/`"yes"`) makes the Fast Pipeline pair consecutive frames -- merged before the text encoder, split back after the transformer. Default off; all four flux2 configs ship it on |
+| `fast_split_TE`                           |          | **Split-TE families** (`qwen21-viggle` / `qwen21-turbo` / `gguf-qwen` / `qwen25-nunchaku` / `flux2`): `true` (or `"on"`/`"1"`/`"yes"`) makes the Fast Pipeline pair consecutive frames -- merged before the text encoder, split back after the transformer. Default off; all four flux2 configs ship it on |
 | `split_TE_resolution`                     |          | **qwen21-viggle / qwen21-turbo / flux2**: area budget of the split-TE flow (default `1024`; per frame in the single flow, per merged canvas in the paired one). Clamped to 256–2048, snapped to 32 |

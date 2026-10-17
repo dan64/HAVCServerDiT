@@ -363,6 +363,73 @@ def load_qwen_pipeline(model_path: str, cache_dir: str, model_precision: str = "
 
 
 # ----------------------------
+# Load Qwen-Image-Edit 2509/2511 through the ComfyUI-nunchaku node
+# ----------------------------
+def load_qwen25_nunchaku_pipeline(model_name: str, unet_path: str, clip_path: str,
+                                  lora_path: str = "", lora_strength: float = 1.0,
+                                  vae_name: str = "qwen_image_vae.safetensors",
+                                  cpu_offload: str = "auto", num_blocks_on_gpu: int = 1,
+                                  use_pin_memory: str = "disable", resolution: int = 0,
+                                  hf_unet="nunchaku-ai/nunchaku-qwen-image-edit-2509",
+                                  hf_clip="Comfy-Org/Qwen-Image_ComfyUI",
+                                  hf_vae="Comfy-Org/Qwen-Image_ComfyUI",
+                                  hf_lora="lightx2v/Qwen-Image-Edit-2511-Lightning",
+                                  unet_hf_name: str = "", vram_headroom: float = None):
+    """Load the Qwen-Image-Edit 2509/2511 pipeline on the Nunchaku node.
+
+    Unlike load_nunchaku_pipeline() (diffusers pipeline, official 2509
+    Lightning checkpoint), this family runs the same graph ComfyUI does:
+    the vendored ComfyUI-nunchaku core builds the model, the ussoewwin
+    LoRA code composes the Lightning LoRA into the quantized buffers, and
+    comfy_bridge.colorize_qwen25_nunchaku() drives the AuraFlow / CFGNorm /
+    KSampler chain (see QWEN25_NUNCHAKU.md).
+
+    unet_hf_name : optional, the UNet filename as it exists on the hf_unet
+    repo, when it differs from the local basename (e.g. the 2509 official
+    file lives under ``lightning-251115/``).
+    """
+    if model_name != "qwen25-nunchaku":
+        return None
+
+    import torch
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cudnn.allow_tf32 = True
+
+    import os as _os
+    _bridge_dir = _os.path.join(_os.path.dirname(__file__), "comfy_bridge")
+    unet_path = _os.path.join(_bridge_dir, unet_path) if not _os.path.isabs(unet_path) else unet_path
+    clip_path = _os.path.join(_bridge_dir, clip_path) if not _os.path.isabs(clip_path) else clip_path
+    if lora_path and not _os.path.isabs(lora_path):
+        lora_path = _os.path.join(_bridge_dir, lora_path)
+
+    from comfy_bridge import load_qwen25_nunchaku_pipeline as _comfy_load_qwen25
+    from comfy_bridge import colorize_qwen25_nunchaku as _colorize_qwen25
+
+    _auto = _os.environ.get("COMFY_AUTO_DOWNLOAD", "1") == "1"
+    _vae_local = _os.path.join(_bridge_dir, "models", "vae", vae_name)
+    _files = {
+        "unet": (unet_path, hf_unet, unet_hf_name or _os.path.basename(unet_path)),
+        # Comfy-Org's Qwen-Image repo keeps the text encoder and the VAE under
+        # split_files/ (same layout load_gguf_pipeline() already assumes).
+        "clip": (clip_path, hf_clip, "split_files/text_encoders/" + _os.path.basename(clip_path)),
+        "vae":  (_vae_local, hf_vae,  "split_files/vae/" + vae_name),
+        "lora": (lora_path, hf_lora, _os.path.basename(lora_path)) if lora_path else None,
+    }
+    if _auto:
+        _ensure_models(_files)
+
+    pipeline = _comfy_load_qwen25(
+        unet_path, clip_path, vae_name=vae_name,
+        lora_path=lora_path, lora_strength=float(lora_strength),
+        cpu_offload=cpu_offload, num_blocks_on_gpu=int(num_blocks_on_gpu),
+        use_pin_memory=use_pin_memory, vram_headroom=vram_headroom)
+    pipeline["_model_type"] = "qwen25-nunchaku"
+    pipeline["_colorize_fn"] = _colorize_qwen25
+    pipeline["_resolution"] = int(resolution or 0)
+    return pipeline
+
+
+# ----------------------------
 # Load LongCat Image Edit Turbo pipeline
 # ----------------------------
 def load_longcat_pipeline(model_name: str, model_precision: str = "", model_rank: str = "",
@@ -662,6 +729,12 @@ def colorize_image(pipe, img: Image, prompt:str, steps: int = 2, seed: int=42, e
         _colorize_fn = pipe.get("_colorize_fn")
         return _colorize_fn(pipe, img, prompt=prompt, steps=steps, seed=seed)
 
+    # Qwen-Image-Edit 2509/2511 on the ComfyUI-nunchaku node (dict with _model_type marker)
+    if isinstance(pipe, dict) and pipe.get("_model_type") == "qwen25-nunchaku":
+        _colorize_fn = pipe.get("_colorize_fn")
+        _res = resolution if resolution is not None else pipe.get("_resolution") or None
+        return _colorize_fn(pipe, img, prompt=prompt, steps=steps, seed=seed, resolution=_res)
+
     # Qwen-Image-2.1-Turbo pipeline (dict with _model_type marker)
     if isinstance(pipe, dict) and pipe.get("_model_type") == "qwen21-turbo":
         _colorize_fn = pipe.get("_colorize_fn")
@@ -856,11 +929,37 @@ def _split_family(pipe):
     and the paired encode_pair_te / colorize_pair_from_te) are shared by the
     cached-TE families: qwen21-viggle and qwen21-turbo use the viggle
     conditioning, flux2 uses its own (prompt-only text encoder + reference
-    latent), while the 2511 family has its own edit-conditioning functions.
+    latent), while the 2511 edit families (gguf-qwen, qwen25-nunchaku) have
+    their own edit-conditioning functions.
     """
     if isinstance(pipe, dict):
         return pipe.get("_model_type", "") or ""
     return ""
+
+
+def _encode_edit_conditioning(pipe, image, prompt):
+    """Phase A of the edit families: conditioning + start latent of one image.
+
+    gguf-qwen uses the stock TextEncodeQwenImageEdit node; qwen25-nunchaku
+    runs the EditPlus node on the Nunchaku chain (same on-disk conditioning
+    format, different text encoder and node).
+    """
+    import comfy_bridge
+
+    if _split_family(pipe) == "qwen25-nunchaku":
+        return comfy_bridge.encode_qwen25_nunchaku_conditioning(pipe, image, prompt)
+    return comfy_bridge.encode_edit_conditioning(pipe, image, prompt)
+
+
+def _colorize_edit_from_conditioning(pipe, conditioning, latent_dict, steps, seed):
+    """Phase B of the edit families: sample + decode a cached conditioning."""
+    import comfy_bridge
+
+    if _split_family(pipe) == "qwen25-nunchaku":
+        return comfy_bridge.colorize_qwen25_nunchaku_from_conditioning(
+            pipe, conditioning, latent_dict, steps=steps, seed=seed)
+    return comfy_bridge.colorize_edit_from_conditioning(
+        pipe, conditioning, latent_dict, steps=steps, seed=seed)
 
 
 def encode_frame_te(pipe, img_path, te_dir, stem, prompt, resolution: int = 1024,
@@ -1129,7 +1228,7 @@ def encode_frame_edit(pipe, img_path, te_dir, stem, prompt, img_size: int = 0,
     orig_w, orig_h = original.size
     img_in = resize_long_side(bw, img_size) if img_size > 0 else bw
 
-    res = comfy_bridge.encode_edit_conditioning(pipe, img_in, prompt)
+    res = _encode_edit_conditioning(pipe, img_in, prompt)
     comfy_bridge.save_edit_conditioning(
         te_path, res["conditioning"], res["latent"], prompt=prompt,
         meta={"orig_width": orig_w, "orig_height": orig_h,
@@ -1182,7 +1281,7 @@ def colorize_frame_edit_from_te(pipe, te_dir, stem, out_path, steps: int = 4,
         logger.warning("colorize_frame_edit_from_te: %s: %s", stem, exc)
         return {"ok": True, "skipped": True, "elapsed": 0.0, "msg": str(exc)}
 
-    colorized_lowres = comfy_bridge.colorize_edit_from_conditioning(
+    colorized_lowres = _colorize_edit_from_conditioning(
         pipe, loaded["conditioning"], loaded["latent"], steps=steps, seed=seed)
     meta = loaded["meta"]
     try:
@@ -1510,7 +1609,7 @@ def encode_pair_edit(pipe, in1_path, in2_path, te_dir, stem, prompt, img_size: i
         logger.info("encode_pair_edit: both frames too dark, skipped: %s", stem)
         return {"ok": True, "skipped": True, "elapsed": 0.0, "msg": "too dark"}
 
-    res = comfy_bridge.encode_edit_conditioning(pipe, canvas["image"], prompt)
+    res = _encode_edit_conditioning(pipe, canvas["image"], prompt)
     comfy_bridge.save_edit_conditioning(
         te_path, res["conditioning"], res["latent"], prompt=prompt,
         meta={"source": os.path.basename(src), "model_config": model_config,
@@ -1567,7 +1666,7 @@ def colorize_pair_edit_from_te(pipe, te_dir, stem, out1_path, out2_path="",
         return {"ok": True, "skipped": True, "elapsed": 0.0, "written": [],
                 "msg": str(exc)}
 
-    colorized_lowres = comfy_bridge.colorize_edit_from_conditioning(
+    colorized_lowres = _colorize_edit_from_conditioning(
         pipe, loaded["conditioning"], loaded["latent"], steps=steps, seed=seed)
     written = _pair_split_save(colorized_lowres, geom, out1_path, out2_path)
     elapsed = time.perf_counter() - t0

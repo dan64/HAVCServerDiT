@@ -407,6 +407,59 @@ def load_viggle_pipeline(unet_path, clip_path, vae_name="qwen_image_2.1_vae_bf16
     return {"model": model, "clip": clip, "vae": vae}
 
 
+def load_qwen25_nunchaku_pipeline(unet_path, clip_path, vae_name="qwen_image_vae.safetensors",
+                                  lora_path=None, lora_strength=1.0, cpu_offload="auto",
+                                  num_blocks_on_gpu=1, use_pin_memory="disable", vram_headroom=None):
+    """Load Qwen-Image-Edit (2509 / 2511) through the vendored
+    ComfyUI-nunchaku core.
+
+    unet_path is a Nunchaku SVDQuant checkpoint (official nunchaku-ai for
+    2509 with the Lightning LoRA fused, QuantFunc for 2511 which needs the
+    LoRA applied on top). clip_path is the usual Qwen2.5-VL text encoder
+    (safetensors; the same file the other qwen families use).
+
+    lora_path / lora_strength: LoRA composed into the quantized low-rank
+    buffers at load time (no runtime hook, nothing to recompose per prompt).
+
+    cpu_offload (auto|enable|disable), num_blocks_on_gpu, use_pin_memory:
+    the Nunchaku loader's offload policy, applied *after* the LoRA — the
+    composition resizes the buffers the offload manager is built from. On a
+    16 GB card `auto` reports 15 GiB and therefore disables offload
+    (upstream's rule); measured on the RTX 5070 Ti that is ~1.9x slower
+    (10.5 s vs 5.4 s per frame at 2 steps), so the shipped 2511 config asks
+    for `enable`.
+
+    vram_headroom: the config's GB of VRAM aimdo must leave free (see
+    _dynamic_vram.enable / _resolve_headroom); None -> the default.
+    """
+    _dynamic_vram.enable(vram_headroom=vram_headroom)  # before the first model load
+    import importlib
+
+    nunchaku_loader = importlib.import_module("ComfyUI-nunchaku.loader")
+    import nodes as cn
+
+    logger.info("Loading Nunchaku UNet: %s", os.path.basename(unet_path))
+    model = nunchaku_loader.load_nunchaku_qwen_model(unet_path)
+
+    if lora_path and os.path.isfile(lora_path):
+        lora_mod = importlib.import_module("ComfyUI-QwenImageLoraLoader.lora")
+        logger.info("Applying Qwen-Image LoRA: %s", os.path.basename(lora_path))
+        lora_mod.apply_qwen_lora(model, lora_path, lora_strength)
+
+    nunchaku_loader.configure_offload(
+        model, cpu_offload=cpu_offload,
+        num_blocks_on_gpu=num_blocks_on_gpu, use_pin_memory=use_pin_memory)
+
+    logger.info("Loading CLIP: %s", os.path.basename(clip_path))
+    clip = get_value_at_index(
+        cn.CLIPLoader().load_clip(clip_name=os.path.basename(clip_path), type="qwen_image", device="default"), 0)
+
+    logger.info("Loading VAE: %s", vae_name)
+    vae = get_value_at_index(cn.VAELoader().load_vae(vae_name=vae_name), 0)
+
+    return {"model": model, "clip": clip, "vae": vae}
+
+
 _VIGGLE_SIGMA_NODES_2 = "1.0, 0.25"
 _VIGGLE_SIGMA_NODES_4 = "1.0, 0.875, 0.5, 0.25"
 _VIGGLE_SIGMA_NODES_6 = "1.0, 0.9375, 0.875, 0.75, 0.5, 0.25"  # v0.2.1-r128 LoRA, native step count
@@ -894,6 +947,147 @@ def colorize_qwen21_turbo_from_conditioning(pipeline, conditioning, latent_dict,
                        "(the turbo checkpoint runs its own 8-step schedule)", steps)
     with torch.inference_mode():
         return _qwen21_turbo_sample_decode(pipeline, conditioning, latent_dict, seed)
+
+
+# ---------------------------------------------------------------------------
+# qwen25-nunchaku: Qwen-Image-Edit 2509/2511 through the ComfyUI-nunchaku node
+# ---------------------------------------------------------------------------
+#
+# The family runs the reference ComfyUI workflow validated on the portable
+# (QWEN25_NUNCHAKU.md 2.4/2.5), not a diffusers pipeline:
+#
+#   ImageScaleToTotalPixels(lanczos, 1 Mpx) -> VAEEncode
+#   TextEncodeQwenImageEditPlus(prompt, clip, vae, image1)   (positive)
+#   ModelSamplingAuraFlow(shift=3) -> CFGNorm(1.0, pre_cfg=False)
+#   -> KSampler(4, cfg 1, euler/simple) -> VAEDecode
+#
+# Two deliberate differences from the node graph:
+#
+# * the negative TextEncode pass is not computed. KSampler runs at cfg=1.0
+#   and comfy/samplers.py takes the cfg1 fast path (uncond=None), so the
+#   negative conditioning is never read -- the same saving the other
+#   cfg-off families in this bridge make.
+# * CFGNorm is kept anyway: at cfg=1 its post-cfg factor is norm(cond)/
+#   norm(pred) with pred == cond, i.e. 1.0, so it is a no-op here; it stays
+#   in the chain so this code and the validated GUI workflow differ only in
+#   the negative pass.
+
+_QWEN25_DEFAULT_MEGAPIXELS = 1.0
+
+
+def _qwen25_prepare(image, resolution=None):
+    """ImageScaleToTotalPixels(lanczos, megapixels, resolution_steps=1).
+
+    `resolution` (long side in pixels) is the config-facing knob of the other
+    families; None/0 keeps the reference 1 Mpx budget.
+    """
+    import comfy.utils
+
+    if resolution:
+        megapixels = (float(resolution) / 1024.0) ** 2
+    else:
+        megapixels = _QWEN25_DEFAULT_MEGAPIXELS
+
+    img_np = np.array(image.convert("RGB")).astype(np.float32) / 255.0
+    samples = torch.from_numpy(img_np).unsqueeze(0).movedim(-1, 1)
+    total = megapixels * 1024 * 1024
+    scale_by = math.sqrt(total / (samples.shape[3] * samples.shape[2]))
+    width = int(round(samples.shape[3] * scale_by))
+    height = int(round(samples.shape[2] * scale_by))
+    s = comfy.utils.common_upscale(samples, width, height, "lanczos", "disabled")
+    return s.movedim(1, -1)
+
+
+def _qwen25_encode_positive(pipeline, img_scaled, prompt):
+    """VAE encode of the start latent + TextEncodeQwenImageEditPlus.
+
+    The node's own VAE pass builds the reference latent the transformer sees
+    (`reference_latents` in the conditioning); the explicit VAEEncode is the
+    start latent. Both derive from the same 1 Mpx image, as in the reference
+    graph. Returns (conditioning, latent).
+    """
+    import nodes as cn
+    from comfy_extras.nodes_qwen import TextEncodeQwenImageEditPlus
+
+    with _edit_profile.phase("vaeenc"):
+        latent_dict = cn.VAEEncode().encode(pixels=img_scaled, vae=pipeline["vae"])[0]
+
+    with _edit_profile.phase("te_pos"):
+        _pos_raw = TextEncodeQwenImageEditPlus().EXECUTE_NORMALIZED(
+            prompt=prompt,
+            clip=pipeline["clip"],
+            vae=pipeline["vae"],
+            image1=img_scaled,
+        )
+        positive = get_value_at_index(_pos_raw, 0)
+    return positive, latent_dict
+
+
+def _qwen25_sample_decode(pipeline, conditioning, latent_dict, steps, seed):
+    """AuraFlow shift 3 -> CFGNorm -> KSampler(euler/simple, cfg 1) -> decode."""
+    import nodes as cn
+    from comfy_extras.nodes_cfg import CFGNorm
+    from comfy_extras.nodes_model_advanced import ModelSamplingAuraFlow
+
+    with _edit_profile.phase("patch"):
+        unet_sampled = ModelSamplingAuraFlow().patch_aura(
+            shift=3, sampling="flow", model=pipeline["model"])[0]
+        unet_sampled = get_value_at_index(
+            CFGNorm().EXECUTE_NORMALIZED(model=unet_sampled, strength=1.0, pre_cfg=False), 0)
+
+    with _edit_profile.phase("sampling"):
+        sampled = cn.KSampler().sample(
+            seed=seed, steps=steps, cfg=1.0,
+            sampler_name="euler", scheduler="simple", denoise=1.0,
+            model=unet_sampled,
+            positive=conditioning, negative=conditioning,
+            latent_image=latent_dict,
+        )
+        latent_samples = sampled[0]
+
+    with _edit_profile.phase("decode"):
+        img_decoded = cn.VAEDecode().decode(samples=latent_samples, vae=pipeline["vae"])
+        return get_value_at_index(img_decoded, 0)
+
+
+def colorize_qwen25_nunchaku(pipeline, image, prompt, steps=4, seed=42, resolution=None):
+    """Qwen-Image-Edit 2509/2511 colorization through the Nunchaku node chain.
+
+    `resolution` is the config-facing long-side budget (None -> the reference
+    1 Mpx); `steps` is the checkpoint's own step count (4 for the Lightning
+    LoRA / fused 4-step checkpoints).
+    """
+    _edit_profile.start_run(steps=steps, seed=seed, image=image.size)
+    try:
+        with torch.inference_mode():
+            with _edit_profile.phase("prep"):
+                img_scaled = _qwen25_prepare(image, resolution)
+            positive, latent_dict = _qwen25_encode_positive(pipeline, img_scaled, prompt)
+            img_t = _qwen25_sample_decode(pipeline, positive, latent_dict, steps, seed)
+        with _edit_profile.phase("post"):
+            return _edit_to_pil(img_t)
+    finally:
+        _edit_profile.end_run()
+
+
+def encode_qwen25_nunchaku_conditioning(pipeline, image, prompt, resolution=None):
+    """Phase A of the split flow for the qwen25-nunchaku family: the positive
+    conditioning + the start latent of one image, ready for
+    save_edit_conditioning() (same on-disk format as gguf-qwen)."""
+    with torch.inference_mode():
+        with _edit_profile.phase("prep"):
+            img_scaled = _qwen25_prepare(image, resolution)
+        positive, latent_dict = _qwen25_encode_positive(pipeline, img_scaled, prompt)
+    return {"conditioning": positive, "latent": latent_dict}
+
+
+def colorize_qwen25_nunchaku_from_conditioning(pipeline, conditioning, latent_dict, steps=4, seed=42):
+    """Phase B of the split flow for qwen25-nunchaku: sample + decode one
+    cached conditioning. Returns the colorized PIL image."""
+    with torch.inference_mode():
+        img_t = _qwen25_sample_decode(pipeline, conditioning, latent_dict, steps, seed)
+    with _edit_profile.phase("post"):
+        return _edit_to_pil(img_t)
 
 
 def save_viggle_conditioning(path, conditioning, latent_dict, prompt="", prompt_original="", meta=None):

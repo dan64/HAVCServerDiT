@@ -2909,7 +2909,7 @@ tab3_layout = [
      sg.Input(cfg["hf_cache"], key="-CACHE_DIR-", expand_x=True), sg.FolderBrowse()],
     [sg.Frame("Model Technical Details", [
         [sg.Text("Model Config:"),
-         sg.Combo(model_configs,   default_value=cfg["model_config"],         key="-MODEL_CONFIG-",   readonly=True, size=(24,1)),
+         sg.Combo(model_configs,   default_value=cfg["model_config"],         key="-MODEL_CONFIG-",   readonly=True, size=(28,12)),
           sg.Button("Run Server", key="-RUN_SERVER-", button_color=("white", "#1a6b1a")),
           sg.Checkbox("External console", key="-RUN_SERVER_EXTERNAL-",
                       default=cfg.get("run_server_external", False),

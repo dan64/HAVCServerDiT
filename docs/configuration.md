@@ -433,7 +433,7 @@ It only pays off for the **int4 flux2 checkpoint**, so only
 | Key                                       | Required | Description                                                                                  |
 | ----------------------------------------- | -------- | -------------------------------------------------------------------------------------------- |
 | `model_name`                              | ✅        | `"nunchaku-qwen"`, `"gguf-qwen"`, `"longcat-gguf"`, `"qwen21-viggle"`, `"qwen21-turbo"`, `"flux2"` or `"qwen25-nunchaku"`                     |
-| `quant`                                   |          | **GGUF only**: quantization level (`"q3"`, `"q4"`, `"q5"`, `"q6"`, `"q8"`). Default: `"q4"`  |
+| `quant`                                   |          | **GGUF only**: quantization level. Shipped: `"q3"` / `"q4"` (longcat-gguf) and `"q3"` (qwen-2511_q3). A hand-added config may name any level; the value is descriptive, the file actually loaded is `unet_gguf` |
 | `model_precision`                         | ✅        | **Nunchaku**: `"fp4"` (RTX 50) or `"int4"` (RTX 30/40). **GGUF/qwen21-viggle**: not used     |
 | `unet_gguf` / `clip_gguf`                 | ✅        | **GGUF only**: local paths to the GGUF model files                                           |
 | `unet_name` / `clip_name`                 | ✅        | **qwen21-viggle / qwen21-turbo / flux2 / qwen25-nunchaku**: local paths to the model files — `unet_name` can be `.safetensors` or `.gguf` (GGUF quants load through the same ComfyUI-GGUF recipe as the gguf backends), `clip_name` can be `.safetensors` or `.gguf` (flux2: safetensors only, the Mistral-3 encoder; qwen25-nunchaku: the Qwen2.5-VL fp8 scaled safetensors) |

@@ -128,7 +128,7 @@ with a plain and a `-fast` (paired split) variant:
 > Launch with `start_server.cmd qwen-2511-nunchaku_fp4` (or the 2509 name) —
 > see [Server Usage](server_usage.md).
 
-### longcat-gguf : 12 sec/frame (Q3–Q8) — Best Quality
+### longcat-gguf : 12 sec/frame (Q3–Q4) — Best Quality
 
 <table>
 <tr>
@@ -147,12 +147,16 @@ with a plain and a `-fast` (paired split) variant:
 > gguf-qwen model — richer colors, more natural skin tones, and better
 > detail preservation — at the same ~12 s/frame speed.
 > 
-> Uses GGUF quantized UNet (Q3_K_M to Q8_0) + CLIP Q4_K_M. The UNet is
-> distributed in five quantization levels to fit different VRAM budgets.
+> Uses a GGUF quantized UNet (**Q3_K_M** or **Q4_K_M**) + CLIP Q4_K_M. Two
+> quantization levels ship — Q3 for the 12 GB class, Q4 as the default: the
+> family is only worth its download when it fits, and above Q4 there is no
+> point in it (Q5/Q6 were retired: anyone with the RAM for them is better off
+> with another backend; below Q3 the quant starts to show).
 > All files are auto-downloaded on first run.
 > 
-> See `config/longcat_gguf_q*.json` — the general rule: lower quant = less VRAM.
-> Launch with `run_server_longcat.cmd` (Q4_K_M) or `start_server.cmd longcat|longcat-q3|...`.
+> See `config/longcat_gguf_q3.json` / `longcat_gguf_q4.json` — the general
+> rule: lower quant = less VRAM.
+> Launch with `run_server_longcat.cmd` (Q4_K_M) or `start_server.cmd longcat|longcat-q3`.
 
 ### qwen21-viggle : ~1.7 sec/frame with Fast Pipeline, ~3.5 without (Qwen-Image-2.1 int8 ConvRot)
 

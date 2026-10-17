@@ -40,6 +40,15 @@ family stays the reference for the official 2509 Lightning pipeline.
 
 See [Backends](backends.md) and [Configuration](configuration.md).
 
+Field verdict (author, 2026-10-17): the **2509** config is the pick — fastest
+to load, fastest overall, stable colors; the **2511** config works but does not
+beat the existing `qwen-2511_int8` (`gguf-qwen`) on quality, and pays a 13 GB
+load plus the LoRA composition.
+
+Log hygiene in the same change: loading the 2511 no longer floods the server
+log with the LoRA engine's per-key dump (2640 lines per load, now at DEBUG),
+and a false `scaled_fp8` warning is gone.
+
 ### 2026-10-15 — qwen-2511 prompt sensitivity (troubleshooting) + prompt preset lists in the GUI
 
 **Prompt-dependent artifacts on qwen-2511 solved.** The intermittent "duplicated

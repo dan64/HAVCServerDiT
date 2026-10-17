@@ -103,6 +103,14 @@ with a plain and a `-fast` (paired split) variant:
 > have it fused). The diffusers `nunchaku-qwen` family stays the reference for
 > the official 2509 Lightning checkpoint.
 >
+> **Field verdict, 2026-10-17**: **`qwen-2509-nunchaku_fp4` is the pick** —
+> fastest to load (12 GB, Lightning fused, no LoRA composition), fastest in
+> absolute terms and with stable colors. **`qwen-2511-nunchaku_fp4` works but
+> does not beat `qwen-2511_int8`** (the `gguf-qwen` config) on quality, and
+> pays a 13 GB load plus the LoRA composition: it is worth it only if you want
+> 2511 on the Nunchaku node specifically — for 2511, `qwen-2511_int8` remains
+> the reference.
+>
 > **Measured** (RTX 5070 Ti 16 GB, 2026-10-17, one 1184×880 frame at the
 > 1 Mpx budget, `steps=4`, warm-up excluded): **2511 ~9.2 s/frame** live and
 > **~8.7 s/frame** on the split (1.8 s conditioning + 6.9 s sampling);

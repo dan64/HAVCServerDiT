@@ -1186,21 +1186,24 @@ def compose_loras_v2(
         else:
             _ACTIVE_KEY_MAPPING = None
 
-        # DEBUG: Inspect all keys in the first LoRA to help debug missing layers (very noisy)
-        # NOTE: User requirement: do NOT hide/remove logs.
-        if lora_configs:
+        # Key-by-key inspection of the first LoRA, to debug missing layers.
+        # HAVC: demoted from INFO to DEBUG (2640 lines per load on the 2511
+        # Lightning stack drowned the server log). Nothing is removed -- run
+        # with LOG_LEVEL=DEBUG (or logging.getLogger("ComfyUI-QwenImageLoraLoader").setLevel(DEBUG))
+        # to get the full list back; the INFO summary below stays.
+        if lora_configs and logger.isEnabledFor(logging.DEBUG):
             first_lora_path_or_dict, first_lora_strength = lora_configs[0]
             first_lora_state_dict = _load_lora_state_dict(first_lora_path_or_dict)
-            logger.info(f"--- DEBUG: Inspecting keys for LoRA 1 (Strength: {first_lora_strength}) ---")
+            logger.debug(f"--- DEBUG: Inspecting keys for LoRA 1 (Strength: {first_lora_strength}) ---")
             for key in first_lora_state_dict.keys():
                 parsed_res = _classify_and_map_key(key)
                 if parsed_res:
                     group, base_key, comp, ab = parsed_res
                     mapped_name = f"{base_key}.{comp}.{ab}" if comp and ab else (f"{base_key}.{ab}" if ab else base_key)
-                    logger.info(f"Key: {key} -> Mapped to: {mapped_name} (Group: {group})")
+                    logger.debug(f"Key: {key} -> Mapped to: {mapped_name} (Group: {group})")
                 else:
                     logger.warning(f"Key: {key} -> UNMATCHED (Ignored)")
-            logger.info("--- DEBUG: End key inspection ---")
+            logger.debug("--- DEBUG: End key inspection ---")
 
         aggregated_weights: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
 
@@ -1413,7 +1416,7 @@ def compose_loras_v2(
             final_B = torch.cat(all_B_scaled, dim=1)
 
             _apply_lora_to_module(module, final_A, final_B, resolved_name, model)
-            logger.info(f"[APPLY] LoRA applied to: {resolved_name}")
+            logger.debug(f"[APPLY] LoRA applied to: {resolved_name}")
             applied_modules_count += 1
 
         total_loras = len(lora_configs)

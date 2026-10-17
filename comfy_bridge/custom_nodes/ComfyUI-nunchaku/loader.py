@@ -74,8 +74,11 @@ def load_diffusion_model_state_dict(sd: dict, metadata: dict = None, model_optio
 
     offload_device = model_management.unet_offload_device()
     unet_weight_dtype = list(model_config.supported_inference_dtypes)
-    if model_config.scaled_fp8 is not None:
-        weight_dtype = None
+    # Upstream reads model_config.scaled_fp8 here (a scaled-fp8 checkpoint wants
+    # the weight dtype left alone). This core's BASE has no such attribute, so
+    # the read fell through __getattr__ -- one "accessed scaled_fp8 ... doesn't
+    # exist" warning per load, always returning None. The models this loader
+    # serves are SVDQuant, never scaled-fp8: skip the dead probe.
 
     if dtype is None:
         unet_dtype = model_management.unet_dtype(
@@ -113,7 +116,7 @@ def load_nunchaku_qwen_model(model_path: str, dtype=None):
     quant = json.loads((metadata or {}).get("quantization_config", "{}"))
     logger.info(
         "Checkpoint quantization: precision=%s rank=%s",
-        quant.get("precision", "?"), quant.get("rank", "?"),
+        get_precision_from_quantization_config(quant), quant.get("rank", "?"),
     )
     return load_diffusion_model_state_dict(sd, metadata=metadata, model_options={"dtype": dtype})
 
@@ -149,7 +152,33 @@ def configure_offload(model, cpu_offload: str = "auto", num_blocks_on_gpu: int =
 
     pin = str(use_pin_memory).strip().lower() == "enable"
     blocks = max(1, int(num_blocks_on_gpu))
+    _silence_offload_move_warning()
     model.model.diffusion_model.set_offload(
         True, num_blocks_on_gpu=blocks, use_pin_memory=pin)
     logger.info("CPU offload enabled: num_blocks_on_gpu=%d use_pin_memory=%s", blocks, pin)
     return True
+
+
+_OFFLOAD_WARNING_SILENCED = False
+
+
+def _silence_offload_move_warning() -> None:
+    """Hide the mixin's "Skipping moving the model to GPU as offload is enabled".
+
+    With CPU offload on, the ModelPatcher still asks the module to move to the
+    GPU (`to_safely(device)`); the mixin refuses by design -- its offload manager
+    streams the blocks itself -- and warns every time. That is this loader's
+    intended configuration, not a problem, so the warning (match on the exact
+    upstream text, UserWarning only) is filtered once, process-wide. The
+    vendored mixin stays untouched.
+    """
+    global _OFFLOAD_WARNING_SILENCED
+    if _OFFLOAD_WARNING_SILENCED:
+        return
+    import warnings
+    warnings.filterwarnings(
+        "ignore",
+        message=r"Skipping moving the model to GPU as offload is enabled",
+        category=UserWarning,
+    )
+    _OFFLOAD_WARNING_SILENCED = True

@@ -433,6 +433,7 @@ It only pays off for the **int4 flux2 checkpoint**, so only
 | Key                                       | Required | Description                                                                                  |
 | ----------------------------------------- | -------- | -------------------------------------------------------------------------------------------- |
 | `model_name`                              | ✅        | `"nunchaku-qwen"`, `"gguf-qwen"`, `"longcat-gguf"`, `"qwen21-viggle"`, `"qwen21-turbo"`, `"flux2"` or `"qwen25-nunchaku"`                     |
+| `prompt`                                  |          | Optional wording tuned for this model. Every shipped config carries one; Tab 2's **Enable Prompt Config** sends it instead of the GUI prompt/preset list (see the key's own note in [GUI usage](gui_usage.md)). Ignored by the server — the client sends the prompt with each request |
 | `quant`                                   |          | **GGUF only**: quantization level. Shipped: `"q3"` / `"q4"` (longcat-gguf) and `"q3"` (qwen-2511_q3). A hand-added config may name any level; the value is descriptive, the file actually loaded is `unet_gguf` |
 | `model_precision`                         | ✅        | **Nunchaku**: `"fp4"` (RTX 50) or `"int4"` (RTX 30/40). **GGUF/qwen21-viggle**: not used     |
 | `unet_gguf` / `clip_gguf`                 | ✅        | **GGUF only**: local paths to the GGUF model files                                           |

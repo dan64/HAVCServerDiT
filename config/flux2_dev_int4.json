@@ -1,5 +1,6 @@
 {
     "model_name":          "flux2",
+    "prompt":              "Color this image, natural colors.",
     "unet_name":           "models/diffusion_models/flux2-dev-int4_convrot.safetensors",
     "unet_hf_name":        "flux2-dev-int4_convrot.safetensors",
     "clip_name":           "models/text_encoders/mistral_3_small_flux2_fp4_mixed.safetensors",

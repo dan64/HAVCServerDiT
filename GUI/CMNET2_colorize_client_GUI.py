@@ -305,6 +305,36 @@ def read_model_config(config_name):
         return None
 
 
+def config_prompt(config_name):
+    """Prompt stored in a model config file ("" when absent or unreadable).
+
+    Optional "prompt" key: every shipped config carries a wording tuned for
+    its model. Tab 2 can send it instead of the local prompt/preset list
+    (checkbox "Enable Prompt Config") - the wording is per model, so the
+    local preset list stays untouched while the config wins."""
+    data = read_model_config(config_name) or {}
+    value = data.get("prompt", "")
+    return value.strip() if isinstance(value, str) else ""
+
+
+def apply_config_prompt(window, enabled, config_name, user_prompt=""):
+    """Point Tab 2's prompt at the model config, or give the field back.
+
+    Enabled: the Prompt field shows the config's prompt read-only (exactly
+    what will be sent) and the preset list controls are disabled - the
+    config is the single source of the prompt, so editing the field or a
+    preset could only mislead. Disabled: the field returns to ``user_prompt``
+    and the preset controls work again.
+
+    Returns the text left in the Prompt field."""
+    prompt = config_prompt(config_name) if enabled else user_prompt
+    window["-PROMPT-"].update(value=prompt, disabled=enabled)
+    for key in ("-PROMPT_IDX-", "-PROMPT_ADD-", "-PROMPT_UPDATE-",
+                "-PROMPT_DEL-", "-PROMPT_CLEAR-", "-PROMPT_MAX-"):
+        window[key].update(disabled=enabled)
+    return prompt
+
+
 def config_flag(mapping, key, default=False):
     """Truthiness of an optional config key: JSON booleans work as-is, and the
     string forms "true"/"on"/"1"/"yes" (case-insensitive) are accepted too,
@@ -384,6 +414,7 @@ def load_all_configs():
         "mux_all_streams": False,
         "hf_cache":       "",
         "prompt":         "Add colors to this black-and-white image, not to hedge about what colors might be present. For any subject, garment, object, or setting whose color is a matter of common knowledge or strong convention, assign the expected color directly and confidently. Colorize this image using natural colors. Strictly preserve all shapes, edges and background details.",
+        "prompt_from_config": False,  # Tab 2: the model config supplies the prompt
         "color_prompt_max":   "30",
         "color_prompts":      [],   # empty = seeded from "prompt" at startup
         "shutdown_on_complete": False,
@@ -978,11 +1009,16 @@ def _launch_pipeline(window, run_values):
     """Actually start the batch pipeline (orchestrator thread) - shared by
     the immediate path in the "-RUN-" handler and the deferred path that
     waits for an auto-started DiT server to come online first."""
+    if run_values.get("-PROMPT_FROM_CONFIG-"):
+        # The model config owns the prompt: send its wording and never add it
+        # to the local preset list (a per-model wording is not a user preset).
+        run_values["-PROMPT-"] = config_prompt(run_values.get("-MODEL_CONFIG-", ""))
     # Register the tab-2 prompt in the preset list before launching
     # (main thread; same history semantics as tab 4's fix_prompts).
     _p = run_values.get("-PROMPT-") or ""
-    if run_values.get("-DO_STEP3-") and remember_color_prompt(
-            state["color_prompts"], _p, prompt_max_of(run_values, "-PROMPT_MAX-")):
+    if (run_values.get("-DO_STEP3-") and not run_values.get("-PROMPT_FROM_CONFIG-")
+            and remember_color_prompt(
+                state["color_prompts"], _p, prompt_max_of(run_values, "-PROMPT_MAX-"))):
         cfg["color_prompts"] = state["color_prompts"]
         save_all_configs(cfg)
         _idx = state["color_prompts"].index(_p)
@@ -2964,7 +3000,7 @@ tab3_layout = [
      sg.Input(cfg["hf_cache"], key="-CACHE_DIR-", expand_x=True), sg.FolderBrowse()],
     [sg.Frame("Model Technical Details", [
         [sg.Text("Model Config:"),
-         sg.Combo(model_configs,   default_value=cfg["model_config"],         key="-MODEL_CONFIG-",   readonly=True, size=(28,12)),
+         sg.Combo(model_configs,   default_value=cfg["model_config"],         key="-MODEL_CONFIG-",   readonly=True, size=(28,12), enable_events=True),
           sg.Button("Run Server", key="-RUN_SERVER-", button_color=("white", "#1a6b1a")),
           sg.Checkbox("External console", key="-RUN_SERVER_EXTERNAL-",
                       default=cfg.get("run_server_external", False),
@@ -2983,7 +3019,10 @@ tab3_layout = [
          sg.Combo(usm_radius_values, default_value=usm_radius_default(cfg.get("usm_radius", "2")),
                   key="-USM_RADIUS-", readonly=True, size=(4, 1))],
     ], expand_x=True)],
-    [sg.Text("Prompt:"), sg.Multiline(cfg["prompt"], key="-PROMPT-", expand_x=True, size=(80,4), no_scrollbar=True),
+    [sg.Text("Prompt:"), sg.Multiline(cfg["prompt"], key="-PROMPT-", expand_x=True, size=(58,6), no_scrollbar=True),
+     sg.Checkbox("Enable Prompt Config", key="-PROMPT_FROM_CONFIG-",
+                 default=cfg.get("prompt_from_config", False), enable_events=True,
+                 tooltip="Send the prompt stored in the selected model config (its\n\"prompt\" key) instead of the field and the preset list above/below.\nEvery shipped config carries a wording tuned for its own model. While\nchecked the prompt field shows that text read-only and the preset\ncontrols are disabled."),
      sg.Checkbox("Enhance Prompt", key="-ENHANCE_PROMPT-", default=cfg.get("enhance_prompt", False))],
     [sg.Text("Preset #:"),
      sg.Combo(_color_prompt_labels,
@@ -3408,6 +3447,13 @@ except Exception as _dnd_e:
 # selection consistent — if the video remembered from the last session is
 # still in place, select it in "Select Video" too.
 _restore_input_video(window, cfg.get("input_video", ""))
+
+# Startup: "Enable Prompt Config" persists - the model config owns the prompt
+# field. The saved "prompt" stays the user's own wording, restored when the
+# checkbox is cleared.
+if cfg.get("prompt_from_config"):
+    state["prompt_user"] = cfg.get("prompt", "") or state["color_prompts"][0]
+    apply_config_prompt(window, True, cfg["model_config"])
 
 # ---------------------------------------------------------------------------
 # FIX COLORS — Colorize worker (local CMNET2, non-RPC)
@@ -4563,6 +4609,31 @@ while True:
         if _seq == _title_seq:   # ignore replies from a superseded request
             _set_window_title(window, _model)
 
+    # ---- Enable Prompt Config (Tab 2): the model config owns the prompt ----
+    if event == "-PROMPT_FROM_CONFIG-":
+        # Live widget read: a thread event carries None for checkboxes in
+        # values[] (FreeSimpleGUI builds that dict without their state).
+        enabled = bool(window["-PROMPT_FROM_CONFIG-"].get())
+        config_name = values.get("-MODEL_CONFIG-") or window["-MODEL_CONFIG-"].get()
+        if enabled:
+            # Remember what the user had typed before the field is locked.
+            state["prompt_user"] = window["-PROMPT-"].get()
+        apply_config_prompt(window, enabled, config_name,
+                            state.get("prompt_user") or state["color_prompts"][0])
+        cfg["prompt_from_config"] = enabled
+        save_all_configs(cfg)
+        if enabled and not config_prompt(config_name):
+            sg.popup_error(
+                "The selected model config has no prompt.\n\n"
+                f"config\\{config_name}.json has no \"prompt\" key.\n"
+                "Add one to the config file, or clear Enable Prompt Config.",
+                title="Prompt missing")
+
+    # Switching config while the checkbox is on: show the new model's prompt.
+    if event == "-MODEL_CONFIG-" and window["-PROMPT_FROM_CONFIG-"].get():
+        apply_config_prompt(window, True,
+                            values.get("-MODEL_CONFIG-") or window["-MODEL_CONFIG-"].get())
+
     # ---- Update script combos when dir changes ----
     if event == "-SCRIPT_DIR-":
         ev = scan_files(values["-SCRIPT_DIR-"], "cmnet2_extract_*.vpy")
@@ -4658,7 +4729,10 @@ while True:
             "fixc_backbone":          values["-FIXC_BACKBONE-"],
             "mkv_path":              values["-MKV_PATH-"],
             "hf_cache":              values["-CACHE_DIR-"],
-            "prompt":                values["-PROMPT-"],
+            "prompt":                (state.get("prompt_user", "")
+                                      if window["-PROMPT_FROM_CONFIG-"].get()
+                                      else values["-PROMPT-"]),
+            "prompt_from_config":    bool(window["-PROMPT_FROM_CONFIG-"].get()),
             "color_prompts":         state["color_prompts"],
             "color_prompt_max":      values["-PROMPT_MAX-"],
             "shutdown_on_complete":  values["-SHUTDOWN-"],
@@ -4704,6 +4778,21 @@ while True:
         if not values["-VIDEO_DROPDOWN-"]:
             sg.popup_error("Select a video file first!")
             continue
+        # Live checkbox read (thread events carry None for it) and normalize
+        # the value inside values[] so the launch path reads a real boolean.
+        values["-PROMPT_FROM_CONFIG-"] = bool(window["-PROMPT_FROM_CONFIG-"].get())
+        if values["-DO_STEP3-"] and values["-PROMPT_FROM_CONFIG-"]:
+            # A config without a prompt would run with an empty one: refuse
+            # now, when the user can still fix it.
+            if not config_prompt(values["-MODEL_CONFIG-"]):
+                sg.popup_error(
+                    "Enable Prompt Config is checked but the selected model "
+                    "config has no prompt.\n\n"
+                    f"config\\{values['-MODEL_CONFIG-']}.json has no "
+                    "\"prompt\" key.\nAdd one to the config file, or clear "
+                    "Enable Prompt Config.",
+                    title="Prompt missing")
+                continue
         if values["-DO_STEP3-"] and not state["rpc_connected"]:
             if values["-RUN_SERVER_EXTERNAL-"]:
                 # External console: the GUI has no way to know when that

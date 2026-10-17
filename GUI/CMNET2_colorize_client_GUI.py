@@ -931,9 +931,8 @@ def _launch_pipeline(window, run_values):
         cfg["color_prompts"] = state["color_prompts"]
         save_all_configs(cfg)
         _idx = state["color_prompts"].index(_p)
-        window["-PROMPT_IDX-"].update(
-            values=color_prompt_labels(state["color_prompts"]),
-            set_to_index=_idx, scroll_to_index=max(0, _idx - 2))
+        _labels = color_prompt_labels(state["color_prompts"])
+        window["-PROMPT_IDX-"].update(values=_labels, value=_labels[_idx])
     window["-RUN-"].update(disabled=True)
     window["-STOP-"].update(disabled=False)
     window["-LOG_BOX-"].update("--- STARTING BATCH ---\n")
@@ -2530,11 +2529,11 @@ def orchestrator(init_values, window):
 
 # ---------------------------------------------------------------------------
 # PRESET PROMPT LIST - pure helpers, shared by tab 2 ("color_prompts") and
-# tab 4 ("fix_prompts"). A short Listbox lists the presets as one-line
-# previews ("N. ...") and the Multiline above shows the full prompt of the
-# selected row. Index 0 is the protected default.
+# tab 4 ("fix_prompts"). A one-line Combo lists the presets as shortened
+# numbered previews ("N. ..."); the Multiline above shows the full prompt of
+# the selected entry. Index 0 is the protected default.
 # ---------------------------------------------------------------------------
-def color_prompt_label(index, prompt, width=52):
+def color_prompt_label(index, prompt, width=38):
     """One-line, width-limited Listbox label for a preset ("N. preview")."""
     text = " ".join(str(prompt).split())
     if len(text) > width:
@@ -2542,7 +2541,7 @@ def color_prompt_label(index, prompt, width=52):
     return f"{index + 1}. {text}"
 
 
-def color_prompt_labels(prompts, width=52):
+def color_prompt_labels(prompts, width=38):
     """Listbox entries for a preset list ("1. preview" .. "n. preview")."""
     return [color_prompt_label(i, p, width) for i, p in enumerate(prompts)]
 
@@ -2562,12 +2561,11 @@ def remember_color_prompt(prompts, prompt, max_prompts):
 
 
 def color_prompt_index(prompts, selected):
-    """Parse a Listbox selection into a clamped 0-based list index.
+    """Parse a Combo selection into a clamped 0-based list index.
 
-    ``selected`` is the values[] payload of a Listbox (a list of labels, empty
-    when the user clicked below the rows) or a bare label. The numeric prefix
-    carries the index; an empty or garbage selection falls back to 0 (the
-    protected default)."""
+    ``selected`` is the Combo value (a label such as "2. preview", or ""
+    when nothing is selected). The numeric prefix carries the index; an
+    empty or garbage selection falls back to 0 (the protected default)."""
     if isinstance(selected, (list, tuple)):
         selected = selected[0] if selected else None
     try:
@@ -2575,17 +2573,6 @@ def color_prompt_index(prompts, selected):
     except (TypeError, ValueError):
         idx = 0
     return max(0, min(idx, len(prompts) - 1))
-
-
-def color_prompt_find(prompts, text):
-    """Index of the preset matching ``text``, else None. Whitespace runs
-    (and trailing spaces) are ignored: the Multiline drops them on the
-    round trip."""
-    key = " ".join(str(text).split())
-    for i, prompt in enumerate(prompts):
-        if " ".join(str(prompt).split()) == key:
-            return i
-    return None
 
 
 def prompt_max_of(values, key):
@@ -2944,19 +2931,16 @@ tab3_layout = [
     [sg.Text("Prompt:"), sg.Multiline(cfg["prompt"], key="-PROMPT-", expand_x=True, size=(80,4), no_scrollbar=True),
      sg.Checkbox("Enhance Prompt", key="-ENHANCE_PROMPT-", default=cfg.get("enhance_prompt", False))],
     [sg.Text("Preset #:"),
-     sg.Listbox(_color_prompt_labels,
-                default_values=[_color_prompt_labels[_color_prompt_init]],
-                key="-PROMPT_IDX-", size=(60, 4), enable_events=True,
-                select_mode=sg.LISTBOX_SELECT_MODE_SINGLE,
-                tooltip="Browse the internal prompt list: pick a row to show that\nprompt in full in the field above (rows carry a shortened preview).\nAdd / Update / Delete / Clear manage the list; preset #1 is the\nprotected default. A prompt used in a run is added automatically\n(up to Max)."),
-     sg.Column([
-         [sg.Button("Add", key="-PROMPT_ADD-"),
-          sg.Button("Update", key="-PROMPT_UPDATE-")],
-         [sg.Button("Delete", key="-PROMPT_DEL-"),
-          sg.Button("Clear", key="-PROMPT_CLEAR-")],
-         [sg.Text("Max:"), sg.Input(cfg.get("color_prompt_max", "30"),
-                                    key="-PROMPT_MAX-", size=(4, 1))],
-     ])],
+     sg.Combo(_color_prompt_labels,
+              default_value=_color_prompt_labels[_color_prompt_init],
+              key="-PROMPT_IDX-", size=(38, 1), readonly=True, enable_events=True,
+              tooltip="Browse the internal prompt list: pick an entry to show that\nprompt in full in the field above (entries carry a shortened preview).\nAdd / Update / Delete / Clear manage the list; preset #1 is the\nprotected default. A prompt used in a run is added automatically\n(up to Max)."),
+     sg.Button("Add", key="-PROMPT_ADD-"),
+     sg.Button("Update", key="-PROMPT_UPDATE-"),
+     sg.Button("Delete", key="-PROMPT_DEL-"),
+     sg.Button("Clear", key="-PROMPT_CLEAR-"),
+     sg.Text("Max:"), sg.Input(cfg.get("color_prompt_max", "30"),
+                                key="-PROMPT_MAX-", size=(4, 1))],
     [sg.Column([
         [sg.Text("B&W Input")],
         [sg.Image(data=b'', key="-IMG_BW-", size=(370, 350), background_color="black")],
@@ -3043,19 +3027,16 @@ tab5_layout = [
     [sg.Text("Prompt:"),
      sg.Multiline(state["fix_prompts"][0], key="-FIX_PROMPT-", expand_x=True, size=(80,4), no_scrollbar=True)],
     [sg.Text("Preset #:"),
-     sg.Listbox(_fix_prompt_labels,
-                default_values=[_fix_prompt_labels[0]],
-                key="-FIX_PROMPT_IDX-", size=(60, 4), enable_events=True,
-                select_mode=sg.LISTBOX_SELECT_MODE_SINGLE,
-                tooltip="Browse the internal prompt list: pick a row to show that\nprompt in full in the field above (rows carry a shortened preview).\nAdd / Update / Delete / Clear manage the list; preset #1 is the\nprotected default. A prompt used in a run is added automatically\n(up to Max)."),
-     sg.Column([
-         [sg.Button("Add", key="-FIX_PROMPT_ADD-"),
-          sg.Button("Update", key="-FIX_PROMPT_UPDATE-")],
-         [sg.Button("Delete", key="-FIX_PROMPT_DEL-"),
-          sg.Button("Clear", key="-FIX_PROMPT_CLEAR-")],
-         [sg.Text("Max:"), sg.Input(cfg.get("fix_prompt_max", "30"),
-                                    key="-FIX_PROMPT_MAX-", size=(4, 1))],
-     ])],
+     sg.Combo(_fix_prompt_labels,
+              default_value=_fix_prompt_labels[0],
+              key="-FIX_PROMPT_IDX-", size=(38, 1), readonly=True, enable_events=True,
+              tooltip="Browse the internal prompt list: pick an entry to show that\nprompt in full in the field above (entries carry a shortened preview).\nAdd / Update / Delete / Clear manage the list; preset #1 is the\nprotected default. A prompt used in a run is added automatically\n(up to Max)."),
+     sg.Button("Add", key="-FIX_PROMPT_ADD-"),
+     sg.Button("Update", key="-FIX_PROMPT_UPDATE-"),
+     sg.Button("Delete", key="-FIX_PROMPT_DEL-"),
+     sg.Button("Clear", key="-FIX_PROMPT_CLEAR-"),
+     sg.Text("Max:"), sg.Input(cfg.get("fix_prompt_max", "30"),
+                                key="-FIX_PROMPT_MAX-", size=(4, 1))],
 
     [sg.Checkbox("Enable batch processing", key="-FIX_BATCH-", default=False,
                  enable_events=True),
@@ -3828,18 +3809,10 @@ while True:
             window["-FIX_PATH-"].update(value="[swapped from output]")
             window["-FIX_STATUS-"].update("Swapped: output → input")
 
-    # ---- tab 4 preset prompt list (Listbox browses the internal list) ----
+    # ---- tab 4 preset prompt list (Combo browses the internal list) ----
     if event == "-FIX_PROMPT_IDX-":
-        selected = values["-FIX_PROMPT_IDX-"]
-        if selected:
-            idx = color_prompt_index(state["fix_prompts"], selected)
-            window["-FIX_PROMPT-"].update(value=state["fix_prompts"][idx])
-        else:
-            # A click below the rows clears the selection: restore it from
-            # the prompt in the field (when that text is still a preset).
-            _idx = color_prompt_find(state["fix_prompts"], values["-FIX_PROMPT-"])
-            if _idx is not None:
-                window["-FIX_PROMPT_IDX-"].update(set_to_index=_idx)
+        idx = color_prompt_index(state["fix_prompts"], values["-FIX_PROMPT_IDX-"])
+        window["-FIX_PROMPT-"].update(value=state["fix_prompts"][idx])
 
     if event in ("-FIX_PROMPT_ADD-", "-FIX_PROMPT_UPDATE-", "-FIX_PROMPT_DEL-", "-FIX_PROMPT_CLEAR-"):
         prompts = state["fix_prompts"]
@@ -3859,26 +3832,17 @@ while True:
         else:  # -FIX_PROMPT_CLEAR-
             state["fix_prompts"] = prompts = [cfg.get("fix_prompts", ["color this image, natural colors."])[0]]
             idx = 0
-        window["-FIX_PROMPT_IDX-"].update(
-            values=color_prompt_labels(prompts),
-            set_to_index=idx, scroll_to_index=max(0, idx - 2))
+        _labels = color_prompt_labels(prompts)
+        window["-FIX_PROMPT_IDX-"].update(values=_labels, value=_labels[idx])
         window["-FIX_PROMPT-"].update(value=prompts[idx])
         cfg["fix_prompts"] = prompts
         cfg["fix_prompt_max"] = values.get("-FIX_PROMPT_MAX-", "30")
         save_all_configs(cfg)
 
-    # ---- tab 2 preset prompt list (Listbox browses the internal list) ----
+    # ---- tab 2 preset prompt list (Combo browses the internal list) ----
     if event == "-PROMPT_IDX-":
-        selected = values["-PROMPT_IDX-"]
-        if selected:
-            idx = color_prompt_index(state["color_prompts"], selected)
-            window["-PROMPT-"].update(value=state["color_prompts"][idx])
-        else:
-            # A click below the rows clears the selection: restore it from
-            # the prompt in the field (when that text is still a preset).
-            _idx = color_prompt_find(state["color_prompts"], values["-PROMPT-"])
-            if _idx is not None:
-                window["-PROMPT_IDX-"].update(set_to_index=_idx)
+        idx = color_prompt_index(state["color_prompts"], values["-PROMPT_IDX-"])
+        window["-PROMPT-"].update(value=state["color_prompts"][idx])
 
     if event in ("-PROMPT_ADD-", "-PROMPT_UPDATE-", "-PROMPT_DEL-", "-PROMPT_CLEAR-"):
         prompts = state["color_prompts"]
@@ -3898,9 +3862,8 @@ while True:
         else:  # -PROMPT_CLEAR-
             state["color_prompts"] = prompts = [(cfg.get("color_prompts") or [cfg["prompt"]])[0]]
             idx = 0
-        window["-PROMPT_IDX-"].update(
-            values=color_prompt_labels(prompts),
-            set_to_index=idx, scroll_to_index=max(0, idx - 2))
+        _labels = color_prompt_labels(prompts)
+        window["-PROMPT_IDX-"].update(values=_labels, value=_labels[idx])
         window["-PROMPT-"].update(value=prompts[idx])
         cfg["color_prompts"] = prompts
         cfg["color_prompt_max"] = values.get("-PROMPT_MAX-", "30")
@@ -3984,10 +3947,12 @@ while True:
         window["-FIX_PROMPT-"].update(value=prompt)
         _fx_idx = (state["fix_prompts"].index(prompt)
                    if prompt in state["fix_prompts"] else None)
-        window["-FIX_PROMPT_IDX-"].update(
-            values=color_prompt_labels(state["fix_prompts"]),
-            set_to_index=_fx_idx,
-            scroll_to_index=None if _fx_idx is None else max(0, _fx_idx - 2))
+        _labels = color_prompt_labels(state["fix_prompts"])
+        if _fx_idx is None:
+            window["-FIX_PROMPT_IDX-"].update(values=_labels)
+        else:
+            window["-FIX_PROMPT_IDX-"].update(values=_labels,
+                                              value=_labels[_fx_idx])
         # Auto-save prompts to config
         cfg["fix_prompts"] = state["fix_prompts"]
         save_all_configs(cfg)

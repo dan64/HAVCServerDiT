@@ -98,10 +98,12 @@ with a plain and a `-fast` (paired split) variant:
 | `qwen-2511-nunchaku_fp4`     | QuantFunc 2511 FP4 `balance` (r128)          | Lightning 4-step    | per-frame TE cache |
 | `qwen-2509-nunchaku-fast_fp4`| same as above                                | fused (none)        | **paired** (`fast_split_TE`) |
 | `qwen-2511-nunchaku-fast_fp4`| same as above                                | Lightning 4-step    | **paired** (`fast_split_TE`) |
+| `qwen-2509-nunchaku_int4`    | official nunchaku-ai 2509 **INT4** (r32)     | fused (none)        | per-frame TE cache |
+| `qwen-2509-nunchaku-fast_int4`| same as above                               | fused (none)        | **paired** (`fast_split_TE`) |
 
 | Requirement | Details |
 | ----------- | ------- |
-| **GPU**     | NVIDIA RTX 50-Series (FP4). 16 GB+ VRAM — the 2511 checkpoint is 13 GB, the 2509 one 12 GB |
+| **GPU**     | RTX 50-Series for the **fp4** configs; **RTX 30/40-Series for the int4 ones** (nunchaku's gate: int4 on SM 75/80/86/89, fp4 on SM 120/121 — each refuses the other). 16 GB+ VRAM — the 2511 checkpoint is 13 GB, the 2509 one 12 GB |
 | **RAM**     | 32 GB+ |
 | **CUDA**    | 13.0 or newer |
 
@@ -134,6 +136,16 @@ with a plain and a `-fast` (paired split) variant:
 > in the frames inspected; it is visibly softer than the single-frame path.
 > Use them for long video runs; keep the plain configs when detail matters
 > more than speed.
+>
+> **`qwen-2509-nunchaku_int4` / `-fast_int4`** are the same 2509 checkpoint
+> re-quantized to **int4** (11.5 GB, r32) — the variant that loads on
+> **RTX 30/40**. The int4 kernel is the one those architectures have tensor
+> cores for; on a Blackwell card nunchaku refuses to load it (use fp4 there).
+> These configs ship `num_blocks_on_gpu: 8` instead of 20: on the fp4 sibling
+> the peak measured 14.1 GB at 20 blocks and 12.1 GB at 8, with no speed loss,
+> and the int4 configs exist for the 12–16 GB class. **Measured on Blackwell
+> only** — 12 GB remains unverified (16 GB+ supported), and the int4 numbers
+> on Ampere/Ada still have to be taken on that hardware.
 >
 > **`cpu_offload`**: the Nunchaku transformer streams its blocks from host
 > RAM; the shipped configs force `enable` because upstream's `auto` disables

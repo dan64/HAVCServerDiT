@@ -48,10 +48,15 @@ the **ComfyUI-nunchaku node** (SVDQuant) — the same graph ComfyUI executes
 (`TextEncodeQwenImageEditPlus` → `AuraFlow shift 3` → `CFGNorm` → `KSampler`, 4
 steps at cfg 1) — instead of a diffusers pipeline.
 
-Two checkpoints ship, each with a plain and a `-fast` config:
+Two checkpoints ship, each with a plain and a `-fast` config — and the 2509
+one also in **int4** for RTX 30/40:
 
 * **`qwen-2509-nunchaku_fp4`** — the official nunchaku-ai 2509 checkpoint,
   Lightning **fused** (no LoRA).
+* **`qwen-2509-nunchaku_int4`** — the same checkpoint re-quantized to **int4**
+  (11.5 GB): nunchaku accepts int4 only on SM 75/80/86/89 and fp4 only on
+  SM 120/121, so this is the config that loads on **RTX 30/40** (on a
+  Blackwell card the load is refused; use the fp4 one).
 * **`qwen-2511-nunchaku_fp4`** — the QuantFunc 2511 checkpoint
   (`balance` r128) **plus** the Lightning LoRA, composed into the quantized
   low-rank buffers at load time. This is the only path to **2511 with SVDQuant
@@ -59,7 +64,8 @@ Two checkpoints ship, each with a plain and a `-fast` config:
   do not ship the Lightning LoRA fused.
 
 Plus their **`-fast` variants** (`qwen-2509-nunchaku-fast_fp4`,
-`qwen-2511-nunchaku-fast_fp4`), identical but with `fast_split_TE: true`: the
+`qwen-2511-nunchaku-fast_fp4`, `qwen-2509-nunchaku-fast_int4`), identical but
+with `fast_split_TE: true`: the
 paired split merges consecutive frames into one canvas, one text-encoder and one
 sampling pass per two frames. Measured **4.1–4.4 s/frame** against 7.4–9.2 for
 the per-frame configs, at half the working area per frame (the pair shares the

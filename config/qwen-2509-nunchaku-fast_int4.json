@@ -1,0 +1,18 @@
+{
+    "model_name":          "qwen25-nunchaku",
+    "prompt":              "Color this image, natural colors.",
+    "unet_name":           "models/diffusion_models/svdq-int4_r32-qwen-image-edit-2509-lightning-4steps-251115.safetensors",
+    "unet_hf_name":        "lightning-251115/svdq-int4_r32-qwen-image-edit-2509-lightning-4steps-251115.safetensors",
+    "clip_name":           "models/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors",
+    "vae_name":            "qwen_image_vae.safetensors",
+    "lora_path":           "",
+    "steps":               4,
+    "cpu_offload":         "enable",
+    "num_blocks_on_gpu":   8,
+    "use_pin_memory":      "disable",
+    "fast_split_TE":       true,
+    "hf_unet":             "nunchaku-ai/nunchaku-qwen-image-edit-2509",
+    "hf_clip":             "Comfy-Org/Qwen-Image_ComfyUI",
+    "hf_vae":              "Comfy-Org/Qwen-Image_ComfyUI",
+    "hf_lora":             ""
+}

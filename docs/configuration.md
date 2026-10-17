@@ -114,6 +114,12 @@ the diffusers `nunchaku-qwen` family above, which still loads the official
 * **`qwen-2509-nunchaku_fp4`** — the official nunchaku-ai 2509 checkpoint,
   **Lightning already fused** (no LoRA). `num_blocks_on_gpu: 20` mirrors the
   validated headless run.
+* **`qwen-2509-nunchaku_int4`** — the same 2509 checkpoint, **int4**
+  re-quantization (`svdq-int4_r32`, 11.5 GB) for **RTX 30/40**: nunchaku's
+  hardware gate accepts only int4 on SM 75/80/86/89 and only fp4 on SM 120/121,
+  so this is the file that loads on Ampere/Ada. `num_blocks_on_gpu: 8` keeps the
+  measured peak around 12 GB (see the VRAM note below); on a Blackwell card the
+  load is refused by nunchaku itself — use the fp4 config there.
 * **`qwen-2511-nunchaku_fp4`** — the QuantFunc 2511 checkpoint
   (`balance`, r128) **plus** the Lightning LoRA, composed into the quantized
   low-rank buffers at load time. There is no official 2511 SVDQuant release.
@@ -123,6 +129,8 @@ the diffusers `nunchaku-qwen` family above, which still loads the official
   sampling pass per two frames) instead of caching per frame. Measured on the
   RTX 5070 Ti: **4.1–4.4 s/frame** against 7.4–9.2 single — at half the working
   area per frame, since the pair shares the 1 Mpx budget.
+* **`qwen-2509-nunchaku-fast_int4`** — the int4 2509 checkpoint with the same
+  paired split.
 
 ```json
 {
@@ -149,7 +157,7 @@ Family-specific keys (ignored by the other backends):
 | Key | Meaning |
 | --- | --- |
 | `cpu_offload` | `enable` / `disable` / `auto`. The Nunchaku transformer keeps only a few blocks on the GPU and streams the rest; `auto` follows upstream's rule (on below 15 GiB) and therefore **disables** offload on a 16 GB card, which measured ~1.9× slower (10.5 s vs 5.4 s per frame at 2 steps) — the shipped configs ask for `enable`. |
-| `num_blocks_on_gpu` | Blocks kept resident when offload is on. `1` for the 2511 balance checkpoint, `20` for the smaller 2509 one. |
+| `num_blocks_on_gpu` | Blocks kept resident when offload is on. `1` for the 2511 balance checkpoint, `20` for the smaller 2509 one, `8` for the int4 2509 configs (they exist for the 12–16 GB class). |
 | `use_pin_memory` | `enable` / `disable` pinned host memory for the offloaded blocks. |
 | `lora_strength` | Weight of the composed LoRA (1.0 in the shipped configs). |
 | `resolution` | Optional long-side budget of the working image; `0`/absent keeps the reference **1 Mpx** (`ImageScaleToTotalPixels`, lanczos). |
@@ -158,6 +166,13 @@ Family-specific keys (ignored by the other backends):
 > ~1.5–1.7 s/step, **~7.5–9 s per 1 Mpx frame** end to end (text encoder,
 > sampling and decode included). The 2511 checkpoint is 13 GB, hence
 > `cpu_offload: enable`; the 2509 one is 12 GB.
+>
+> **12 GB cards**: the fp4 configs peaked at **14.1 GB** with
+> `num_blocks_on_gpu: 20`; at `8` the same run peaked at **12.1 GB** with no
+> speed loss (4.68 vs 4.92 s/frame). The int4 configs ship `8` for that reason
+> — but this was measured on a 16 GB card, so 12 GB remains **not verified**
+> and 16 GB+ is the supported size. RTX 50 cards ignore the int4 configs: the
+> nunchaku gate refuses int4 on SM 120/121.
 
 > **Fast Pipeline** works on this family too: phase A caches the EditPlus
 > conditioning (`ref_te_edit/`), phase B samples from it — the same edit split

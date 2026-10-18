@@ -146,20 +146,24 @@ CMNET2_DINOV2 = (
 )
 
 # Default model seeded into the GUI settings when the value is missing: the
-# --default-model value the manager passes (2026-10-11: back to the viggle
-# family -- the turbo family colors better but less stably, so the nominal
-# default is qwen21-viggle again; `longcat-gguf` is the lighter model it
-# switches to below the RAM threshold).
-DEFAULT_MODEL_NAME = "qwen21-viggle"
+# --default-model value the manager passes. Since 2026-10-18 the installer
+# picks qwen-2509-nunchaku (fp4 on RTX 50, int4 on RTX 30/40) and falls back
+# to longcat-gguf Q3 on small machines (VRAM < 12 GB, or VRAM <= 16 GB with
+# RAM < 24 GB); the manager computes that per machine. This constant is only
+# the CLI fallback when --default-model is not given (int4, the checkpoint
+# that runs on both RTX 30/40 and RTX 50).
+DEFAULT_MODEL_NAME = "qwen25-nunchaku-int4"
 
 # GUI "Model Config" (the config/ file stem, without .json) seeded/wired for
 # each --default-model value: the config folder is what selects the model.
-# The nominal default family seeds `qwen21_viggle-soft_int8` (the merged-LoRA
-# checkpoint, the stable pick of that family, 2026-10-11 -- the base
-# `qwen21_viggle` runtime-LoRA config was retired as redundant on 2026-10-18);
-# `qwen21-turbo` seeds the turbo config (the interim one-day
-# default, kept working); below the RAM threshold it seeds longcat-gguf Q3.
-DEFAULT_MODEL_CONFIG = {"qwen21-viggle": "qwen21_viggle-soft_int8",
+# The 2026-10-18 rule seeds `qwen-2509-nunchaku_fp4` on RTX 50 and
+# `qwen-2509-nunchaku_int4` on RTX 30/40 (the manager picks from the GPU);
+# below the thresholds it seeds longcat-gguf Q3. The viggle/turbo values stay
+# for older manager builds (the base `qwen21_viggle` runtime-LoRA config was
+# retired as redundant on 2026-10-18).
+DEFAULT_MODEL_CONFIG = {"qwen25-nunchaku-fp4": "qwen-2509-nunchaku_fp4",
+                        "qwen25-nunchaku-int4": "qwen-2509-nunchaku_int4",
+                        "qwen21-viggle": "qwen21_viggle-soft_int8",
                         "qwen21-turbo": "qwen21_turbo_int8",
                         "longcat-gguf": "longcat_gguf_q3"}
 
@@ -1559,7 +1563,9 @@ def main(argv=None) -> int:
     parser.add_argument("--default-model", default=DEFAULT_MODEL_NAME,
                         help="GUI default model seeded/wired in the GUI settings "
                              f"when empty (default: {DEFAULT_MODEL_NAME}; "
-                             "e.g. longcat-gguf seeds model_config longcat_gguf_q3)")
+                             "qwen25-nunchaku-fp4 / qwen25-nunchaku-int4 seed the "
+                             "qwen-2509-nunchaku configs, longcat-gguf seeds "
+                             "longcat_gguf_q3)")
     parser.add_argument("--only", default="",
                         help="run only these steps (comma-separated ids)")
     parser.add_argument("--plan", action="store_true",

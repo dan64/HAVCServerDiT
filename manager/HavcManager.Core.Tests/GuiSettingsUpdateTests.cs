@@ -45,6 +45,24 @@ public class GuiSettingsUpdateTests
     }
 
     [Fact]
+    public void Qwen2509_nunchaku_values_use_the_matching_config()
+    {
+        string dir = TestPaths.NewTempDir();
+        try
+        {
+            string template = Template();
+            string wheel = WriteWheel(dir, template);
+            WriteInstalled(dir, WithInstallValues(template, dir, "qwen25-nunchaku-fp4"));
+            Assert.False(GuiSettingsUpdate.Differs(wheel, dir, "qwen25-nunchaku-fp4"));
+            Assert.True(GuiSettingsUpdate.Differs(wheel, dir, "qwen25-nunchaku-int4"));
+        }
+        finally
+        {
+            TestPaths.Delete(dir);
+        }
+    }
+
+    [Fact]
     public void Missing_installed_file_is_not_reported()
     {
         // Fresh installs seed the file without asking.
@@ -163,6 +181,8 @@ public class GuiSettingsUpdateTests
         node["fixv_base_dir"] = samples;
         node["model_config"] = model switch
         {
+            "qwen25-nunchaku-fp4" => "qwen-2509-nunchaku_fp4",
+            "qwen25-nunchaku-int4" => "qwen-2509-nunchaku_int4",
             "longcat-gguf" => "longcat_gguf_q3",
             "qwen21-turbo" => "qwen21_turbo_int8",
             _ => "qwen21_viggle-soft_int8",

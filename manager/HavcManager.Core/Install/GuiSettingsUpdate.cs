@@ -99,12 +99,13 @@ public static class GuiSettingsUpdate
         template["fixv_base_dir"] = samples;
         string model = defaultModel ?? "qwen21-viggle"; // --default-model default
         // GUI "Model Config" (config/ file stem): DEFAULT_MODEL_CONFIG in
-        // havc/install.py. The nominal default family seeds the viggle soft
-        // int8 config (2026-10-11: back from the interim turbo default); the
-        // old model_name/model_precision pair is superseded and dropped from
-        // the expected shape as well.
+        // havc/install.py. The preflight picks qwen-2509-nunchaku (fp4 on
+        // RTX 50, int4 on RTX 30/40) or longcat-gguf Q3 on small machines
+        // (2026-10-18); the viggle and turbo values stay for older builds.
         template["model_config"] = model switch
         {
+            "qwen25-nunchaku-fp4" => "qwen-2509-nunchaku_fp4",
+            "qwen25-nunchaku-int4" => "qwen-2509-nunchaku_int4",
             "longcat-gguf" => "longcat_gguf_q3",
             "qwen21-turbo" => "qwen21_turbo_int8",
             _ => "qwen21_viggle-soft_int8",

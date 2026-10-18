@@ -36,9 +36,14 @@ faster but color **less accurately and less stably** — a low-end option, since
 this family is meant for hardware where the other backends do not fit.
 
 **LongCat is the fallback for small machines, and it goes low**: the Q3
-checkpoint runs on **8 GB of VRAM with 16 GB of RAM** (field-tested), which is
-why the installer now selects `longcat_gguf_q3` by default below **24 GB of RAM
-or 12 GB of VRAM**; the wizard quotes those minimums in the fallback message.
+checkpoint runs on **8 GB of VRAM with 16 GB of RAM** (field-tested). The
+installer's default model now follows this rule: **`longcat_gguf_q3` when the
+GPU has less than 12 GB of VRAM, or when a GPU up to 16 GB is paired with less
+than 24 GB of RAM**; otherwise **`qwen-2509-nunchaku`** — the **fp4**
+checkpoint on RTX 50 and the **int4** one on RTX 30/40. The wizard rounds RAM
+and VRAM to whole GB (a 32 GB machine reports ~31.9 GB, a 12 GB card
+12282 MiB), so a nominal size is never read as just below its own threshold,
+and it quotes the fallback's minimums in the message.
 
 **The base `qwen21_viggle` config was retired** as redundant: the viggle
 family ships only the merged-LoRA checkpoints (`-soft`/`-sharp` × int8/q4,

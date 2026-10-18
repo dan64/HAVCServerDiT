@@ -1,29 +1,44 @@
 namespace HavcManager.Core.Install;
 
 /// <summary>
-/// HAVC-Server.cmd arguments used by "Start server" (2026-10-11). The
-/// launcher resolves its argument with file-first precedence
-/// (<c>config\&lt;name&gt;.json</c> wins over the historical aliases), so the
-/// nominal default model is addressed by its config name directly. The
-/// nominal default is the viggle family again: the turbo family colors
-/// better but less stably (field verdict 2026-10-11), and the soft_int8
-/// config of the viggle family is the pick.
+/// HAVC-Server.cmd arguments used by "Start server". The launcher resolves
+/// its argument with file-first precedence (<c>config\&lt;name&gt;.json</c>
+/// wins over the historical aliases), so the model chosen by the preflight
+/// (2026-10-18: <c>qwen-2509-nunchaku</c> — fp4 on RTX 50, int4 on RTX 30/40 —
+/// or <c>longcat_gguf_q3</c> on small machines) is addressed by its config
+/// stem directly. The viggle value stays as the historical nominal default
+/// for installs whose stored <c>backend_default</c> predates the new rule.
 /// </summary>
 public static class BackendDefaults
 {
-    /// <summary>Launcher argument of the nominal default model.</summary>
-    public const string DefaultArg = "qwen21_viggle-soft_int8";
+    /// <summary>Config stem of the qwen-2509-nunchaku int4 checkpoint (RTX 30/40).</summary>
+    public const string Int4Arg = "qwen-2509-nunchaku_int4";
+
+    /// <summary>Config stem of the qwen-2509-nunchaku fp4 checkpoint (RTX 50).</summary>
+    public const string Fp4Arg = "qwen-2509-nunchaku_fp4";
+
+    /// <summary>
+    /// Last-resort default when no stored backend is available: the int4
+    /// checkpoint runs on RTX 30/40 and on RTX 50 (slower there than fp4).
+    /// </summary>
+    public const string DefaultArg = Int4Arg;
+
+    /// <summary>Historical default (viggle soft int8), kept for old state files.</summary>
+    public const string ViggleArg = "qwen21_viggle-soft_int8";
 
     /// <summary>Launcher argument of the turbo family config (interim default).</summary>
     public const string TurboArg = "qwen21_turbo_int8";
 
-    /// <summary>Launcher argument of the lighter model (below the RAM threshold).</summary>
+    /// <summary>Launcher argument of the lighter model (below the thresholds).</summary>
     public const string LighterArg = "longcat3";
 
     /// <summary>HAVC-Server.cmd argument for a --default-model value (launcher mapping).</summary>
     public static string ArgFor(string? guiModelName) => guiModelName switch
     {
+        "qwen25-nunchaku-fp4" => Fp4Arg,
+        "qwen25-nunchaku-int4" => Int4Arg,
         "longcat-gguf" => LighterArg,
+        "qwen21-viggle" => ViggleArg,
         "qwen21-turbo" => TurboArg,
         _ => DefaultArg,
     };

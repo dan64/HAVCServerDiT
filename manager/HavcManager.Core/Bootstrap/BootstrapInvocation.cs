@@ -18,8 +18,9 @@ public sealed record BootstrapInvocation
     public required string AssetsDir { get; init; }
 
     /// <summary>
-    /// GUI default model (--default-model): "longcat-gguf" below the RAM
-    /// threshold, else "qwen21-viggle"; seeds gui_cmnet2_settings.json when empty.
+    /// GUI default model (--default-model): "qwen25-nunchaku-fp4" on RTX 50,
+    /// "qwen25-nunchaku-int4" on RTX 30/40, "longcat-gguf" on small machines;
+    /// seeds gui_cmnet2_settings.json when empty.
     /// </summary>
     public string? DefaultModel { get; init; }
 

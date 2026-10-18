@@ -45,9 +45,16 @@ public sealed class Preflight
     /// the viggle soft int8 config since 2026-10-11).
     /// </summary>
     public const string DefaultModelName = "qwen21-viggle";
-    private const string LighterModelName = "longcat-gguf";         // below the RAM threshold
+    private const string LighterModelName = "longcat-gguf";         // below the thresholds
     private const long MinDefaultModelVramMiB = 12 * 1024;          // 12 GiB
     private const long MinDefaultModelRamBytes = 32L * 1024 * 1024 * 1024;  // 32 GiB
+
+    /// <summary>
+    /// Below this much system RAM the lighter longcat-gguf (Q3) becomes the
+    /// default model (2026-10-18: the author lowered the switch from 32 GB to
+    /// 24 GB, and added the VRAM side of the same rule).
+    /// </summary>
+    private const long LighterModelRamBytes = 24L * 1024 * 1024 * 1024;  // 24 GiB
 
     /// <summary>
     /// At or above this much system RAM the model files stay cached in memory
@@ -75,23 +82,26 @@ public sealed class Preflight
             $"Windows {version.Major}.{version.Minor} build {version.Build} (10.0.17763 or later required)"));
 
         // GPU: nvidia-smi, non-blocking when absent.
+        long? vramMiB = null;
         (string? gpu, bool gpuOk) = await RunNvidiaSmiAsync(cancellationToken).ConfigureAwait(false);
         if (gpuOk && gpu is not null)
         {
             checks.Add(new PreflightCheck("NVIDIA GPU", PreflightStatus.Ok, gpu));
             // The wizard no longer offers a model choice: check the fixed
             // default model's VRAM requirement (non-blocking warning below).
-            if (ParseVramMiB(gpu) is { } vramMiB)
+            if (ParseVramMiB(gpu) is { } detectedVram)
             {
-                bool enough = vramMiB >= MinDefaultModelVramMiB;
+                vramMiB = detectedVram;
+                bool enough = detectedVram >= MinDefaultModelVramMiB;
                 string requirement = FormatBytes(MinDefaultModelVramMiB * 1024 * 1024);
                 checks.Add(new PreflightCheck(
                     "VRAM (default model)",
                     enough ? PreflightStatus.Ok : PreflightStatus.Warning,
-                    $"{FormatBytes(vramMiB * 1024 * 1024)} in total — "
+                    $"{FormatBytes(detectedVram * 1024 * 1024)} in total — "
                     + (enough
                         ? $"meets the default model ({DefaultModelName}) requirement of at least {requirement}"
-                        : $"the default model ({DefaultModelName}) requires at least {requirement}; you can install anyway and pick another model in the HAVC GUI")));
+                        : $"below the {requirement} required by {DefaultModelName}; the installer will "
+                          + $"use {LighterModelName} (Q3) as the default model instead — you can still pick another model in the HAVC GUI")));
             }
         }
         else
@@ -101,10 +111,12 @@ public sealed class Preflight
                 "nvidia-smi not available — install or update the NVIDIA driver"));
         }
 
-        // System RAM: the nominal default model needs >= 32 GB; below the
-        // threshold the default switches to the lighter longcat-gguf (Q3).
+        // System RAM / VRAM: the nominal default model wants >= 32 GB of RAM
+        // and >= 12 GB of VRAM; below either threshold the default switches to
+        // the lighter longcat-gguf (Q3), the only family that runs there.
         ulong? ramBytes = TotalPhysicalMemoryBytes();
-        string defaultModel = DecideDefaultModel(ramBytes is { } ram ? (long)ram : null);
+        string defaultModel = DecideDefaultModel(
+            ramBytes is { } ram ? (long)ram : null, vramMiB);
         if (ramBytes is { } bytes)
         {
             bool enoughRam = bytes >= (ulong)MinDefaultModelRamBytes;
@@ -115,7 +127,10 @@ public sealed class Preflight
                 $"{FormatBytes((long)bytes)} in total — "
                 + (enoughRam
                     ? $"meets the default model ({DefaultModelName}) requirement of at least {ramRequirement}"
-                    : $"below the {ramRequirement} required by {DefaultModelName}; the installer will use {LighterModelName} (Q3) as the default model instead")));
+                    : $"below the {ramRequirement} required by {DefaultModelName}"
+                      + (defaultModel == LighterModelName
+                          ? $"; the installer will use {LighterModelName} (Q3) as the default model instead"
+                          : ""))));
         }
 
         checks.Add(SpaceCheck("Disk space (install)", installDir, MinInstallBytes));
@@ -148,22 +163,44 @@ public sealed class Preflight
 
     /// <summary>
     /// Default model for this machine: longcat-gguf (Q3) when the system RAM
-    /// is below the requirement, else qwen21-viggle (also when the RAM cannot
-    /// be measured). Used by the wizard at preflight and by update/repair runs
-    /// so the GUI settings seed stays consistent.
+    /// is below 24 GB **or** the GPU has less than 12 GB of VRAM, else
+    /// qwen21-viggle (also when the values cannot be measured). Used by the
+    /// wizard at preflight and by update/repair runs so the GUI settings seed
+    /// stays consistent.
     /// </summary>
     public static string DefaultModelForThisMachine()
-        => DecideDefaultModel(TotalRamBytesForThisMachine());
+        => DecideDefaultModel(TotalRamBytesForThisMachine(), TotalVramMiBForThisMachine());
 
     /// <summary>Total physical memory in bytes, or null when it cannot be read.</summary>
     public static long? TotalRamBytesForThisMachine()
         => TotalPhysicalMemoryBytes() is { } bytes ? (long)bytes : null;
 
+    /// <summary>Total VRAM in MiB via nvidia-smi, or null when it is missing.</summary>
+    public static long? TotalVramMiBForThisMachine()
+    {
+        try
+        {
+            (string? gpu, bool ok) = RunNvidiaSmiAsync(CancellationToken.None)
+                .ConfigureAwait(false).GetAwaiter().GetResult();
+            return ok && gpu is not null ? ParseVramMiB(gpu) : null;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
     private static long? RamBytes(ulong? bytes) => bytes is { } value ? (long)value : null;
 
     /// <summary>Machine-readable decision (see <see cref="DefaultModelForThisMachine"/>).</summary>
-    public static string DecideDefaultModel(long? totalRamBytes)
-        => totalRamBytes is { } ram && ram < MinDefaultModelRamBytes ? LighterModelName : DefaultModelName;
+    public static string DecideDefaultModel(long? totalRamBytes, long? vramMiB = null)
+    {
+        if (totalRamBytes is { } ram && ram < LighterModelRamBytes)
+            return LighterModelName;
+        if (vramMiB is { } vram && vram < MinDefaultModelVramMiB)
+            return LighterModelName;
+        return DefaultModelName;
+    }
 
     /// <summary>
     /// Storage advice for the install folder: a warning only when the folder

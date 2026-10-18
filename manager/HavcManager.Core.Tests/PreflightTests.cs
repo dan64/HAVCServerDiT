@@ -8,23 +8,36 @@ public class PreflightTests
     private const long GiB = 1024L * 1024 * 1024;
 
     [Fact]
-    public void DecideDefaultModel_switches_to_longcat_below_32_gb()
+    public void DecideDefaultModel_switches_to_longcat_below_24_gb()
     {
         Assert.Equal("longcat-gguf", DecideDefaultModel(16 * GiB));
-        Assert.Equal("longcat-gguf", DecideDefaultModel(32 * GiB - 1));
+        Assert.Equal("longcat-gguf", DecideDefaultModel(24 * GiB - 1));
     }
 
     [Fact]
-    public void DecideDefaultModel_keeps_qwen21_at_or_above_32_gb()
+    public void DecideDefaultModel_keeps_qwen21_from_24_gb_upwards()
     {
+        Assert.Equal("qwen21-viggle", DecideDefaultModel(24 * GiB));
         Assert.Equal("qwen21-viggle", DecideDefaultModel(32 * GiB));
         Assert.Equal("qwen21-viggle", DecideDefaultModel(128 * GiB));
     }
 
     [Fact]
-    public void DecideDefaultModel_keeps_qwen21_when_ram_is_unknown()
+    public void DecideDefaultModel_switches_to_longcat_below_12_gb_of_vram()
+    {
+        // The 2026-10-18 rule: low VRAM alone is enough, even with plenty of RAM.
+        Assert.Equal("longcat-gguf", DecideDefaultModel(64 * GiB, 8 * 1024));
+        Assert.Equal("longcat-gguf", DecideDefaultModel(128 * GiB, 12 * 1024 - 1));
+        Assert.Equal("qwen21-viggle", DecideDefaultModel(64 * GiB, 12 * 1024));
+    }
+
+    [Fact]
+    public void DecideDefaultModel_ignores_each_value_when_it_is_unknown()
     {
         Assert.Equal("qwen21-viggle", DecideDefaultModel(null));
+        Assert.Equal("qwen21-viggle", DecideDefaultModel(null, null));
+        Assert.Equal("qwen21-viggle", DecideDefaultModel(64 * GiB, null));
+        Assert.Equal("longcat-gguf", DecideDefaultModel(null, 6 * 1024));
     }
 
     [Fact]

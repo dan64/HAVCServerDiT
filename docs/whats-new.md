@@ -8,8 +8,11 @@ is paired with **less than 24 GB of RAM**; otherwise **`qwen-2509-nunchaku`** �
 **fp4** on RTX 50 (Blackwell) and **int4** on RTX 30/40. RAM and VRAM are
 rounded to whole GB before the decision and in the messages, so a 32 GB machine
 (reported as ~31.9 GB) and a 12 GB card (12282 MiB) are read as the sizes they
-are sold as. The wizard explains the choice in the preflight rows; update and
-repair keep the model an existing installation already uses.
+are sold as. The wizard explains the choice in the preflight rows; an existing
+installation keeps a model you picked explicitly, while the legacy `"qwen21"`
+value (which only ever meant "the default") is migrated to the per-GPU choice
+by update and repair — and *Start server* resolves it the same way even before
+that.
 
 **The install folder can no longer swallow a whole drive.** Picking a drive
 root — **`E:\`** — installs into **`E:\HAVCServerDiT`**, both when chosen with

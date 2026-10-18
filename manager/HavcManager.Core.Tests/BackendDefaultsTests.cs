@@ -40,6 +40,41 @@ public class BackendDefaultsTests
         => Assert.Equal(BackendDefaults.DefaultArg, BackendDefaults.Resolve("qwen21"));
 
     [Fact]
+    public void Legacy_values_resolve_to_the_machine_default()
+    {
+        // 2026-10-18: an install whose state still says "qwen21" (or nothing)
+        // follows the per-GPU rule instead of the int4 fallback.
+        Assert.Equal("qwen-2509-nunchaku_fp4",
+            BackendDefaults.Resolve("qwen21", "qwen25-nunchaku-fp4"));
+        Assert.Equal("qwen-2509-nunchaku_int4",
+            BackendDefaults.Resolve("qwen21", "qwen25-nunchaku-int4"));
+        Assert.Equal("longcat3", BackendDefaults.Resolve(null, "longcat-gguf"));
+    }
+
+    [Fact]
+    public void An_explicit_choice_is_never_migrated()
+    {
+        // A stored config name or alias is the user's choice: it survives the
+        // migration even when the machine default differs.
+        Assert.Equal("qwen-2509-nunchaku_int4",
+            BackendDefaults.Resolve("qwen-2509-nunchaku_int4", "qwen25-nunchaku-fp4"));
+        Assert.Equal("longcat3", BackendDefaults.Resolve("longcat3", "qwen25-nunchaku-fp4"));
+        Assert.Equal("qwen21_viggle-soft_int8",
+            BackendDefaults.MigrateLegacy("qwen21_viggle-soft_int8", "qwen25-nunchaku-fp4"));
+    }
+
+    [Fact]
+    public void Migration_writes_the_machine_default_when_the_alias_is_legacy()
+    {
+        Assert.Equal("qwen-2509-nunchaku_fp4",
+            BackendDefaults.MigrateLegacy("qwen21", "qwen25-nunchaku-fp4"));
+        Assert.Equal("qwen-2509-nunchaku_int4",
+            BackendDefaults.MigrateLegacy("", "qwen25-nunchaku-int4"));
+        // No machine reading: the safe fallback (int4) is written.
+        Assert.Equal(BackendDefaults.DefaultArg, BackendDefaults.MigrateLegacy("qwen21", null));
+    }
+
+    [Fact]
     public void Stored_arguments_pass_through()
     {
         Assert.Equal("longcat3", BackendDefaults.Resolve("longcat3"));

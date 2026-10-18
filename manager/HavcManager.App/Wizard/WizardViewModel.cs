@@ -521,6 +521,8 @@ public sealed class WizardViewModel : INotifyPropertyChanged
                 UpdatedAt = now,
                 Previous = snapshot,
                 Dirty = false,
+                BackendDefault = BackendDefaults.MigrateLegacy(
+                    state.BackendDefault, Preflight.DefaultModelForThisMachine()),
                 LastVerify = new LastVerifyState { Ts = now, Ok = true, AppVersion = _updateManifest.AppVersion },
             });
             try
@@ -632,6 +634,8 @@ public sealed class WizardViewModel : INotifyPropertyChanged
             {
                 Dirty = false,
                 ManagerVersion = ManagerVersion,
+                BackendDefault = BackendDefaults.MigrateLegacy(
+                    state.BackendDefault, Preflight.DefaultModelForThisMachine()),
                 LastVerify = new LastVerifyState { Ts = now, Ok = true, AppVersion = state.AppVersion },
             });
             RefreshInstalledManager();
@@ -970,7 +974,8 @@ public sealed class WizardViewModel : INotifyPropertyChanged
     public void StartServer()
         => ShellIntegration.StartServer(
             InstallDir,
-            BackendDefaults.Resolve(Existing?.State.BackendDefault));
+            BackendDefaults.Resolve(
+                Existing?.State.BackendDefault, Preflight.DefaultModelForThisMachine()));
 
     public void OpenReleaseNotes()
     {

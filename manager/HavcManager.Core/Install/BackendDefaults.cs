@@ -44,17 +44,27 @@ public static class BackendDefaults
     };
 
     /// <summary>
-    /// Argument to pass to HAVC-Server.cmd for the stored <c>backend_default</c>:
-    /// empty falls back to the nominal default. The historical alias "qwen21"
-    /// meant "the nominal default" as well, so it is translated to today's
-    /// default instead of starting whichever model it mapped to before; any
-    /// other stored value passes through (including a config name written by
-    /// an interim build).
+    /// Argument to pass to HAVC-Server.cmd for the stored <c>backend_default</c>.
+    /// The historical alias "qwen21" (and an empty value) meant "the nominal
+    /// default", not a specific checkpoint, so both are translated to the
+    /// default of <paramref name="nominalDefault"/> — the per-machine value
+    /// chosen by the preflight (2026-10-18) — instead of starting whichever
+    /// model the alias mapped to before. Any other stored value passes through
+    /// unchanged (an explicit choice, including a config name written by an
+    /// interim build).
     /// </summary>
-    public static string Resolve(string? storedBackend)
-    {
-        if (string.IsNullOrEmpty(storedBackend))
-            return DefaultArg;
-        return storedBackend == "qwen21" ? DefaultArg : storedBackend;
-    }
+    public static string Resolve(string? storedBackend, string? nominalDefault = null)
+        => MigrateLegacy(storedBackend, nominalDefault);
+
+    /// <summary>
+    /// Rewrites a legacy/empty <c>backend_default</c> to the argument of the
+    /// machine's nominal default (fp4 on RTX 50, int4 on RTX 30/40, longcat Q3
+    /// on small machines); an explicit stored value is kept. Used by update and
+    /// repair so the saved state catches up with the per-GPU rule of
+    /// 2026-10-18 without overriding a choice the user made.
+    /// </summary>
+    public static string MigrateLegacy(string? storedBackend, string? nominalDefault)
+        => string.IsNullOrEmpty(storedBackend) || storedBackend == "qwen21"
+            ? ArgFor(nominalDefault)
+            : storedBackend;
 }

@@ -1,6 +1,6 @@
 {
     "model_name":          "qwen25-nunchaku",
-    "prompt":              "Colorize this image, natural skin tones, vibrant environment. Maintain consistency and details.",
+    "prompt":              "Colorize this image, natural colors. Strictly preserve all shapes, edges and background details.",
     "unet_name":           "models/diffusion_models/svdq-int4_r32-qwen-image-edit-2509-lightning-4steps-251115.safetensors",
     "unet_hf_name":        "lightning-251115/svdq-int4_r32-qwen-image-edit-2509-lightning-4steps-251115.safetensors",
     "clip_name":           "models/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors",

@@ -169,10 +169,13 @@ argument it starts `int4`.
 > **Prompt tip (qwen-2511)**: keep it short and direct — the opposite of the
 > detail-heavy wording `qwen21-viggle` likes. A good default: *"Colorize
 > this image, natural colors. Strictly preserve all shapes, edges and
-> background details."* Longer or more emphatic prompts can steer it the
-> wrong way (a "vibrant colors" variant colored some subjects noticeably
-> wrong in a side-by-side test), so start simple and only add words when the
-> output calls for it. The sensitivity is per-wording and not monotonic:
+> background details."* — the wording the Qwen-Image-Edit configs ship
+> (`qwen-2511*`, `qwen-2509-nunchaku*`, `qwen_nunchaku_*`), so Tab 2's
+> **Enable Prompt Config** sends it as-is. Longer or more emphatic prompts
+> can steer it the wrong way (a "vibrant colors" variant colored some
+> subjects noticeably wrong in a side-by-side test), so start simple and only
+> add words when the output calls for it. The sensitivity is per-wording and
+> not monotonic:
 > some very terse prompts (*"Color this image, natural colors."*) can make
 > it duplicate the subject on portrait frames — see
 > [Troubleshooting](troubleshooting.md). A wording that stays clean on such

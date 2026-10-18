@@ -169,10 +169,15 @@ Family-specific keys (ignored by the other backends):
 >
 > **12 GB cards**: the fp4 configs peaked at **14.1 GB** with
 > `num_blocks_on_gpu: 20`; at `8` the same run peaked at **12.1 GB** with no
-> speed loss (4.68 vs 4.92 s/frame). The int4 configs ship `8` for that reason
-> — but this was measured on a 16 GB card, so 12 GB remains **not verified**
-> and 16 GB+ is the supported size. RTX 50 cards ignore the int4 configs: the
-> nunchaku gate refuses int4 on SM 120/121.
+> speed loss (4.68 vs 4.92 s/frame). The int4 configs ship `8` for that reason.
+> **Verified on an RTX 3060 (12 GB, 32 GB RAM) on 2026-10-18**:
+> `qwen-2509-nunchaku-fast_int4` runs at **~4.3 s/frame** on the paired split,
+> 8 blocks fit without OOM and `num_blocks_on_gpu` 8 vs 4 made no difference.
+> The single-frame live path (`Fix Image`) is much slower at this size: the
+> encoder is re-read from disk for every image (~65 s/image on an HDD), since
+> the two models do not fit in the pinned pool together — see the backend
+> page. RTX 50 cards ignore the int4 configs: the nunchaku gate refuses int4
+> on SM 120/121.
 
 > **Fast Pipeline** works on this family too: phase A caches the EditPlus
 > conditioning (`ref_te_edit/`), phase B samples from it — the same edit split

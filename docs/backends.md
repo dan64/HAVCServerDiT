@@ -103,7 +103,7 @@ with a plain and a `-fast` (paired split) variant:
 
 | Requirement | Details |
 | ----------- | ------- |
-| **GPU**     | RTX 50-Series for the **fp4** configs; **RTX 30/40-Series for the int4 ones** (nunchaku's gate: int4 on SM 75/80/86/89, fp4 on SM 120/121 — each refuses the other). 16 GB+ VRAM — the 2511 checkpoint is 13 GB, the 2509 one 12 GB |
+| **GPU**     | RTX 50-Series for the **fp4** configs; **RTX 30/40-Series for the int4 ones** (nunchaku's gate: int4 on SM 75/80/86/89, fp4 on SM 120/121 — each refuses the other). **12 GB+ for `qwen-2509-nunchaku-fast_int4`** (field-tested on an RTX 3060); 16 GB+ for the rest — the 2511 checkpoint is 13 GB, the 2509 one 12 GB |
 | **RAM**     | 32 GB+ |
 | **CUDA**    | 13.0 or newer |
 
@@ -142,10 +142,19 @@ with a plain and a `-fast` (paired split) variant:
 > **RTX 30/40**. The int4 kernel is the one those architectures have tensor
 > cores for; on a Blackwell card nunchaku refuses to load it (use fp4 there).
 > These configs ship `num_blocks_on_gpu: 8` instead of 20: on the fp4 sibling
-> the peak measured 14.1 GB at 20 blocks and 12.1 GB at 8, with no speed loss,
-> and the int4 configs exist for the 12–16 GB class. **Measured on Blackwell
-> only** — 12 GB remains unverified (16 GB+ supported), and the int4 numbers
-> on Ampere/Ada still have to be taken on that hardware.
+> the peak measured 14.1 GB at 20 blocks and 12.1 GB at 8, with no speed loss.
+>
+> **Field test, 2026-10-18 — RTX 3060, 12 GB VRAM / 32 GB RAM, models on an
+> HDD**: `qwen-2509-nunchaku-fast_int4` runs at **~4.3 s/frame** on the paired
+> split (4.9 s/image averaged over a 9-frame batch, which ends on a single
+> full-area frame). `num_blocks_on_gpu` **8 or 4 made no difference** (0.7%),
+> and 8 blocks fit without OOM — **12 GB is verified for this config**. The
+> **single-frame live path** (`Fix Image`) needs the text encoder and the
+> transformer one after the other; with 32 GB of RAM they do not fit in the
+> pinned pool together (40% of RAM ≈ 13 GB vs 7.9 + 11.5 GB), so it
+> **re-streams the encoder from disk for every image** — ~65 s/image on an HDD
+> after the first. Use the split configs for batches, and keep the model
+> folder on an SSD (the first load also takes 4–5 min from an HDD).
 >
 > **`cpu_offload`**: the Nunchaku transformer streams its blocks from host
 > RAM; the shipped configs force `enable` because upstream's `auto` disables

@@ -29,6 +29,12 @@ config runs at **~4.3 s/frame** on the paired split with 8 blocks resident
 (`num_blocks_on_gpu` 8 vs 4 made no difference, no OOM), so **12 GB is
 verified** for that config.
 
+**`longcat-gguf` ships four configs**: `longcat_gguf_q3` / `_q4` (single
+split) and `longcat_gguf-fast_q3` / `_fast_q4` (paired, `fast_split_TE`, same
+checkpoints and same prompt). Field verdict 2026-10-18: the paired variants are
+faster but color **less accurately and less stably** — a low-end option, since
+this family is meant for hardware where the other backends do not fit.
+
 **The base `qwen21_viggle` config was retired** as redundant: the viggle
 family ships only the merged-LoRA checkpoints (`-soft`/`-sharp` × int8/q4,
 plus `soft-fast_q4`). A settings file that still points at the old name is

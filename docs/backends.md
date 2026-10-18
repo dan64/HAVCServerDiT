@@ -214,9 +214,22 @@ with a plain and a `-fast` (paired split) variant:
 > sampling pass, so **~6.3 s/frame** (~**2.0×**), two frames per pass.
 > 
 > See `config/longcat_gguf_q3.json` / `longcat_gguf_q4.json` — the general
-> rule: lower quant = less VRAM. To pair consecutive frames, add
-> `"fast_split_TE": true` (see [Pipeline Configuration](configuration.md)).
-> Launch with `run_server_longcat.cmd` (Q4_K_M) or `start_server.cmd longcat|longcat-q3`.
+> rule: lower quant = less VRAM. Two **`-fast`** variants
+> (`longcat_gguf-fast_q3`, `longcat_gguf-fast_q4`) ship the same checkpoints
+> with `"fast_split_TE": true` and the **same prompt**, so a paired run and a
+> single run differ only in the pairing. **Field verdict, 2026-10-18**: the
+> paired variants are faster but the colors come out **less accurate and less
+> stable** than the single split — the pair works at half the area per frame.
+> They make sense on low-end machines, where throughput matters more than the
+> last bit of color fidelity; on a capable card prefer the base configs.
+>
+> **When to pick this family at all**: only on **low-end hardware**. On a
+> card that runs `qwen21-viggle` or `qwen25-nunchaku` comfortably, those are
+> faster and cleaner; LongCat is the fallback for small VRAM / small RAM.
+>
+> Launch with `run_server_longcat.cmd` (Q4_K_M) or
+> `start_server.cmd longcat|longcat-q3`; the `-fast` configs by name:
+> `start_server.cmd longcat_gguf-fast_q3`.
 
 ### qwen21-viggle : ~1.7 sec/frame with Fast Pipeline, ~3.5 without (Qwen-Image-2.1 int8 ConvRot)
 

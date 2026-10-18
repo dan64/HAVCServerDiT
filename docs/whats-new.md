@@ -1,5 +1,36 @@
 # What's New
 
+### 2026-10-18 (v2.7.1) — Installer: a default model per GPU, a safer install folder
+
+**The setup picks the default model from the hardware.** `longcat_gguf_q3`
+when the GPU has **less than 12 GB of VRAM**, or when a GPU with **up to 16 GB**
+is paired with **less than 24 GB of RAM**; otherwise **`qwen-2509-nunchaku`** —
+**fp4** on RTX 50 (Blackwell) and **int4** on RTX 30/40. RAM and VRAM are
+rounded to whole GB before the decision and in the messages, so a 32 GB machine
+(reported as ~31.9 GB) and a 12 GB card (12282 MiB) are read as the sizes they
+are sold as. The wizard explains the choice in the preflight rows; update and
+repair keep the model an existing installation already uses.
+
+**The install folder can no longer swallow a whole drive.** Picking a drive
+root — **`E:\`** — installs into **`E:\HAVCServerDiT`**, both when chosen with
+*Browse* and when typed, and the *Summary* page shows the folder that will be
+used. A folder that **already holds files** is confirmed before anything is
+written; an existing HAVC installation found there is called out with its
+version and a pointer to *Update / Repair*. Relative paths are rejected and a
+missing drive is reported before the download starts.
+
+**The two registry keys written by the manager are documented** in
+[docs/installation.md](installation.md#what-the-installer-writes-to-windows):
+`HKCU\Software\HAVCServerDiT` (`InstallDir`) and the uninstall entry under
+`HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\HAVCServerDiT`.
+Nothing machine-wide is touched, and a manual setup writes no keys at all.
+
+**The int4 pairs of `qwen-2509-nunchaku` are shipped** (`qwen-2509-nunchaku_int4`
+and `-fast_int4`, the 12 GB class verified on an RTX 3060 at ~4.3 s/frame with
+the paired split). Everything in the entry below — the LongCat Fast Pipeline,
+the SSD hint, the 12 GB field-test figures and the retuned config prompts —
+ships in this release as well.
+
 ### 2026-10-18 — Fast Pipeline on LongCat, an SSD hint in the setup, and the 12 GB field test
 
 **`longcat-gguf` now has the Fast Pipeline split.** Tab 2's *Fast Pipeline*

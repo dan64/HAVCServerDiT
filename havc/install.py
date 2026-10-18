@@ -71,11 +71,14 @@ NVENC = {
 # (ComfyUI-nunchaku core v1.2.1 + the QwenImage LoRA loader), the nunchaku
 # precision fix for Blackwell and the 2511 log hygiene. Bucket: HAVC Assets
 # v1.0.5.
+# v0.36 (2026-10-18): the Fast Pipeline split for longcat-gguf (cached EditPlus
+# conditioning in its own `longcat-conditioning` kind; the negative text-encoder
+# pass is gone at cfg=1.0). Bucket: HAVC Assets v1.0.6.
 COMFY_BRIDGE = {
-    "name": "comfy_bridge_v0.35.zip",
-    "url": "https://github.com/dan64/HAVCServerDiT/releases/download/v1.0.5/comfy_bridge_v0.35.zip",
-    "sha256": "62ffe05852044a00d5cd4ac2c12db6201f01285b2b25bf411edee5479610e277",
-    "size": 10737559,
+    "name": "comfy_bridge_v0.36.zip",
+    "url": "https://github.com/dan64/HAVCServerDiT/releases/download/v1.0.6/comfy_bridge_v0.36.zip",
+    "sha256": "fc46f16e58afc4f507082968d8deba90509ef8fadbb520dcd76628975582d389",
+    "size": 10739636,
 }
 
 # cmnet2 assets (plugins + weights) — pinned; sha256 also verified against

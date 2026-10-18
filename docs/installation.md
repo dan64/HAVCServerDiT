@@ -22,6 +22,11 @@ on first use.
   (`<install>\gui\gui_cmnet2_settings.json`) and the pipeline configs
   (`<install>\config\`) live in the install folder and are preserved by
   update/repair and by the uninstaller (which asks before deleting them).
+  With **less than 64 GB of RAM** an SSD is strongly recommended: the models
+  are then streamed from disk while running, and the wizard warns when the
+  chosen folder is on a hard disk (measured on an RTX 3060 with 32 GB of RAM
+  and an HDD: ~65 s per image on the single-frame path against ~4 s on the
+  paired split).
 - The manager (installed copy or the setup exe) offers *Open GUI*,
   *Start server*, *Check for updates*, *Repair* and *Uninstall*. Installed
   layouts also ship the launcher scripts — see

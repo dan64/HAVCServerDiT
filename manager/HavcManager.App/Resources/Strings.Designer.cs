@@ -100,6 +100,8 @@ public static class Strings
 
     public static string StatusStopping => ResourceManager.GetString("StatusStopping")!;
 
+    public static string StorageHddHint => ResourceManager.GetString("StorageHddHint")!;
+
     public static string SummaryFilesLabel => ResourceManager.GetString("SummaryFilesLabel")!;
 
     public static string SummaryTitle => ResourceManager.GetString("SummaryTitle")!;

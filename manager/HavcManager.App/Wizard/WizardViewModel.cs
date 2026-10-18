@@ -60,6 +60,10 @@ public sealed class WizardViewModel : INotifyPropertyChanged
     private bool _preflightDone;
     private string? _defaultModelName;
     private bool _dirtyWarningVisible;
+    private string _storageHintText = "";
+    private bool _storageHintVisible;
+    private string? _storageHintRoot;
+    private StorageKind _storageKind = StorageKind.Unknown;
 
     public WizardViewModel(AppOptions options) => _options = options;
 
@@ -78,7 +82,11 @@ public sealed class WizardViewModel : INotifyPropertyChanged
     public string InstallDir
     {
         get => _installDir;
-        set => Set(ref _installDir, value);
+        set
+        {
+            if (Set(ref _installDir, value))
+                RefreshStorageHint();
+        }
     }
 
     public bool DesktopShortcut
@@ -135,6 +143,23 @@ public sealed class WizardViewModel : INotifyPropertyChanged
     {
         get => _dirtyWarningVisible;
         private set => Set(ref _dirtyWarningVisible, value);
+    }
+
+    /// <summary>
+    /// SSD suggestion shown under the install folder (see
+    /// <see cref="Preflight.DescribeStorage"/>): only when the chosen drive is
+    /// a rotating disk and this machine has less than 64 GB of RAM.
+    /// </summary>
+    public string StorageHintText
+    {
+        get => _storageHintText;
+        private set => Set(ref _storageHintText, value);
+    }
+
+    public bool StorageHintVisible
+    {
+        get => _storageHintVisible;
+        private set => Set(ref _storageHintVisible, value);
     }
 
     public string AboutText => string.Format(CultureInfo.InvariantCulture, Strings.AboutLine, ManagerVersion);
@@ -232,6 +257,36 @@ public sealed class WizardViewModel : INotifyPropertyChanged
         {
         }
         return "—";
+    }
+
+    /// <summary>
+    /// Recomputes the SSD suggestion for the current install folder. The media
+    /// type is only re-queried when the drive letter changes, since the folder
+    /// binding fires on every keystroke.
+    /// </summary>
+    private void RefreshStorageHint()
+    {
+        string root = "";
+        try
+        {
+            root = Path.GetPathRoot(Path.GetFullPath(_installDir)) ?? "";
+        }
+        catch (Exception)
+        {
+        }
+        if (root.Length < 2 || root[1] != ':')
+            root = "";
+        if (!string.Equals(root, _storageHintRoot, StringComparison.OrdinalIgnoreCase))
+        {
+            _storageHintRoot = root;
+            _storageKind = root.Length > 0 ? StorageMedia.KindForPath(root) : StorageKind.Unknown;
+        }
+
+        PreflightCheck? advice = Preflight.DescribeStorage(
+            _storageKind, Preflight.TotalRamBytesForThisMachine());
+        bool warn = advice?.Status == PreflightStatus.Warning;
+        StorageHintText = warn ? Strings.StorageHddHint : "";
+        StorageHintVisible = warn;
     }
 
     public void Navigate(WizardPage page)

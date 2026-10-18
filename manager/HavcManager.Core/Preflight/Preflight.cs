@@ -29,7 +29,9 @@ public sealed record PreflightReport(IReadOnlyList<PreflightCheck> Checks, strin
 /// (name/driver/VRAM — missing GPU is a non-blocking warning), VRAM and
 /// system RAM vs the default model requirements (qwen21-viggle: at least
 /// 12 GB VRAM and 32 GB RAM; below the RAM threshold the default switches to
-/// the lighter longcat-gguf, Q3), disk space (indicative thresholds),
+/// the lighter longcat-gguf, Q3), disk space (indicative thresholds), storage
+/// media for the install folder (an HDD is called out below 64 GB of RAM,
+/// since the models are then streamed from disk while running),
 /// manifest reachability (with a fallback to a `release.json` next to the app).
 /// </summary>
 public sealed class Preflight
@@ -46,6 +48,15 @@ public sealed class Preflight
     private const string LighterModelName = "longcat-gguf";         // below the RAM threshold
     private const long MinDefaultModelVramMiB = 12 * 1024;          // 12 GiB
     private const long MinDefaultModelRamBytes = 32L * 1024 * 1024 * 1024;  // 32 GiB
+
+    /// <summary>
+    /// At or above this much system RAM the model files stay cached in memory
+    /// across phases, so a rotating disk only costs the first load. Below it
+    /// they are streamed from disk while running (measured on an RTX 3060 with
+    /// 32 GB of RAM and an HDD: ~65 s/image on the single-frame path against
+    /// ~4 s on the paired split), hence the SSD suggestion in the wizard.
+    /// </summary>
+    public const long MinRamForHddBytes = 64L * 1024 * 1024 * 1024;  // 64 GiB
 
     public async Task<PreflightReport> RunAsync(
         string installDir,
@@ -108,6 +119,8 @@ public sealed class Preflight
         }
 
         checks.Add(SpaceCheck("Disk space (install)", installDir, MinInstallBytes));
+        if (DescribeStorage(StorageMedia.KindForPath(installDir), RamBytes(ramBytes)) is { } storage)
+            checks.Add(storage);
 
         bool isRemote = Uri.TryCreate(manifestUrl, UriKind.Absolute, out var manifestUri)
                         && (manifestUri.Scheme == Uri.UriSchemeHttp || manifestUri.Scheme == Uri.UriSchemeHttps);
@@ -140,14 +153,49 @@ public sealed class Preflight
     /// so the GUI settings seed stays consistent.
     /// </summary>
     public static string DefaultModelForThisMachine()
-    {
-        ulong? bytes = TotalPhysicalMemoryBytes();
-        return DecideDefaultModel(bytes is { } b ? (long)b : null);
-    }
+        => DecideDefaultModel(TotalRamBytesForThisMachine());
+
+    /// <summary>Total physical memory in bytes, or null when it cannot be read.</summary>
+    public static long? TotalRamBytesForThisMachine()
+        => TotalPhysicalMemoryBytes() is { } bytes ? (long)bytes : null;
+
+    private static long? RamBytes(ulong? bytes) => bytes is { } value ? (long)value : null;
 
     /// <summary>Machine-readable decision (see <see cref="DefaultModelForThisMachine"/>).</summary>
     public static string DecideDefaultModel(long? totalRamBytes)
         => totalRamBytes is { } ram && ram < MinDefaultModelRamBytes ? LighterModelName : DefaultModelName;
+
+    /// <summary>
+    /// Storage advice for the install folder: a warning only when the folder
+    /// is on a rotating disk and the machine has less than 64 GB of RAM — the
+    /// condition under which the models are streamed from disk while running.
+    /// Unknown media produce no line at all (nothing is claimed).
+    /// </summary>
+    public static PreflightCheck? DescribeStorage(StorageKind kind, long? totalRamBytes)
+    {
+        switch (kind)
+        {
+            case StorageKind.Ssd:
+                return new PreflightCheck(
+                    "Storage (install folder)", PreflightStatus.Ok,
+                    "solid-state drive — the recommended choice for the model files");
+            case StorageKind.Hdd when totalRamBytes is { } ram && ram < MinRamForHddBytes:
+                return new PreflightCheck(
+                    "Storage (install folder)", PreflightStatus.Warning,
+                    $"hard disk, and this machine has {FormatBytes(ram)} of RAM — below the "
+                    + $"{FormatBytes(MinRamForHddBytes)} at which the models stay cached in memory. "
+                    + "The model files (comfy_bridge\\models) are then streamed from disk while running: "
+                    + "measured on an HDD ~65 s per image on the single-frame path against ~4 s on the "
+                    + "paired split. Consider installing on an SSD.");
+            case StorageKind.Hdd:
+                return new PreflightCheck(
+                    "Storage (install folder)", PreflightStatus.Ok,
+                    "hard disk — with 64 GB or more of RAM the models stay in memory; "
+                    + "the very first load still takes a few minutes");
+            default:
+                return null;
+        }
+    }
 
     private static PreflightCheck SpaceCheck(string name, string path, long minimumBytes)
     {

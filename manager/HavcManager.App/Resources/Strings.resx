@@ -197,6 +197,9 @@ No = keep your settings</value>
   <data name="StatusStopping" xml:space="preserve">
     <value>Stopping after the current step…</value>
   </data>
+  <data name="StorageHddHint" xml:space="preserve">
+    <value>Suggested: install HAVC on an SSD. This folder is on a hard disk and this machine has less than 64 GB of RAM, so the model files are streamed from disk while running — measured on an HDD: ~65 s per image on the single-frame path against ~4 s on the paired split.</value>
+  </data>
   <data name="SummaryFilesLabel" xml:space="preserve">
     <value>Will be downloaded:</value>
   </data>

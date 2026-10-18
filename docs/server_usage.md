@@ -119,10 +119,10 @@ same list is what the GUI shows as **Model Config** (Tab 2).
 | `run_server_qwen2509n.cmd` | `start_server.cmd qwen-2509-nunchaku_fp4` | Qwen-Image-Edit 2509, Nunchaku node |
 
 `run_server_qwen21.cmd` is a **standalone launcher** for the shipped default
-(`qwen21-turbo`) — it does not take an argument and always launches with
-`config/qwen21_turbo_int8.json` (the same config as `HAVC-Server.cmd qwen21`).
-The qwen21-viggle config is still one command away:
-`start_server.cmd qwen21_viggle`.
+(`qwen21_viggle-soft_int8`) — it does not take an argument and always launches
+with `config/qwen21_viggle-soft_int8.json` (the same config as
+`HAVC-Server.cmd qwen21`). Other configs are one command away, by name:
+`start_server.cmd qwen21_viggle-soft_q4`, `start_server.cmd qwen21_turbo_int8`, …
 
 `HAVC-Server.cmd` (the installer's console launcher) accepts the same kind
 of argument: `HAVC-Server.cmd qwen21` starts the shipped default config

@@ -8,7 +8,7 @@
 ::
 :: Single-config backend (config\qwen21_viggle-soft_int8.json) - no
 :: quant/precision argument, unlike start_server.cmd. Other qwen21 configs are
-:: still available: start_server.cmd qwen21_turbo_int8 / qwen21_viggle / ...
+:: still available: start_server.cmd qwen21_turbo_int8 / qwen21_viggle-soft_q4 / ...
 ::
 :: Edit the USER CONFIGURATION block below before first use.
 :: =============================================================================

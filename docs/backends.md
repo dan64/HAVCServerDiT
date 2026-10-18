@@ -222,7 +222,7 @@ with a plain and a `-fast` (paired split) variant:
 > assumed safe). A fresh `install.cmd` run sets these; an **existing**
 > `.venv` needs an explicit upgrade, see [Quick Update](installation.md#-quick-update-existing-installation).
 > All files are auto-downloaded on first run — see [What's New](whats-new.md).
-> Launch with `start_server.cmd qwen21_viggle`.
+> Launch with `start_server.cmd qwen21_viggle-soft_int8`.
 
 ### qwen21-turbo : ~4.5 sec/frame single split, ~2.3 with the paired split (Qwen-Image-2.1-Turbo int8 ConvRot)
 

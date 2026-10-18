@@ -185,28 +185,30 @@ Family-specific keys (ignored by the other backends):
 > image, the cache does not carry across frames: the split mainly separates
 > the VRAM phases, not the work.
 
-### qwen21-viggle Backend : `config/qwen21_viggle.json` & `qwen21_viggle-{soft,sharp}_{int8,q4}.json`
+### qwen21-viggle Backend : `config/qwen21_viggle-{soft,sharp}_{int8,q4}.json`
 
-The default config uses the int8 ConvRot UNet with the Viggle-Turbo LoRA
-applied at load time; **merged-LoRA variants** are also provided
-(`soft_*`/`sharp_*` — see the subsection below). The CLIP, unlike the UNet,
-can be either a `.safetensors` file or a GGUF+mmproj pair — the default
-uses GGUF+mmproj (see [What's New](whats-new.md)):
+The shipped configs load **merged-LoRA checkpoints** (the Viggle-Turbo LoRA is
+baked into the UNet — no runtime LoRA hook), in two model generations —
+**v0.3** (`soft_*`) and **v0.2.1** (`sharp_*`) — and two formats: **int8
+ConvRot** (`.safetensors`, ~6.75 GB) and **GGUF `Q4_K_M`** (~4 GB). The
+shipped default of the stack is `qwen21_viggle-soft_int8`. The text encoder is
+the int8 ConvRot `.safetensors` (`qwen3vl_8b_int8_convrot`, default since
+2.4.0); like the UNet it can also be a GGUF+mmproj pair (see
+[What's New](whats-new.md)):
 
 ```json
 {
     "model_name":          "qwen21-viggle",
-    "unet_name":           "models/unet/qwen_image_2.1_int8_convrot.safetensors",
-    "clip_name":           "models/clip/Qwen3-VL-8B-Instruct-UD-Q4_K_XL.gguf",
-    "clip_mmproj":         "models/clip/Qwen3-VL-8B-Instruct-mmproj-BF16.gguf",
-    "clip_mmproj_hf_name": "mmproj-BF16.gguf",
+    "unet_name":           "models/unet/Qwen-Image-2.1-viggle-turbo-v0.3-6step-int8_convrot.safetensors",
+    "unet_hf_name":        "Qwen-Image-2.1-viggle-turbo-v0.3-6step-int8_convrot.safetensors",
+    "clip_name":           "models/text_encoders/qwen3vl_8b_int8_convrot.safetensors",
     "vae_name":            "qwen_image_2.1_vae_bf16.safetensors",
-    "lora_path":           "models/loras/Qwen-Image-2.1-viggle-turbo-v0.2.1-6step-lora-r128.safetensors",
+    "lora_path":           "",
     "steps":               6,
-    "hf_unet":             "Comfy-Org/Qwen-Image-2.1",
-    "hf_clip":             "unsloth/Qwen3-VL-8B-Instruct-GGUF",
+    "hf_unet":             "Viggle/Qwen-Image-2.1-viggle-turbo",
+    "hf_clip":             "Comfy-Org/Qwen-Image-2.1",
     "hf_vae":              "Comfy-Org/Qwen-Image-2.1",
-    "hf_lora":             "Viggle/Qwen-Image-2.1-viggle-turbo"
+    "hf_lora":             ""
 }
 ```
 
@@ -221,61 +223,36 @@ uses GGUF+mmproj (see [What's New](whats-new.md)):
 >     "clip_name":   "models/text_encoders/qwen3vl_8b_int8_convrot.safetensors",
 > ```
 >
-> `steps: 6` here only documents the LoRA's native
+> `steps: 6` here only documents the checkpoint's native
 > step count for anyone reading the file; the actual number of steps used
 > at inference time is the `steps` argument passed per-call to the
 > colorization RPC methods (see [Suggested Inference Steps](server_usage.md#-suggested-inference-steps)
 > and [RPC API Reference](rpc-api.md)), same as every other backend.
 
-> **Merged-LoRA checkpoints** (e.g. the `v0.2.1-6step-*` / `v0.3-6step-*`
-> files in the
-> [Viggle repo](https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo),
-> which already contain the LoRA) simply omit `lora_path` (or leave it
-> empty); when such a file lives at the *root* of its HuggingFace repo, add
-> `unet_hf_name` with its filename as it exists upstream — the next
-> subsection shows ready-to-use examples.
+> **Runtime LoRA (not shipped).** The loader still applies a LoRA at load time
+> when `lora_path` is set — useful if you have the base Qwen-Image-2.1 UNet
+> and the Viggle-Turbo LoRA as separate files. No viggle config ships that
+> way: the base `qwen21_viggle` config was retired on 2026-10-18 as redundant
+> with the merged checkpoints. Copy a `soft_int8` config, point `unet_name` at
+> `models/unet/qwen_image_2.1_int8_convrot.safetensors`, set `lora_path` to
+> `models/loras/Qwen-Image-2.1-viggle-turbo-v0.2.1-6step-lora-r128.safetensors`
+> and `unet_hf_name` to `""`.
 
-#### Merged-LoRA variants : `config/qwen21_viggle-{soft,sharp}_{int8,q4}.json`
+> **Merged checkpoints from the repo root**: `unet_hf_name` carries the
+> filename as it exists upstream — without it the loader's default
+> auto-download path (`diffusion_models/<local filename>`, the Comfy-Org
+> layout) would 404 there.
 
-The [Viggle repo](https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo)
-also publishes checkpoints that **already contain the Viggle-Turbo LoRA**.
-Four configs ship them, in two model generations — **v0.3** (`soft_*`) and
-**v0.2.1** (`sharp_*`) — and two formats: **int8 ConvRot** (`.safetensors`,
-~6.75 GB) and **GGUF `Q4_K_M`** (~4 GB). No LoRA is applied at runtime.
-Example (`qwen21_viggle-soft_int8.json`):
+#### Other merged variants : `config/qwen21_viggle-{soft,sharp}_{int8,q4}.json`
 
-```json
-{
-    "model_name":          "qwen21-viggle",
-    "unet_name":           "models/unet/Qwen-Image-2.1-viggle-turbo-v0.3-6step-int8_convrot.safetensors",
-    "unet_hf_name":        "Qwen-Image-2.1-viggle-turbo-v0.3-6step-int8_convrot.safetensors",
-    "clip_name":           "models/clip/Qwen3-VL-8B-Instruct-UD-Q4_K_XL.gguf",
-    "clip_mmproj":         "models/clip/Qwen3-VL-8B-Instruct-mmproj-BF16.gguf",
-    "clip_mmproj_hf_name": "mmproj-BF16.gguf",
-    "vae_name":            "qwen_image_2.1_vae_bf16.safetensors",
-    "lora_path":           "",
-    "steps":               6,
-    "hf_unet":             "Viggle/Qwen-Image-2.1-viggle-turbo",
-    "hf_clip":             "unsloth/Qwen3-VL-8B-Instruct-GGUF",
-    "hf_vae":              "Comfy-Org/Qwen-Image-2.1",
-    "hf_lora":             ""
-}
-```
-
-Differences from the default config above:
-
-- `unet_name` points at the merged checkpoint (downloaded to
-  `comfy_bridge/models/unet/` on first use, like every other model file);
-  the `*_q4` variants point at a `.gguf` file instead — the loader detects
-  the extension and uses the ComfyUI-GGUF recipe;
-- `lora_path` is empty — the checkpoint is loaded as-is, the loader skips
-  the runtime LoRA hook;
-- `unet_hf_name` gives the filename as it exists on the Viggle repo: the
-  merged files sit at the **repo root**, where the loader's default
-  auto-download path would be the Comfy-Org-style
-  `diffusion_models/<local filename>` (which does not exist there → 404);
-- `hf_lora` is unused (empty) — nothing to download for a LoRA;
-- `steps: 6` matches the checkpoints' native step count.
+The same family ships five configs — **v0.3** (`soft_*`) and **v0.2.1**
+(`sharp_*`), in **int8 ConvRot** and **GGUF `Q4_K_M`**, plus the paired-split
+`soft-fast_q4`. They all follow the example above (no runtime LoRA); the
+`*_q4` variants only change `unet_name` to a `.gguf` file — the loader detects
+the extension and uses the ComfyUI-GGUF recipe. `unet_hf_name` is required
+for every one of them: the merged files sit at the **repo root** upstream,
+where the loader's default auto-download path
+(`diffusion_models/<local filename>`, the Comfy-Org layout) would 404.
 
 > **Field notes** (author's tests, RTX 5070 Ti, 2026-10-07): prefer
 > `int8_convrot` — best output quality and the fastest of the tested

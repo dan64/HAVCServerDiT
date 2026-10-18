@@ -154,9 +154,10 @@ DEFAULT_MODEL_NAME = "qwen21-viggle"
 
 # GUI "Model Config" (the config/ file stem, without .json) seeded/wired for
 # each --default-model value: the config folder is what selects the model.
-# The nominal default family seeds `qwen21_viggle-soft_int8` (the stable
-# pick of that family, 2026-10-11; the base `qwen21_viggle` stays one combo
-# entry away); `qwen21-turbo` seeds the turbo config (the interim one-day
+# The nominal default family seeds `qwen21_viggle-soft_int8` (the merged-LoRA
+# checkpoint, the stable pick of that family, 2026-10-11 -- the base
+# `qwen21_viggle` runtime-LoRA config was retired as redundant on 2026-10-18);
+# `qwen21-turbo` seeds the turbo config (the interim one-day
 # default, kept working); below the RAM threshold it seeds longcat-gguf Q3.
 DEFAULT_MODEL_CONFIG = {"qwen21-viggle": "qwen21_viggle-soft_int8",
                         "qwen21-turbo": "qwen21_turbo_int8",
@@ -174,7 +175,10 @@ def legacy_model_config(data: dict) -> str:
     name = data.get("model_name", "")
     precision = data.get("model_precision", "")
     if name == "qwen21-viggle":
-        return "qwen21_viggle"
+        # 2026-10-18: the base `qwen21_viggle` config (base UNet + LoRA at
+        # load time) was retired as redundant -- map to the shipped merged
+        # checkpoint of the family.
+        return "qwen21_viggle-soft_int8"
     if name == "nunchaku-qwen" and precision:
         return f"qwen_nunchaku_{precision}"
     if name == "gguf-qwen" and precision:

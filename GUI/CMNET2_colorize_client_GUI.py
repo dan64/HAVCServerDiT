@@ -264,7 +264,10 @@ def legacy_model_config(cfg):
     name = cfg.get("model_name", "")
     precision = cfg.get("model_precision", "")
     if name == "qwen21-viggle":
-        return "qwen21_viggle"
+        # 2026-10-18: the base `qwen21_viggle` config (base UNet + LoRA at
+        # load time) was retired as redundant -- the merged-LoRA soft_int8
+        # checkpoint is the shipped choice of the family.
+        return "qwen21_viggle-soft_int8"
     if name == "nunchaku-qwen" and precision:
         return f"qwen_nunchaku_{precision}"
     if name == "gguf-qwen" and precision:
@@ -283,14 +286,12 @@ def resolve_model_config(cfg, configs):
     """Pick the config to select: the saved value, else its equivalent from
     the old model_name/model_precision pair, else the shipped default
     (qwen21_viggle-soft_int8 -- more stable colors than the turbo family,
-    field-validated 2026-10-11), else the historical qwen21_viggle, else the
-    first available config."""
+    field-validated 2026-10-11), else the first available config."""
     for candidate in (cfg.get("model_config", ""), legacy_model_config(cfg)):
         if candidate in configs:
             return candidate
-    for default in ("qwen21_viggle-soft_int8", "qwen21_viggle"):
-        if default in configs:
-            return default
+    if "qwen21_viggle-soft_int8" in configs:
+        return "qwen21_viggle-soft_int8"
     return configs[0] if configs else ""
 
 

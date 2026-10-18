@@ -202,6 +202,14 @@ with a plain and a `-fast` (paired split) variant:
 > **82%** of the frame (10.5 s), the two text-encoder passes 15% together and
 > only the negative one (7.5%) can go — unlike the qwen21/flux families, whose
 > live path also paid per-frame model movement and whose sampling is 2 steps.
+> The split does separate the models (phase A: text encoder + VAE, phase B:
+> UNet + VAE), but on a 16 GB card the live path already keeps **all three
+> resident** (13.4 GB of 15.9), so there is no movement to save. The separation
+> starts paying when they no longer coexist: with the model manager's budget
+> cut (`comfy --reserve-vram`, a simulation of a smaller card, not a smaller
+> allocator) the live path degrades to **14.8 s/frame** at 3 GB reserved and
+> **17.5** at 6 GB — it streams weights — while the split stays at
+> **~11.6–11.9**. That is ~**1.1×** on 16 GB, ~**1.3–1.5×** on a tighter card.
 > Add `"fast_split_TE": true` to pair consecutive frames: the pair shares the
 > sampling pass, so **~6.3 s/frame** (~**2.0×**), two frames per pass.
 > 

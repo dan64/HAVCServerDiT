@@ -7,11 +7,13 @@ checkbox routes it through the same cached-conditioning flow as the other
 families: phase A runs the text encoder + VAE over the batch, phase B samples
 with the UNet + VAE resident. The split also drops the **negative text-encoder
 pass** the live path used to compute for a `cfg=1.0` sampler that never reads
-it. Measured on an RTX 5070 Ti 16 GB (Q4_K_M, 8 steps, ~1 Mpx, 4-frame
-batch, first-frame load included):
-**14.2 → 12.1 s/frame** (~1.17×) with the single split, and the output is
-**bit-identical** to the live one. Add `"fast_split_TE": true` to pair
-consecutive frames: **~7.5 s/frame** (~1.9×), two frames per sampling pass.
+it. Measured on an RTX 5070 Ti 16 GB (Q4_K_M, 8 steps, ~1 Mpx, steady
+state):
+**13.0 → 11.9 s/frame** (~1.09×) with the single split, and the output is
+**bit-identical** to the live one. The limit is the sampling: at 8 steps it is
+**82%** of the frame, and the split can only drop the negative text-encoder
+pass (7.5%). Add `"fast_split_TE": true` to pair consecutive frames: the pair
+shares the sampling pass, so **~6.3 s/frame** (~2.0×), two frames per pass.
 
 **The installer warns when the install folder sits on a hard disk and the
 machine has less than 64 GB of RAM.** The manager reads the drive's real

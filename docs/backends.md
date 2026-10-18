@@ -196,11 +196,14 @@ with a plain and a `-fast` (paired split) variant:
 > batch, phase B samples with the UNet + VAE resident — and the split drops
 > the negative text-encoder pass the live path computed for a `cfg=1.0`
 > sampler that never reads it. Measured on an RTX 5070 Ti 16 GB, Q4_K_M,
-> 8 steps, ~1 Mpx frames (4-frame batch, first-frame load included):
-> **14.2 → 12.1 s/frame** live → split (~**1.17×**), and **7.5 s/frame** with the
-> paired variant (`fast_split_TE`, two frames
-> share the canvas) — ~**1.9×** the live path. The split output is
-> **bit-identical** to the live one (same graph, same seed).
+> 8 steps, ~1 Mpx frames, steady state: **13.0 → 11.9 s/frame** (~**1.09×**)
+> with the single split, and the output is **bit-identical** to the live one.
+> The gain is small, and the arithmetic says why: at 8 steps the sampling is
+> **82%** of the frame (10.5 s), the two text-encoder passes 15% together and
+> only the negative one (7.5%) can go — unlike the qwen21/flux families, whose
+> live path also paid per-frame model movement and whose sampling is 2 steps.
+> Add `"fast_split_TE": true` to pair consecutive frames: the pair shares the
+> sampling pass, so **~6.3 s/frame** (~**2.0×**), two frames per pass.
 > 
 > See `config/longcat_gguf_q3.json` / `longcat_gguf_q4.json` — the general
 > rule: lower quant = less VRAM. To pair consecutive frames, add

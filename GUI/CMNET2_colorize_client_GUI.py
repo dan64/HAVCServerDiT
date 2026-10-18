@@ -1564,7 +1564,8 @@ def orchestrator(init_values, window):
         sampling pass per two frames.
 
         family is "te" (qwen21-viggle / qwen21-turbo / flux2 conditioning
-        format) or "edit" (qwen-2511). Same chunk/resume/cleanup scheme as
+        format) or "edit" (qwen-2511, qwen25-nunchaku, longcat-gguf). Same
+        chunk/resume/cleanup scheme as
         do_colorize_split(): phase A caches the pair conditioning with the TE +
         VAE resident, phase B samples with the UNet + VAE resident, and a
         chunk's cache is dropped once its frames are colorized. The pair cache
@@ -1843,8 +1844,8 @@ def orchestrator(init_values, window):
                 f"({infer_time / count:.2f}s/image, infer only)")
 
     def do_colorize_split_edit(values, window):
-        """Fast Pipeline for the qwen-2511 (gguf-qwen) family: split colorize in
-        chunks.
+        """Fast Pipeline for the edit families (gguf-qwen, qwen25-nunchaku,
+        longcat-gguf): split colorize in chunks.
 
         Same scheme as do_colorize_split() (qwen21-viggle): phase A caches the
         conditioning with the TE + VAE resident, phase B samples with the UNet
@@ -1852,8 +1853,8 @@ def orchestrator(init_values, window):
         colorized (a cancelled run keeps it, so the next run resumes from the
         first missing frame). Two differences from the viggle flow: the cached
         conditioning is the edit node's (context + reference latent + start
-        latent, ~21 MB per frame -- so the chunks are smaller), and it lives in
-        ref_te_edit/: a separate folder, because the two conditioning formats
+        latent, ~7-21 MB per frame -- so the chunks are smaller), and it lives
+        in ref_te_edit/: a separate folder, because the conditioning formats
         are not interchangeable.
         """
         rpc = state.get("rpc_client")
@@ -2069,19 +2070,32 @@ def orchestrator(init_values, window):
             log_message("⚠️ No connection to RPC server.")
             return
 
-        # qwen21-viggle works at a higher pair-mode resolution
-        # (VIGGLE_PAIR_RESOLUTION=1280, see dit_colorize_main.py) than the
-        # other backends (1024) - that headroom allows a wider gap between
-        # the two merged frames without eating into per-frame detail.
+        # qwen21-viggle *can* run the legacy pair pass at a higher resolution
+        # (VIGGLE_PAIR_RESOLUTION=1280, see dit_colorize_main.py), but every
+        # shipped viggle config takes one of the split flows below, so Fast
+        # Pipeline never reaches the pair pass for it. The pair pass serves
+        # the backends with no split flow (nunchaku-qwen), at 1024.
         model_cfg  = read_model_config(values["-MODEL_CONFIG-"]) or {}
         model_type = model_cfg.get("model_name", "")
         # config key fast_split_TE: the split-TE flows pair consecutive frames
         # (merged before the text encoder, split after the transformer)
         fast_pair  = config_flag(model_cfg, "fast_split_TE")
+        if model_type == "longcat-gguf":
+            # Fast Pipeline on longcat-gguf runs the edit split flow (phase A:
+            # EditPlus conditioning cache -- context + reference latent + the
+            # distilled guidance; phase B: sampling from the cache). The live
+            # path is the slowest of the stack and computes a negative pass
+            # that cfg=1.0 never reads: the split drops it and keeps the
+            # TE + VAE and the UNet + VAE resident in turn.
+            if fast_pair:
+                do_colorize_split_pair(values, window, "edit")
+            else:
+                do_colorize_split_edit(values, window)
+            return
         if model_type == "qwen21-viggle":
             # Fast Pipeline on the qwen21-viggle family runs the split flow
             # (phase A: conditioning cache; phase B: sampling from the cache,
-            # in chunks of 200 frames) instead of the 1280px pair pass.
+            # in chunks of 200 frames) instead of the legacy pair pass.
             if fast_pair:
                 do_colorize_split_pair(values, window, "te")
             else:
@@ -3011,7 +3025,7 @@ tab3_layout = [
           sg.Text("stopped", key="-SERVER_STATUS-", size=(45, 1), expand_x=True)],
         [sg.Text("Colorization Steps:"),
          sg.Combo(steps_values, default_value=cfg["steps"], key="-STEPS-", tooltip="Colorization steps per frame (lower = faster). LongCat 8, Qwen 2, qwen21-viggle 6, flux2 2.", readonly=True, size=(6,1)),
-         sg.Checkbox("Fast Pipeline", key="-FAST_PIPE-", default=cfg["fast_pipe"], tooltip="qwen21-viggle / qwen21-turbo / qwen-2511 / qwen25-nunchaku / flux2: cached-TE split flow; other models: paired 1280px pass. A config with fast_split_TE pairs consecutive frames (merged before the TE, split after the transformer)"),
+         sg.Checkbox("Fast Pipeline", key="-FAST_PIPE-", default=cfg["fast_pipe"], tooltip="qwen21-viggle / qwen21-turbo / qwen-2511 / qwen25-nunchaku / longcat-gguf / flux2: cached-TE split flow; qwen25-nunchaku pairs two frames per pass (1024px). A config with fast_split_TE pairs consecutive frames (merged before the TE, split after the transformer)"),
          sg.Checkbox("Unsharp Mask", key="-USM-", default=cfg.get("usm", False),
                      tooltip="Pre-filter the input before colorization (unsharp mask: amount 0.50, "
                              "threshold 0). Removes the film grain that can stop the model from "

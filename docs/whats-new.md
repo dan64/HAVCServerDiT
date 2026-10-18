@@ -1,5 +1,44 @@
 # What's New
 
+### 2026-10-18 — Fast Pipeline on LongCat, an SSD hint in the setup, and the 12 GB field test
+
+**`longcat-gguf` now has the Fast Pipeline split.** Tab 2's *Fast Pipeline*
+checkbox routes it through the same cached-conditioning flow as the other
+families: phase A runs the text encoder + VAE over the batch, phase B samples
+with the UNet + VAE resident. The split also drops the **negative text-encoder
+pass** the live path used to compute for a `cfg=1.0` sampler that never reads
+it. Measured on an RTX 5070 Ti 16 GB (Q4_K_M, 8 steps, ~1 Mpx, 4-frame
+batch, first-frame load included):
+**14.2 → 12.1 s/frame** (~1.17×) with the single split, and the output is
+**bit-identical** to the live one. Add `"fast_split_TE": true` to pair
+consecutive frames: **~7.5 s/frame** (~1.9×), two frames per sampling pass.
+
+**The installer warns when the install folder sits on a hard disk and the
+machine has less than 64 GB of RAM.** The manager reads the drive's real
+media type (the same seek-penalty query the embedded runtime uses) rather than
+guessing: with little RAM the models are streamed from disk while running, so
+an SSD is strongly recommended. The suggestion appears in the preflight and
+again under the folder picker, following the drive letter you choose. Field
+evidence behind the threshold: on an RTX 3060 with 32 GB of RAM and an HDD,
+the single-frame path ran at ~65 s/image against ~4 s for the paired split.
+
+**RTX 3060 (12 GB) field test for `qwen-2509-nunchaku-fast_int4`**: the
+config runs at **~4.3 s/frame** on the paired split with 8 blocks resident
+(`num_blocks_on_gpu` 8 vs 4 made no difference, no OOM), so **12 GB is
+verified** for that config.
+
+**The base `qwen21_viggle` config was retired** as redundant: the viggle
+family ships only the merged-LoRA checkpoints (`-soft`/`-sharp` × int8/q4,
+plus `soft-fast_q4`). A settings file that still points at the old name is
+migrated to `qwen21_viggle-soft_int8`; the runtime-LoRA path remains
+supported by the loader but no shipped config uses it.
+
+**Config prompts** were retuned across the families (most now carry the
+short skin-tones-safe wording; the viggle/turbo family keeps its detailed
+anti-hedging text), and the **Fast Pipeline tooltip** no longer claims a
+1280 px pair pass: that legacy pass was only ever used by `nunchaku-qwen`
+(at 1024 px).
+
 ### 2026-10-17 — Per-model prompts in the configs, and a GUI pass (title, tooltips, presets)
 
 **Every model config now carries its own prompt.** `config/*.json` gained an

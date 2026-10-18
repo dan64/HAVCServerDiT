@@ -929,8 +929,8 @@ def _split_family(pipe):
     and the paired encode_pair_te / colorize_pair_from_te) are shared by the
     cached-TE families: qwen21-viggle and qwen21-turbo use the viggle
     conditioning, flux2 uses its own (prompt-only text encoder + reference
-    latent), while the 2511 edit families (gguf-qwen, qwen25-nunchaku) have
-    their own edit-conditioning functions.
+    latent), while the edit families (gguf-qwen, qwen25-nunchaku and, since
+    2026-10-18, longcat-gguf) have their own edit-conditioning functions.
     """
     if isinstance(pipe, dict):
         return pipe.get("_model_type", "") or ""
@@ -942,12 +942,17 @@ def _encode_edit_conditioning(pipe, image, prompt):
 
     gguf-qwen uses the stock TextEncodeQwenImageEdit node; qwen25-nunchaku
     runs the EditPlus node on the Nunchaku chain (same on-disk conditioning
-    format, different text encoder and node).
+    format, different text encoder and node); longcat-gguf runs the EditPlus
+    node on its GGUF chain (own on-disk kind: it also caches the distilled
+    guidance and the reference-latent method).
     """
     import comfy_bridge
 
-    if _split_family(pipe) == "qwen25-nunchaku":
+    family = _split_family(pipe)
+    if family == "qwen25-nunchaku":
         return comfy_bridge.encode_qwen25_nunchaku_conditioning(pipe, image, prompt)
+    if family == "longcat-gguf":
+        return comfy_bridge.encode_longcat_conditioning(pipe, image, prompt)
     return comfy_bridge.encode_edit_conditioning(pipe, image, prompt)
 
 
@@ -955,11 +960,37 @@ def _colorize_edit_from_conditioning(pipe, conditioning, latent_dict, steps, see
     """Phase B of the edit families: sample + decode a cached conditioning."""
     import comfy_bridge
 
-    if _split_family(pipe) == "qwen25-nunchaku":
+    family = _split_family(pipe)
+    if family == "qwen25-nunchaku":
         return comfy_bridge.colorize_qwen25_nunchaku_from_conditioning(
+            pipe, conditioning, latent_dict, steps=steps, seed=seed)
+    if family == "longcat-gguf":
+        return comfy_bridge.colorize_longcat_from_conditioning(
             pipe, conditioning, latent_dict, steps=steps, seed=seed)
     return comfy_bridge.colorize_edit_from_conditioning(
         pipe, conditioning, latent_dict, steps=steps, seed=seed)
+
+
+def _save_edit_conditioning(pipe, path, res, prompt, meta):
+    """Save an _encode_edit_conditioning() result in the family's own
+    on-disk format (longcat carries guidance/method in the metadata)."""
+    import comfy_bridge
+
+    if _split_family(pipe) == "longcat-gguf":
+        return comfy_bridge.save_longcat_conditioning(
+            path, res["conditioning"], res["latent"], prompt=prompt, meta=meta)
+    return comfy_bridge.save_edit_conditioning(
+        path, res["conditioning"], res["latent"], prompt=prompt, meta=meta)
+
+
+def _load_edit_conditioning(pipe, path):
+    """Load a conditioning in the family's own on-disk format. Raises
+    ValueError when the file belongs to another family."""
+    import comfy_bridge
+
+    if _split_family(pipe) == "longcat-gguf":
+        return comfy_bridge.load_longcat_conditioning(path)
+    return comfy_bridge.load_edit_conditioning(path)
 
 
 def encode_frame_te(pipe, img_path, te_dir, stem, prompt, resolution: int = 1024,
@@ -1186,7 +1217,8 @@ def encode_frame_edit(pipe, img_path, te_dir, stem, prompt, img_size: int = 0,
                       first: bool = False, model_config: str = "",
                       usm_radius: float = 0.0) -> dict:
     """Phase A, single frame (edit family): encode + cache the conditioning of
-    one image under te_dir/<stem>.safetensors. Same contract as
+    one image under te_dir/<stem>.safetensors (gguf-qwen / qwen25-nunchaku /
+    longcat-gguf, each in its own on-disk format). Same contract as
     encode_frame_te(): first=True drops the loaded models before anything
     else (so the TE + VAE start from a clean VRAM even when this frame turns
     out to be cached); frames already cached for the same prompt/settings are
@@ -1229,8 +1261,8 @@ def encode_frame_edit(pipe, img_path, te_dir, stem, prompt, img_size: int = 0,
     img_in = resize_long_side(bw, img_size) if img_size > 0 else bw
 
     res = _encode_edit_conditioning(pipe, img_in, prompt)
-    comfy_bridge.save_edit_conditioning(
-        te_path, res["conditioning"], res["latent"], prompt=prompt,
+    _save_edit_conditioning(
+        pipe, te_path, res, prompt,
         meta={"orig_width": orig_w, "orig_height": orig_h,
               "source": os.path.basename(src), "model_config": model_config})
 
@@ -1274,7 +1306,7 @@ def colorize_frame_edit_from_te(pipe, te_dir, stem, out_path, steps: int = 4,
 
     t0 = time.perf_counter()
     try:
-        loaded = comfy_bridge.load_edit_conditioning(te_path)
+        loaded = _load_edit_conditioning(pipe, te_path)
     except ValueError as exc:
         # a conditioning of the other family left in this folder (same stem):
         # skip instead of sampling a mismatched structure
@@ -1565,7 +1597,8 @@ def colorize_pair_from_te(pipe, te_dir, stem, out1_path, out2_path="", steps: in
 def encode_pair_edit(pipe, in1_path, in2_path, te_dir, stem, prompt, img_size: int = 0,
                      first: bool = False, model_config: str = "",
                      usm_radius: float = 0.0) -> dict:
-    """Phase A, one pair of the qwen-2511 edit family: the same scheme as
+    """Phase A, one pair of the edit families (gguf-qwen, qwen25-nunchaku,
+    longcat-gguf): the same scheme as
     encode_pair_te(), but the conditioning is the edit node's (context +
     reference latent + start latent) -- see encode_edit_conditioning().
     Returns {"ok", "skipped", "elapsed", "msg"}.
@@ -1610,8 +1643,8 @@ def encode_pair_edit(pipe, in1_path, in2_path, te_dir, stem, prompt, img_size: i
         return {"ok": True, "skipped": True, "elapsed": 0.0, "msg": "too dark"}
 
     res = _encode_edit_conditioning(pipe, canvas["image"], prompt)
-    comfy_bridge.save_edit_conditioning(
-        te_path, res["conditioning"], res["latent"], prompt=prompt,
+    _save_edit_conditioning(
+        pipe, te_path, res, prompt,
         meta={"source": os.path.basename(src), "model_config": model_config,
               "pair_geometry": json.dumps(canvas["geom"], separators=(",", ":"))})
 
@@ -1625,7 +1658,7 @@ def encode_pair_edit(pipe, in1_path, in2_path, te_dir, stem, prompt, img_size: i
 def colorize_pair_edit_from_te(pipe, te_dir, stem, out1_path, out2_path="",
                                steps: int = 4, seed: int = 42,
                                first: bool = False) -> dict:
-    """Phase B, one pair of the qwen-2511 edit family: sample + decode the
+    """Phase B, one pair of the edit families: sample + decode the
     cached edit conditioning, split the canvas back and save each frame at its
     original size. Same contract as colorize_pair_from_te(). Returns
     {"ok", "skipped", "elapsed", "msg", "written"}.
@@ -1660,7 +1693,7 @@ def colorize_pair_edit_from_te(pipe, te_dir, stem, out1_path, out2_path="",
 
     t0 = time.perf_counter()
     try:
-        loaded = comfy_bridge.load_edit_conditioning(te_path)
+        loaded = _load_edit_conditioning(pipe, te_path)
     except ValueError as exc:
         logger.warning("colorize_pair_edit_from_te: %s: %s", stem, exc)
         return {"ok": True, "skipped": True, "elapsed": 0.0, "written": [],

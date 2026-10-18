@@ -316,7 +316,8 @@ canvas is split back *after* the transformer -- one TE pass and one sampling
 pass per two frames instead of one of each per frame. The pair shares the
 single flow's area budget, so each frame is colorized at about half that
 budget's resolution. It applies to every split-TE family (`qwen21-viggle`,
-`qwen21-turbo`, `gguf-qwen`); models without split-TE support never see the
+`qwen21-turbo`, `gguf-qwen`, `qwen25-nunchaku`, `longcat-gguf`, `flux2`);
+models without split-TE support never see the
 option, because the flag only lives in the configs of the families that use
 it.
 
@@ -326,7 +327,8 @@ it.
 flows work at: per frame in the single flow, per merged canvas in the paired
 one. Raising it keeps more spatial detail, at a cost roughly proportional to
 the area increase (clamped to `256`–`2048`, snapped to multiples of 32). It
-applies to `qwen21-viggle` / `qwen21-turbo`; for `gguf-qwen` the working size
+applies to `qwen21-viggle` / `qwen21-turbo`; for `gguf-qwen`, `qwen25-nunchaku`
+and `longcat-gguf` the working size
 comes from the edit node's own image scale, so the key is ignored there.
 Changing it invalidates the conditioning cache automatically (the value is
 part of the cache key), so the next run re-encodes and does not mix
@@ -451,5 +453,5 @@ It only pays off for the **int4 flux2 checkpoint**, so only
 | `steps`                                   |          | **GGUF**: inference steps (`4` with LoRA, `20` without). **qwen21-viggle**: documents the native step count only, not consumed at load time. **qwen21-turbo**: fixed at 8 by the checkpoint's own schedule. **flux2**: documents the Turbo LoRA's distilled count (`2`) |
 | `vae_name`                                |          | **GGUF / qwen21-viggle / qwen21-turbo / flux2**: VAE filename (flux2 default: the small decoder)                                                    |
 | `hf_*`                                    |          | **GGUF / qwen21-viggle / qwen21-turbo / flux2**: HuggingFace repo names for auto-download                        |
-| `fast_split_TE`                           |          | **Split-TE families** (`qwen21-viggle` / `qwen21-turbo` / `gguf-qwen` / `qwen25-nunchaku` / `flux2`): `true` (or `"on"`/`"1"`/`"yes"`) makes the Fast Pipeline pair consecutive frames -- merged before the text encoder, split back after the transformer. Default off; all four flux2 configs ship it on |
+| `fast_split_TE`                           |          | **Split-TE families** (`qwen21-viggle` / `qwen21-turbo` / `gguf-qwen` / `qwen25-nunchaku` / `longcat-gguf` / `flux2`): `true` (or `"on"`/`"1"`/`"yes"`) makes the Fast Pipeline pair consecutive frames -- merged before the text encoder, split back after the transformer. Default off; all four flux2 configs ship it on. The 2511 edit families ignore `split_TE_resolution` (the node's own ~1 Mpx scale decides) |
 | `split_TE_resolution`                     |          | **qwen21-viggle / qwen21-turbo / flux2**: area budget of the split-TE flow (default `1024`; per frame in the single flow, per merged canvas in the paired one). Clamped to 256–2048, snapped to 32 |

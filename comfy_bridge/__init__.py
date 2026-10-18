@@ -1090,6 +1090,37 @@ def colorize_qwen25_nunchaku_from_conditioning(pipeline, conditioning, latent_di
         return _edit_to_pil(img_t)
 
 
+# LongCat Image Edit Turbo (longcat-gguf): the split flow lives in its own
+# module (comfy_bridge/longcat_colorize.py) because the family loads through
+# the GGUF nodes; these wrappers keep the family dispatch in one place.
+
+def encode_longcat_conditioning(pipeline, image, prompt):
+    """Phase A of the split flow for longcat-gguf: conditioning + start latent
+    of one image, ready for save_longcat_conditioning()."""
+    from .longcat_colorize import encode_conditioning
+    return encode_conditioning(pipeline, image, prompt)
+
+
+def colorize_longcat_from_conditioning(pipeline, conditioning, latent_dict, steps=8, seed=42):
+    """Phase B of the split flow for longcat-gguf: sample + decode one cached
+    conditioning. Returns the colorized PIL image."""
+    from .longcat_colorize import colorize_from_conditioning
+    return colorize_from_conditioning(pipeline, conditioning, latent_dict, steps=steps, seed=seed)
+
+
+def save_longcat_conditioning(path, conditioning, latent_dict, prompt="", meta=None):
+    """Save a longcat conditioning (its own on-disk kind: the guidance and
+    reference-latent method travel in the metadata)."""
+    from .longcat_colorize import save_conditioning
+    return save_conditioning(path, conditioning, latent_dict, prompt=prompt, meta=meta)
+
+
+def load_longcat_conditioning(path):
+    """Load a conditioning saved by save_longcat_conditioning()."""
+    from .longcat_colorize import load_conditioning
+    return load_conditioning(path)
+
+
 def save_viggle_conditioning(path, conditioning, latent_dict, prompt="", prompt_original="", meta=None):
     """Save a conditioning produced by encode_viggle_conditioning() as one
     .safetensors file (float32 round-trip, ~1.4 MB per 1024-budget frame).

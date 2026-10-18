@@ -668,20 +668,20 @@ class ColorizeService:
     def encode_frame_edit(self, in_path: str, te_dir: str, stem: str, prompt: str,
                           img_size: int = 0, first: bool = False,
                           usm_radius: float = 0.0) -> dict:
-        """Phase A (single frame) of the split colorize for the Qwen-Image-Edit
-        2511 family (gguf-qwen): cache the conditioning of one frame under
-        te_dir/<stem>.safetensors (the edit node's context + reference latent +
-        start latent, ~21 MB/frame); first=True drops the loaded models so the
-        TE + VAE start clean. Already-cached frames are skipped (resume). The
-        GUI drives this frame by frame, in chunks, so progress and cancel stay
-        responsive.
+        """Phase A (single frame) of the split colorize for the edit families
+        (gguf-qwen, qwen25-nunchaku, longcat-gguf): cache the conditioning of
+        one frame under te_dir/<stem>.safetensors (context + reference latent +
+        start latent; longcat also keeps its guidance in the file metadata);
+        first=True drops the loaded models so the TE + VAE start clean.
+        Already-cached frames are skipped (resume). The GUI drives this frame
+        by frame, in chunks, so progress and cancel stay responsive.
         """
         if self._pipeline is None:
             return {"ok": False, "skipped": False, "elapsed": 0.0, "msg": "Pipeline not loaded"}
-        if self._pipeline_model_name not in ("gguf-qwen", "qwen25-nunchaku"):
+        if self._pipeline_model_name not in ("gguf-qwen", "qwen25-nunchaku", "longcat-gguf"):
             return {"ok": False, "skipped": False, "elapsed": 0.0,
                     "msg": "encode_frame_edit requires an edit-family pipeline "
-                           "(gguf-qwen / qwen25-nunchaku)"}
+                           "(gguf-qwen / qwen25-nunchaku / longcat-gguf)"}
         try:
             from dit_colorize_main import encode_frame_edit as _encode_frame_edit
             res = _encode_frame_edit(
@@ -699,17 +699,17 @@ class ColorizeService:
     def colorize_frame_edit_from_te(self, te_dir: str, stem: str, out_path: str,
                                     steps: int = 4, seed: int = 42,
                                     first: bool = False) -> dict:
-        """Phase B (single frame) of the split colorize for the Qwen-Image-Edit
-        2511 family (gguf-qwen): sample + decode one cached conditioning into
-        out_path; first=True drops the loaded models so the UNet + VAE start
-        clean. Existing outputs are skipped (resume).
+        """Phase B (single frame) of the split colorize for the edit families
+        (gguf-qwen, qwen25-nunchaku, longcat-gguf): sample + decode one cached
+        conditioning into out_path; first=True drops the loaded models so the
+        UNet + VAE start clean. Existing outputs are skipped (resume).
         """
         if self._pipeline is None:
             return {"ok": False, "skipped": False, "elapsed": 0.0, "msg": "Pipeline not loaded"}
-        if self._pipeline_model_name not in ("gguf-qwen", "qwen25-nunchaku"):
+        if self._pipeline_model_name not in ("gguf-qwen", "qwen25-nunchaku", "longcat-gguf"):
             return {"ok": False, "skipped": False, "elapsed": 0.0,
                     "msg": "colorize_frame_edit_from_te requires an edit-family "
-                           "pipeline (gguf-qwen / qwen25-nunchaku)"}
+                           "pipeline (gguf-qwen / qwen25-nunchaku / longcat-gguf)"}
         try:
             from dit_colorize_main import colorize_frame_edit_from_te as _colorize_frame_edit_from_te
             res = _colorize_frame_edit_from_te(
@@ -795,15 +795,16 @@ class ColorizeService:
     def encode_pair_edit(self, in1_path: str, in2_path: str, te_dir: str, stem: str,
                          prompt: str, img_size: int = 0, first: bool = False,
                          usm_radius: float = 0.0) -> dict:
-        """Phase A (one pair), qwen-2511 (gguf-qwen) family: the same paired
-        scheme as encode_pair_te(), with the edit node's conditioning.
+        """Phase A (one pair), edit families (gguf-qwen, qwen25-nunchaku,
+        longcat-gguf): the same paired scheme as encode_pair_te(), with the
+        edit node's conditioning.
         """
         if self._pipeline is None:
             return {"ok": False, "skipped": False, "elapsed": 0.0, "msg": "Pipeline not loaded"}
-        if self._pipeline_model_name not in ("gguf-qwen", "qwen25-nunchaku"):
+        if self._pipeline_model_name not in ("gguf-qwen", "qwen25-nunchaku", "longcat-gguf"):
             return {"ok": False, "skipped": False, "elapsed": 0.0,
                     "msg": "encode_pair_edit requires an edit-family pipeline "
-                           "(gguf-qwen / qwen25-nunchaku)"}
+                           "(gguf-qwen / qwen25-nunchaku / longcat-gguf)"}
         try:
             from dit_colorize_main import encode_pair_edit as _encode_pair_edit
             res = _encode_pair_edit(
@@ -821,17 +822,18 @@ class ColorizeService:
     def colorize_pair_edit_from_te(self, te_dir: str, stem: str, out1_path: str,
                                    out2_path: str = "", steps: int = 4,
                                    seed: int = 42, first: bool = False) -> dict:
-        """Phase B (one pair), qwen-2511 (gguf-qwen) family: sample + decode the
-        cached edit conditioning and split the canvas back into the frames; a
-        pair whose expected outputs all exist is skipped (resume).
+        """Phase B (one pair), edit families (gguf-qwen, qwen25-nunchaku,
+        longcat-gguf): sample + decode the cached edit conditioning and split
+        the canvas back into the frames; a pair whose expected outputs all
+        exist is skipped (resume).
         """
         if self._pipeline is None:
             return {"ok": False, "skipped": False, "elapsed": 0.0, "written": [],
                     "msg": "Pipeline not loaded"}
-        if self._pipeline_model_name not in ("gguf-qwen", "qwen25-nunchaku"):
+        if self._pipeline_model_name not in ("gguf-qwen", "qwen25-nunchaku", "longcat-gguf"):
             return {"ok": False, "skipped": False, "elapsed": 0.0, "written": [],
                     "msg": "colorize_pair_edit_from_te requires an edit-family "
-                           "pipeline (gguf-qwen / qwen25-nunchaku)"}
+                           "pipeline (gguf-qwen / qwen25-nunchaku / longcat-gguf)"}
         try:
             from dit_colorize_main import colorize_pair_edit_from_te as _colorize_pair_edit_from_te
             res = _colorize_pair_edit_from_te(

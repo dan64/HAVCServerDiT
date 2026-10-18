@@ -10,6 +10,12 @@ from . import _bootstrap
 
 logger = logging.getLogger(__name__)
 
+# Distilled guidance baked into the LongCat-Image-Edit-Turbo graph (the
+# FluxGuidance node of the reference workflow): it travels in the cached
+# conditioning, so the split flow has to restore it too.
+GUIDANCE = 2.5
+REFERENCE_LATENTS_METHOD = "index"
+
 # ---------------------------------------------------------------------------
 # Cached pipeline state (loaded once, reused across calls)
 # ---------------------------------------------------------------------------
@@ -188,3 +194,163 @@ def colorize(pipeline, image, prompt="colorize this image", steps=8, seed=42):
         img_np = img_t.cpu().float().numpy()
     img_np = np.clip(img_np, 0, 1)
     return Image.fromarray((img_np * 255).astype(np.uint8))
+
+
+# ---------------------------------------------------------------------------
+# Split colorize (Fast Pipeline): phase A caches the conditioning, phase B
+# samples from it, so the TE + VAE and the UNet + VAE each stay resident for
+# a whole batch instead of alternating per image.
+# ---------------------------------------------------------------------------
+
+def _prepare(image):
+    """The live path's prologue: RGB float tensor + FluxKontextImageScale
+    (the ~1 Mpx Kontext snap the VAE and the text encoder both see)."""
+    from . import _edit_prepare
+
+    return _edit_prepare(image)
+
+
+def _start_latent(img_scaled):
+    """The empty latent the live path feeds KSampler (same dimensions as the
+    scaled image, empty: the sampler adds the noise)."""
+    import nodes as cn
+
+    if img_scaled.ndim == 4:
+        _, h, w = img_scaled.shape[:3]
+    else:
+        h, w = img_scaled.shape[:2]
+    latent = cn.EmptyLatentImage().generate(width=int(w), height=int(h), batch_size=1)
+    return latent[0]
+
+
+def _encode_positive(pipeline, img_scaled, prompt):
+    """The positive half of the live graph: EditPlus encode -> FluxGuidance ->
+    reference-latent method. The negative pass is not computed: KSampler runs
+    at cfg=1.0 and comfy/samplers.py takes the cfg1 fast path (uncond=None),
+    so it would be a full text-encoder pass thrown away (the same saving the
+    edit family already makes)."""
+    pos_out = pipeline["_textencode"]().EXECUTE_NORMALIZED(
+        prompt=prompt,
+        clip=pipeline["clip"],
+        vae=pipeline["vae"],
+        image1=img_scaled,
+    )
+    positive_raw = get_value_at_index(pos_out, 0)
+    fg_pos_out = pipeline["_fluxguidance"]().EXECUTE_NORMALIZED(
+        guidance=GUIDANCE, conditioning=positive_raw,
+    )
+    positive = get_value_at_index(fg_pos_out, 0)
+    mref_pos_out = pipeline["_multiref"]().EXECUTE_NORMALIZED(
+        reference_latents_method=REFERENCE_LATENTS_METHOD, conditioning=positive,
+    )
+    return get_value_at_index(mref_pos_out, 0)
+
+
+def encode_conditioning(pipeline, image, prompt):
+    """Phase A of the split flow for longcat-gguf: the positive conditioning
+    (context + reference latents + guidance/method values) and the start
+    latent of one image. Returns {"conditioning", "latent"} for
+    save_conditioning() or direct reuse."""
+    with torch.inference_mode():
+        img_scaled = _prepare(image)
+        conditioning = _encode_positive(pipeline, img_scaled, prompt)
+        latent_dict = _start_latent(img_scaled)
+    return {"conditioning": conditioning, "latent": latent_dict}
+
+
+def _decode(img_t):
+    if img_t.ndim == 4:
+        img_np = img_t[0].cpu().float().numpy()
+    else:
+        img_np = img_t.cpu().float().numpy()
+    img_np = np.clip(img_np, 0, 1)
+    return Image.fromarray((img_np * 255).astype(np.uint8))
+
+
+def colorize_from_conditioning(pipeline, conditioning, latent_dict, steps=8, seed=42):
+    """Phase B of the split flow: sample + decode one cached conditioning.
+    Same graph as colorize() (CFGNorm strength 1, euler/simple, cfg 1.0); the
+    positive is passed in both slots because cfg 1.0 never reads the second
+    one. Returns the colorized PIL image."""
+    import nodes as cn
+
+    with torch.inference_mode():
+        cfgnorm_out = pipeline["_cfgnorm"]().EXECUTE_NORMALIZED(
+            strength=1, pre_cfg=False, model=pipeline["unet"],
+        )
+        model_patched = get_value_at_index(cfgnorm_out, 0)
+
+        sampled = cn.KSampler().sample(
+            seed=seed, steps=steps, cfg=1.0,
+            sampler_name="euler", scheduler="simple", denoise=1.0,
+            model=model_patched,
+            positive=conditioning, negative=conditioning,
+            latent_image=latent_dict,
+        )
+        decoded = cn.VAEDecode().decode(samples=sampled[0], vae=pipeline["vae"])
+        img_t = get_value_at_index(decoded, 0)
+    return _decode(img_t)
+
+
+def save_conditioning(path, conditioning, latent_dict, prompt="", meta=None):
+    """Save an encode_conditioning() result as one .safetensors file.
+
+    The edit-family format cannot be reused: the LongCat sampler also needs
+    the distilled guidance and the reference-latent method, which live in the
+    conditioning dict rather than in tensors -- both are written as metadata.
+    Returns the metadata dict written.
+    """
+    from safetensors.torch import save_file
+
+    extra = conditioning[0][1]
+    reference_latents = extra.get("reference_latents") or []
+    if not reference_latents:
+        raise ValueError("save_conditioning: conditioning has no reference_latents")
+    tensors = {
+        "context": conditioning[0][0].detach().to("cpu").contiguous(),
+        "latent_samples": latent_dict["samples"].detach().to("cpu").contiguous(),
+    }
+    for i, ref in enumerate(reference_latents):
+        tensors[f"reference_latent_{i}"] = ref.detach().to("cpu").contiguous()
+    metadata = {
+        "format": "1",
+        "kind": "longcat-conditioning",
+        "prompt": str(prompt),
+        "guidance": str(extra.get("guidance", GUIDANCE)),
+        "reference_latents_method": str(
+            extra.get("reference_latents_method", REFERENCE_LATENTS_METHOD)),
+        "references": str(len(reference_latents)),
+    }
+    if meta:
+        metadata.update({str(k): str(v) for k, v in meta.items()})
+    save_file(tensors, path, metadata=metadata)
+    return metadata
+
+
+def load_conditioning(path):
+    """Load a conditioning saved by save_conditioning(). Returns
+    {"conditioning", "latent", "meta"} in the structure the sampler expects.
+    Raises ValueError for any other conditioning kind (an edit-family file in
+    the same folder, for instance)."""
+    import comfy.model_management
+    from safetensors import safe_open
+
+    with safe_open(path, framework="pt", device="cpu") as f:
+        meta = dict(f.metadata() or {})
+        if meta.get("kind") != "longcat-conditioning":
+            raise ValueError("load_conditioning: not a longcat conditioning file")
+        tensors = {k: f.get_tensor(k) for k in f.keys()}
+
+    device = comfy.model_management.get_torch_device()
+    count = int(meta.get("references", "1") or "1")
+    reference_latents = [tensors[f"reference_latent_{i}"].to(device)
+                         for i in range(count)]
+    conditioning = [[tensors["context"].to(device), {
+        "pooled_output": None,
+        "reference_latents": reference_latents,
+        "guidance": float(meta.get("guidance", GUIDANCE)),
+        "reference_latents_method": meta.get(
+            "reference_latents_method", REFERENCE_LATENTS_METHOD),
+    }]]
+    latent_dict = {"samples": tensors["latent_samples"].to(device)}
+    return {"conditioning": conditioning, "latent": latent_dict, "meta": meta}

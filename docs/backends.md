@@ -4,7 +4,7 @@ Seven backends, one API — pick the one that fits your hardware.
 
 Each backend below shows a side-by-side comparison on the **same frame**: the ground-truth (color) source on the left, and that backend's colorization of it on the right — a quick way to judge how well each model colors known objects.
 
-> ¹ Measured with **Fast Pipeline** — for `qwen21-viggle`, `qwen21-turbo`, `gguf-qwen`, `qwen25-nunchaku` and `flux2` the cached text-encoder split (paired for `qwen21-turbo`'s fast variant and for `flux2`), for `nunchaku-qwen` paired inference (two frames per forward pass) — at the backend's fastest recommended step count, warm-up excluded. ² `longcat-gguf` has no Fast Pipeline path (falls back to per-image processing, see [What's New](whats-new.md)) — its figure is a genuine single-image time, not directly comparable to the Fast Pipeline figures above.
+> ¹ Measured with **Fast Pipeline** — for `qwen21-viggle`, `qwen21-turbo`, `gguf-qwen`, `qwen25-nunchaku`, `longcat-gguf` and `flux2` the cached text-encoder split (paired for `qwen21-turbo`'s fast variant, for `flux2`, for the `qwen25-nunchaku` `-fast` configs and for `longcat-gguf` with `fast_split_TE`), for `nunchaku-qwen` paired inference (two frames per forward pass) — at the backend's fastest recommended step count, warm-up excluded. ² `longcat-gguf`'s figure is its single-image live time: with Fast Pipeline it drops to ~12 s/frame (and ~7.5 paired, see its section).
 
 > **Recommended**: **qwen21-viggle** and **nunchaku-qwen** are both recommended for production use. Thanks to recent code optimizations — Dynamic VRAM and the text-encoder (TE) split — **qwen21-viggle** is now the fastest backend: **1.7 sec/frame** with _Fast Pipeline_ (~3.5 sec/frame at the fastest usable step count, `steps=2`, without it; see the `⚠️ Fast Pipeline` note below) — and has the **lowest minimum hardware requirements**: **12 GB VRAM / 32 GB RAM** (14GB+ VRAM on the standard path). The other backends that also fit a 12 GB card are far slower — `qwen-2511_q3` at ~7 sec/frame, `longcat-gguf` at ~12 sec/frame — so at that VRAM class viggle is not just the fastest, it is in a different league. `nunchaku-qwen` runs at about **4 sec/frame** using its paired _Fast Pipeline_ (`steps=2`) and needs 16GB+ VRAM / 64GB+ RAM. **`gguf-qwen`** (Qwen-Image-Edit 2511) now also supports the cached-TE split: **~7.3 sec/frame** against ~10.5 sec/frame for the standard path (~1.4×, 17-frame test at 2 steps), on a 16 GB+ GPU / 48 GB+ RAM for the recommended `qwen-2511_int8` config (12 GB+ with `qwen-2511_q3`). **`qwen21-turbo`** is the rendition-maximizing option — **~4.5 sec/frame** on the single split, **~2.3** with the paired `fast_split_TE` one — richer colors than the viggle family, but noticeably less stable between similar frames (see the field verdict below). `longcat-gguf` remain the choice for VRAM-constrained setups where neither of the above fits, at a real speed cost (see the `⚠️ Experimental` note under GGUF below). **`flux2`** (2.6.0) adds the FLUX.2-dev family: 16 GB+ VRAM / 64 GB+ RAM, **~4.0 s/frame** on the int4 config with `"vram_headroom": 3` (~5.5 on fp8 mixed) — see its section below. **`qwen25-nunchaku`** (2.7.0) runs the same Qwen-Image-Edit models through the **ComfyUI-nunchaku node**: **~4.1–4.4 s/frame** on the paired `-fast` configs and ~7.4–9.2 on the single-frame ones, on an RTX 50 card with 16 GB+ VRAM — its **2509** config is the pick of the family, while for 2511 the reference stays `qwen-2511_int8` (see the field verdict in its section).
 >
@@ -190,9 +190,21 @@ with a plain and a `-fast` (paired split) variant:
 > point in it (Q5/Q6 were retired: anyone with the RAM for them is better off
 > with another backend; below Q3 the quant starts to show).
 > All files are auto-downloaded on first run.
+>
+> **Fast Pipeline is supported since 2026-10-18** (cached EditPlus
+> conditioning, `ref_te_edit/`): phase A runs the text encoder + VAE over the
+> batch, phase B samples with the UNet + VAE resident — and the split drops
+> the negative text-encoder pass the live path computed for a `cfg=1.0`
+> sampler that never reads it. Measured on an RTX 5070 Ti 16 GB, Q4_K_M,
+> 8 steps, ~1 Mpx frames (4-frame batch, first-frame load included):
+> **14.2 → 12.1 s/frame** live → split (~**1.17×**), and **7.5 s/frame** with the
+> paired variant (`fast_split_TE`, two frames
+> share the canvas) — ~**1.9×** the live path. The split output is
+> **bit-identical** to the live one (same graph, same seed).
 > 
 > See `config/longcat_gguf_q3.json` / `longcat_gguf_q4.json` — the general
-> rule: lower quant = less VRAM.
+> rule: lower quant = less VRAM. To pair consecutive frames, add
+> `"fast_split_TE": true` (see [Pipeline Configuration](configuration.md)).
 > Launch with `run_server_longcat.cmd` (Q4_K_M) or `start_server.cmd longcat|longcat-q3`.
 
 ### qwen21-viggle : ~1.7 sec/frame with Fast Pipeline, ~3.5 without (Qwen-Image-2.1 int8 ConvRot)

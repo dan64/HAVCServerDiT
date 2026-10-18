@@ -35,6 +35,11 @@ checkpoints and same prompt). Field verdict 2026-10-18: the paired variants are
 faster but color **less accurately and less stably** — a low-end option, since
 this family is meant for hardware where the other backends do not fit.
 
+**LongCat is the fallback for small machines, and it goes low**: the Q3
+checkpoint runs on **8 GB of VRAM with 16 GB of RAM** (field-tested), which is
+why the installer now selects `longcat_gguf_q3` by default below **24 GB of RAM
+or 12 GB of VRAM**; the wizard quotes those minimums in the fallback message.
+
 **The base `qwen21_viggle` config was retired** as redundant: the viggle
 family ships only the merged-LoRA checkpoints (`-soft`/`-sharp` × int8/q4,
 plus `soft-fast_q4`). A settings file that still points at the old name is

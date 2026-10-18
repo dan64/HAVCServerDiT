@@ -57,6 +57,19 @@ public sealed class Preflight
     private const long LighterModelRamBytes = 24L * 1024 * 1024 * 1024;  // 24 GiB
 
     /// <summary>
+    /// What the lighter model itself needs: longcat-gguf Q3 runs on an 8 GB
+    /// card with 16 GB of RAM (author's field test, 2026-10-18). Quoted in the
+    /// wizard so a user below the thresholds knows what the fallback buys.
+    /// </summary>
+    private const long LighterModelMinVramMiB = 8 * 1024;                  // 8 GiB
+    private const long LighterModelMinRamBytes = 16L * 1024 * 1024 * 1024;  // 16 GiB
+
+    /// <summary>"8.0 GB of VRAM and 16.0 GB of RAM" — the fallback's own minimums.</summary>
+    public static string LighterModelRequirementsText()
+        => $"{FormatBytes(LighterModelMinVramMiB * 1024 * 1024)} of VRAM and "
+           + $"{FormatBytes(LighterModelMinRamBytes)} of RAM";
+
+    /// <summary>
     /// At or above this much system RAM the model files stay cached in memory
     /// across phases, so a rotating disk only costs the first load. Below it
     /// they are streamed from disk while running (measured on an RTX 3060 with
@@ -101,7 +114,8 @@ public sealed class Preflight
                     + (enough
                         ? $"meets the default model ({DefaultModelName}) requirement of at least {requirement}"
                         : $"below the {requirement} required by {DefaultModelName}; the installer will "
-                          + $"use {LighterModelName} (Q3) as the default model instead — you can still pick another model in the HAVC GUI")));
+                          + $"use {LighterModelName} (Q3) as the default model instead, which runs from "
+                          + $"{LighterModelRequirementsText()} — you can still pick another model in the HAVC GUI")));
             }
         }
         else
@@ -129,7 +143,8 @@ public sealed class Preflight
                     ? $"meets the default model ({DefaultModelName}) requirement of at least {ramRequirement}"
                     : $"below the {ramRequirement} required by {DefaultModelName}"
                       + (defaultModel == LighterModelName
-                          ? $"; the installer will use {LighterModelName} (Q3) as the default model instead"
+                          ? $"; the installer will use {LighterModelName} (Q3) as the default model instead, "
+                            + $"which runs from {LighterModelRequirementsText()}"
                           : ""))));
         }
 

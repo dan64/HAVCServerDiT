@@ -41,6 +41,23 @@ public class PreflightTests
     }
 
     [Fact]
+    public void DecideDefaultModel_matches_the_8_gb_16_gb_machine()
+    {
+        // The author's field machine: LongCat Q3 runs there (2026-10-18).
+        Assert.Equal("longcat-gguf", DecideDefaultModel(16 * GiB, 8 * 1024));
+    }
+
+    [Fact]
+    public void LighterModelRequirementsText_quotes_the_field_tested_minimums()
+    {
+        string text = LighterModelRequirementsText();
+        Assert.Contains("8.0 GB", text);
+        Assert.Contains("16.0 GB", text);
+        Assert.Contains("VRAM", text);
+        Assert.Contains("RAM", text);
+    }
+
+    [Fact]
     public void DescribeStorage_warns_on_an_hdd_below_64_gb_of_ram()
     {
         var check = DescribeStorage(StorageKind.Hdd, 32 * GiB);

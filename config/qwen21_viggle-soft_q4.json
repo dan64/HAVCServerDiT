@@ -1,6 +1,6 @@
 {
     "model_name":          "qwen21-viggle",
-    "prompt":              "Add color to this black-and-white image without hesitation regarding the appropriate colors. For any subject, garment, object, or setting where the color is common knowledge or established by convention, confidently apply the expected color; otherwise use natural colors. Color the image by strictly preserving all shapes, outlines, and background details.",
+    "prompt":              "Add colors to this black-and-white image, not to hedge about what colors might be present. For any subject, garment, object, or setting whose color is a matter of common knowledge or strong convention, assign the expected color directly and confidently. Colorize this image using natural colors. Strictly preserve all shapes, edges and background details.",
     "unet_name":           "models/unet/Qwen-Image-2.1-viggle-turbo-v0.3-6step-Q4_K_M.gguf",
     "unet_hf_name":        "Qwen-Image-2.1-viggle-turbo-v0.3-6step-Q4_K_M.gguf",
     "clip_name":           "models/text_encoders/qwen3vl_8b_int8_convrot.safetensors",

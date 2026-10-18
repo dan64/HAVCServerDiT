@@ -32,6 +32,49 @@ on first use.
   layouts also ship the launcher scripts — see
   [Windows launch script](server_usage.md#-windows-launch-script).
 
+### What the installer writes to Windows
+
+The installer is **per-user**: it needs no administrator rights and writes
+no machine-wide settings. Two keys are created under `HKEY_CURRENT_USER`,
+plus the Start Menu / desktop shortcuts (`.lnk` files, not registry entries).
+
+**Install location** — `HKCU\Software\HAVCServerDiT`:
+
+- `InstallDir` — the install folder, e.g. `D:\HAVCServerDiT`. The manager
+  reads it on the next start to find the existing installation (the lookup
+  order is an explicit `--install-dir`, then this key, then
+  `%LOCALAPPDATA%\HAVCServerDiT`).
+
+**Uninstall entry** — `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\HAVCServerDiT`,
+which is what *Settings → Apps* and *Control Panel → Programs and Features*
+list:
+
+- `DisplayName` — `HAVC Server + GUI`
+- `DisplayVersion` — the installed version, e.g. `2.7.0`
+- `Publisher` — `dan64`
+- `DisplayIcon`, `InstallLocation` — icon and folder
+- `UninstallString` — `"<install>\HAVCManager.exe" --uninstall`
+
+Both keys are written at the end of a fresh installation, and the uninstall
+entry is refreshed after a successful update so `DisplayVersion` stays in
+step. **Uninstall removes both keys** (the model files, saved settings and
+pipeline configs are kept unless you tick *Also delete…* in the confirmation).
+*Repair* does not touch them, since the version does not change.
+
+Nothing else is registered: no `HKEY_LOCAL_MACHINE` writes, no `PATH`
+edits, no file associations, no services and no autostart entries. A manual
+setup — `install.cmd`, or `havc-install` on its own — writes no registry
+keys at all; only the manager creates them.
+
+If an install folder is deleted by hand without running *Uninstall*, the two
+keys can be cleared from PowerShell:
+
+```powershell
+Remove-Item 'HKCU:\Software\HAVCServerDiT' -Recurse -ErrorAction SilentlyContinue
+Remove-Item 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\HAVCServerDiT' `
+    -Recurse -ErrorAction SilentlyContinue
+```
+
 ## Manual installation
 
 For advanced users and development: clone the repository and run

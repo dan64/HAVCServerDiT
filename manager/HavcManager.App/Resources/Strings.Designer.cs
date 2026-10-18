@@ -44,6 +44,18 @@ public static class Strings
 
     public static string FinishVersionLabel => ResourceManager.GetString("FinishVersionLabel")!;
 
+    public static string FolderDriveMissingMessage => ResourceManager.GetString("FolderDriveMissingMessage")!;
+
+    public static string FolderHasInstallMessage => ResourceManager.GetString("FolderHasInstallMessage")!;
+
+    public static string FolderHasInstallTitle => ResourceManager.GetString("FolderHasInstallTitle")!;
+
+    public static string FolderNotEmptyMessage => ResourceManager.GetString("FolderNotEmptyMessage")!;
+
+    public static string FolderNotEmptyTitle => ResourceManager.GetString("FolderNotEmptyTitle")!;
+
+    public static string FolderPathNotAbsoluteMessage => ResourceManager.GetString("FolderPathNotAbsoluteMessage")!;
+
     public static string FoldersTitle => ResourceManager.GetString("FoldersTitle")!;
 
     public static string ForceStop => ResourceManager.GetString("ForceStop")!;
@@ -103,6 +115,8 @@ public static class Strings
     public static string StorageHddHint => ResourceManager.GetString("StorageHddHint")!;
 
     public static string SummaryFilesLabel => ResourceManager.GetString("SummaryFilesLabel")!;
+
+    public static string SummaryInstallFolderLabel => ResourceManager.GetString("SummaryInstallFolderLabel")!;
 
     public static string SummaryTitle => ResourceManager.GetString("SummaryTitle")!;
 

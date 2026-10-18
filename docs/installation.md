@@ -18,6 +18,10 @@ on first use.
   or offline use you can keep a `release.json` next to the exe, or pass
   `--release-tag vX`.
 - Default install folder: `%LOCALAPPDATA%\HAVCServerDiT` (per-user, no admin).
+  Picking a drive root (**`E:\`**) installs into **`E:\HAVCServerDiT`** — the
+  wizard appends the product folder instead of writing into the root — and a
+  folder that already holds files is **confirmed before anything is written**
+  (an existing HAVC installation found there is called out with its version).
   Model files (`<install>\comfy_bridge\models`), the saved GUI settings
   (`<install>\gui\gui_cmnet2_settings.json`) and the pipeline configs
   (`<install>\config\`) live in the install folder and are preserved by

@@ -85,9 +85,20 @@ public sealed class WizardViewModel : INotifyPropertyChanged
         set
         {
             if (Set(ref _installDir, value))
+            {
                 RefreshStorageHint();
+                Notify(nameof(InstallFolderSummary));
+            }
         }
     }
+
+    /// <summary>
+    /// The resolved install folder, shown on the summary page: the wizard
+    /// appends the product folder to a drive root (E:\ → E:\HAVCServerDiT),
+    /// so the path the installer will use is visible before it runs.
+    /// </summary>
+    public string InstallFolderSummary => string.Format(
+        CultureInfo.InvariantCulture, Strings.SummaryInstallFolderLabel, InstallDir);
 
     public bool DesktopShortcut
     {
@@ -324,14 +335,40 @@ public sealed class WizardViewModel : INotifyPropertyChanged
         Notify(nameof(CanContinueFromPreflight));
     }
 
+    /// <summary>
+    /// Called when the folder picker returns a folder: a drive root becomes
+    /// <c>&lt;drive&gt;\HAVCServerDiT</c> (2026-10-18), so picking a drive
+    /// installs into a dedicated folder instead of the drive root.
+    /// </summary>
+    public void ChooseInstallFolder(string picked)
+        => InstallDir = InstallFolder.Complete(picked);
+
     public async Task ContinueFromFoldersAsync()
     {
-        if (string.IsNullOrWhiteSpace(InstallDir))
+        string folder = InstallFolder.Complete(InstallDir);
+        if (folder.Length == 0)
         {
             ShowError(Strings.ErrorTitle, "Choose the install folder.");
             return;
         }
+        // A drive root becomes <drive>\HAVCServerDiT: show the real target in
+        // the text box rather than installing into the root of the drive.
+        InstallDir = folder;
+        if (!InstallFolder.IsAbsolute(folder))
+        {
+            ShowError(Strings.ErrorTitle, Strings.FolderPathNotAbsoluteMessage);
+            return;
+        }
+        if (!InstallFolder.RootExists(folder))
+        {
+            ShowError(Strings.ErrorTitle, string.Format(
+                CultureInfo.InvariantCulture, Strings.FolderDriveMissingMessage,
+                (Path.GetPathRoot(folder) ?? folder).TrimEnd('\\')));
+            return;
+        }
         if (IsBusy)
+            return;
+        if (!ConfirmInstallFolder(folder))
             return;
         IsBusy = true;
         StatusText = Strings.StatusFetchingManifest;
@@ -657,6 +694,32 @@ public sealed class WizardViewModel : INotifyPropertyChanged
         return app.Dispatcher.Invoke(
             () => MessageDialog.Show(app.MainWindow, Strings.GuiSettingsUpdateTitle,
                 Strings.GuiSettingsUpdateMessage, yesNo: true));
+    }
+
+    /// <summary>
+    /// Confirmation before the installer writes into a folder that already
+    /// holds files (2026-10-18): it never overwrites silently, and an existing
+    /// HAVC installation found there is called out with its version. Returns
+    /// true when the folder is new/empty or the user agreed.
+    /// </summary>
+    private bool ConfirmInstallFolder(string folder)
+    {
+        int entries = InstallFolder.CountEntries(folder);
+        if (entries == 0)
+            return true;
+        var app = Application.Current;
+        if (app is null)
+            return false;
+        bool existing = InstallFolder.ContainsInstallation(folder);
+        string version = InstallFolder.InstallationVersion(folder);
+        string message = existing
+            ? string.Format(CultureInfo.InvariantCulture, Strings.FolderHasInstallMessage,
+                folder, version.Length > 0 ? version : "unknown")
+            : string.Format(CultureInfo.InvariantCulture, Strings.FolderNotEmptyMessage,
+                folder, entries);
+        string title = existing ? Strings.FolderHasInstallTitle : Strings.FolderNotEmptyTitle;
+        return app.Dispatcher.Invoke(
+            () => MessageDialog.Show(app.MainWindow, title, message, yesNo: true));
     }
 
     private static string? RuntimeArchivePath(InstallState state, string cacheDir)

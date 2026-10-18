@@ -109,6 +109,38 @@ No = keep your copies</value>
   <data name="FinishVersionLabel" xml:space="preserve">
     <value>HAVC installed:</value>
   </data>
+  <data name="FolderDriveMissingMessage" xml:space="preserve">
+    <value>The drive {0} is not available. Choose another folder.</value>
+  </data>
+  <data name="FolderHasInstallMessage" xml:space="preserve">
+    <value>The folder
+{0}
+already contains a HAVC installation (version {1}).
+
+Continuing installs over it: the model files, the saved settings and the pipeline configurations are kept, and the program files are replaced.
+
+To update or repair that installation instead, close this wizard and use Update / Repair from the manager's start screen.
+
+Continue?</value>
+  </data>
+  <data name="FolderHasInstallTitle" xml:space="preserve">
+    <value>Existing installation found</value>
+  </data>
+  <data name="FolderNotEmptyMessage" xml:space="preserve">
+    <value>The folder
+{0}
+already contains {1} item(s).
+
+The installer writes its files into this folder and replaces any file with the same name; unrelated files are left alone.
+
+Continue?</value>
+  </data>
+  <data name="FolderNotEmptyTitle" xml:space="preserve">
+    <value>Folder not empty</value>
+  </data>
+  <data name="FolderPathNotAbsoluteMessage" xml:space="preserve">
+    <value>Enter a full path, for example D:\HAVCServerDiT.</value>
+  </data>
   <data name="FoldersTitle" xml:space="preserve">
     <value>Folders</value>
   </data>
@@ -202,6 +234,9 @@ No = keep your settings</value>
   </data>
   <data name="SummaryFilesLabel" xml:space="preserve">
     <value>Will be downloaded:</value>
+  </data>
+  <data name="SummaryInstallFolderLabel" xml:space="preserve">
+    <value>Install folder: {0}</value>
   </data>
   <data name="SummaryTitle" xml:space="preserve">
     <value>Summary</value>

@@ -19,7 +19,7 @@ public partial class FoldersPage : UserControl
             InitialDirectory = ViewModel.InstallDir,
         };
         if (dialog.ShowDialog() == true)
-            ViewModel.InstallDir = dialog.FolderName;
+            ViewModel.ChooseInstallFolder(dialog.FolderName);
     }
 
     private void OnBackClick(object sender, RoutedEventArgs e)

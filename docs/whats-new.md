@@ -1,5 +1,16 @@
 # What's New
 
+### 2026-10-18 (v2.7.2) — One prompt for every Qwen-Image-Edit config
+
+**The nine `qwen-2509-nunchaku*` / `qwen-2511*` configs now carry the same
+wording as the `nunchaku-qwen` ones**: *"Colorize this image, natural colors.
+Strictly preserve all shapes, edges and background details."* All eleven
+Qwen-Image-Edit configs share one prompt, and each `-fast` variant stays
+prompt-matched with its base, so a paired run and a single run send the same
+text. On an existing installation the manager lists the configs that differ
+from the packaged ones and asks before replacing them (the previous files are
+kept as `<name>.json.bak`).
+
 ### 2026-10-18 (v2.7.1) — Installer: a default model per GPU, a safer install folder
 
 **The setup picks the default model from the hardware.** `longcat_gguf_q3`

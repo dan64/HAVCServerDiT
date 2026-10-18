@@ -321,6 +321,12 @@ models without split-TE support never see the
 option, because the flag only lives in the configs of the families that use
 it.
 
+A paired run is processed in chunks of **100 pairs** (200 frames) for the
+`te` families and **50 pairs** (100 frames) for the edit families — the edit
+conditioning is ~21 MB per frame, so both keep the same ~2 GB disk ceiling as
+the single flows (200 and 100 frames respectively). The sizes are fixed; see
+[GUI usage](gui_usage.md#step-3-colorize-frames-ai) for the full list.
+
 #### Split-TE working resolution (`split_TE_resolution`)
 
 `"split_TE_resolution"` (default `1024`) is the area budget the split-TE

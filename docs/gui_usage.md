@@ -606,6 +606,26 @@ Two modes are available:
   itself is a config value: **`split_TE_resolution`** (default 1024), tuned
   against your own material.
 
+**Chunk sizes.** A run is processed in chunks so the cached conditioning on
+disk stays bounded, and a chunk's cache is deleted as soon as its frames are
+colorized:
+
+- single split, `qwen21-viggle` / `qwen21-turbo` / `flux2`: **200 frames** per
+  chunk (`ref_te/`);
+- single split, `gguf-qwen` / `qwen25-nunchaku` / `longcat-gguf`: **100 frames**
+  per chunk (`ref_te_edit/`) — the edit conditioning is ~21 MB per frame, so
+  100 frames already reach ~2 GB;
+- paired (`fast_split_TE`) on the `te` families: **100 pairs** (200 frames) per
+  chunk (`ref_te_pair/`);
+- paired (`fast_split_TE`) on the edit families: **50 pairs** (100 frames) per
+  chunk (`ref_te_pair_edit/`) — the same ~2 GB ceiling as the single edit
+  flow.
+
+In the paired flows the size counts **pairs**, not frames: a chunk of 50 is a
+chunk of 100 frames. The sizes are fixed — there is no config key or GUI
+control for them. A short video therefore runs as one chunk, and only long
+videos show the phase A / phase B alternation in the log.
+
 In both modes, frames already present in `ref_qwen/` are skipped: a rerun
 colorizes only what is missing.
 

@@ -417,7 +417,7 @@ def load_all_configs():
         "mux_all_streams": False,
         "hf_cache":       "",
         "prompt":         "Add colors to this black-and-white image, not to hedge about what colors might be present. For any subject, garment, object, or setting whose color is a matter of common knowledge or strong convention, assign the expected color directly and confidently. Colorize this image using natural colors. Strictly preserve all shapes, edges and background details.",
-        "prompt_from_config": False,  # Tab 2: the model config supplies the prompt
+        "prompt_from_config": True,   # Tab 2: the model config supplies the prompt
         "color_prompt_max":   "30",
         "color_prompts":      [],   # empty = seeded from "prompt" at startup
         "shutdown_on_complete": False,
@@ -3141,7 +3141,7 @@ tab3_layout = [
     [sg.Text("Prompt:"), sg.Multiline(cfg["prompt"], key="-PROMPT-", tooltip="Prompt sent to the model. Keep it short and direct for qwen-2511, detailed for qwen21-viggle / qwen21-turbo.", expand_x=True, size=(58,6), no_scrollbar=True),
      sg.Column([
          [sg.Checkbox("Enable Prompt Config", key="-PROMPT_FROM_CONFIG-",
-                      default=cfg.get("prompt_from_config", False), enable_events=True,
+                      default=cfg.get("prompt_from_config", True), enable_events=True,
                       tooltip="Send the prompt stored in the selected model config (its\n\"prompt\" key) instead of the field and the preset list above/below.\nEvery shipped config carries a wording tuned for its own model. While\nchecked the prompt field shows that text read-only and the preset\ncontrols are disabled.")],
          [sg.Checkbox("Enhance Prompt", key="-ENHANCE_PROMPT-", tooltip="qwen21-viggle only: rewrite the prompt with Qwen3-VL before colorizing (adds ~15-20 s per frame). No effect on other backends.",
                       default=cfg.get("enhance_prompt", False))],

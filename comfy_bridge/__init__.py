@@ -1197,30 +1197,58 @@ def load_viggle_conditioning(path):
 # ---------------------------------------------------------------------------
 # FLUX.2 family (config model_name "flux2")
 #
-# Flux.2-dev transformer (a GGUF quant through the vendored ComfyUI-GGUF
-# recipe, or the Comfy-Org fp8-mixed safetensors) + the Mistral-3 text
-# encoder (CLIPLoader type="flux2") + the Flux2 VAE, with the FLUX.2-Turbo
-# LoRA applied at runtime. Unlike the Qwen families the text encoder never
-# sees the picture: the B&W frame enters the graph as a VAE *reference
-# latent* (what the ReferenceLatent node does), and an empty Flux2 latent is
-# the thing being denoised. Recipe of the reference workflow:
+# Two sub-shapes share the graph and the loader:
 #
-#   LoaderGGUF / UNETLoader -> LoraLoaderModelOnly(Turbo LoRA) -> BasicGuider
-#   CLIPLoader(flux2) -> CLIPTextEncode -> FluxGuidance(4)
-#       -> ReferenceLatent(latent=VAEEncode(frame))
-#   Flux2Scheduler(steps, w, h) + EmptyFlux2LatentImage + RandomNoise
-#       + euler -> SamplerCustomAdvanced -> VAEDecode
+#  * **Flux.2-dev** -- transformer (a GGUF quant through the vendored
+#    ComfyUI-GGUF recipe, or the Comfy-Org fp8-mixed safetensors) + the
+#    **Mistral-3** text encoder (CLIPLoader type="flux2") + the Flux2 VAE,
+#    with the FLUX.2-Turbo LoRA applied at runtime and the embedded guidance
+#    fed through **FluxGuidance**. Recipe of the reference workflow:
+#
+#      LoaderGGUF / UNETLoader -> LoraLoaderModelOnly(Turbo LoRA) -> BasicGuider
+#      CLIPLoader(flux2) -> CLIPTextEncode -> FluxGuidance(4)
+#          -> ReferenceLatent(latent=VAEEncode(frame))
+#      Flux2Scheduler(steps, w, h) + EmptyFlux2LatentImage + RandomNoise
+#          + euler -> SamplerCustomAdvanced -> VAEDecode
+#
+#  * **Flux.2 Klein** (9B / 4B) -- same graph with the **Qwen3** text encoder
+#    (qwen_3_8b_fp8mixed / qwen_3_4b), **no LoRA**, and **no FluxGuidance**:
+#    the reference workflow feeds the prompt straight into a CFGGuider with
+#    cfg=1.0. At cfg 1.0 comfy's sampling_function takes the uncond=None fast
+#    path (comfy/samplers.py), so the negative branch the reference graph
+#    still encodes is never evaluated: BasicGuider with the same positive
+#    conditioning is the same sampling, minus a wasted text-encoder pass.
+#    A config asks for this shape with "guidance": 0 (see _flux2_guidance).
 #
 # The step count is a free parameter here (the Turbo LoRA's native value is
-# 2), and the scheduler derives its mu-shift from the image sequence length,
-# so the sigmas depend on the working size -- see _flux2_sample_decode().
+# 2; Klein's reference is 4), and the scheduler derives its mu-shift from the
+# image sequence length, so the sigmas depend on the working size -- see
+# _flux2_sample_decode().
 # ---------------------------------------------------------------------------
 
 # FluxGuidance input of the reference workflow (Flux.2-dev's embedded
-# guidance); overridable per config with the "guidance" key.
+# guidance); overridable per config with the "guidance" key. 0 (or negative)
+# means **no FluxGuidance node at all**, which is what the Klein checkpoints
+# want: their reference workflow samples through CFGGuider(cfg=1.0) instead.
 FLUX2_DEFAULT_GUIDANCE = 4.0
 
 _FLUX2_COND_KIND = "flux2-conditioning"
+
+
+def _flux2_effective_guidance(pipeline, guidance=None):
+    """The FluxGuidance value for this pipeline, or None when the node must be
+    skipped entirely (Klein). `guidance` wins over the pipeline's own, which
+    wins over the family default; a non-numeric or <= 0 value disables it."""
+    value = guidance
+    if value is None and isinstance(pipeline, dict):
+        value = pipeline.get("_guidance")
+    if value is None:
+        value = FLUX2_DEFAULT_GUIDANCE
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        value = FLUX2_DEFAULT_GUIDANCE
+    return value if value > 0 else None
 
 
 def load_flux2_pipeline(unet_path, clip_path, vae_name="flux2-vae.safetensors", lora_path=None,
@@ -1289,7 +1317,7 @@ def _flux2_prepare(pipeline, img_tensor, prompt, resolution, guidance):
     """The flux2 graph's positive branch for one frame: the area-budget resize
     (same math as _viggle_encode_positive -- ~resolution^2 pixels, snapped to
     32), the VAE encode that becomes the reference latent, the CLIPTextEncode
-    pass and the FluxGuidance value.
+    pass and, when `guidance` is not None, the FluxGuidance value.
 
     Returns (positive_conditioning, latent_dict), with latent_dict the empty
     Flux2 latent the sampler denoises (EmptyFlux2LatentImage, same shape as
@@ -1320,8 +1348,12 @@ def _flux2_prepare(pipeline, img_tensor, prompt, resolution, guidance):
     ref_latent = get_value_at_index(VAEEncode().encode(pixels=s, vae=pipeline["vae"]), 0)["samples"]
 
     positive = get_value_at_index(CLIPTextEncode().encode(clip=pipeline["clip"], text=prompt), 0)
-    positive = get_value_at_index(
-        FluxGuidance().EXECUTE_NORMALIZED(conditioning=positive, guidance=float(guidance)), 0)
+    if guidance is not None:
+        # Flux.2-dev: the embedded guidance travels in the conditioning. Klein
+        # skips this node (its reference workflow samples through CFGGuider
+        # with cfg=1.0, i.e. no guidance at all).
+        positive = get_value_at_index(
+            FluxGuidance().EXECUTE_NORMALIZED(conditioning=positive, guidance=float(guidance)), 0)
     positive = node_helpers.conditioning_set_values(
         positive, {"reference_latents": [ref_latent]}, append=True)
 
@@ -1375,16 +1407,16 @@ def _flux2_sample_decode(pipeline, conditioning, latent_dict, steps, seed):
 def colorize_flux2(pipeline, image, prompt, steps=2, seed=42, resolution=1024, guidance=None):
     """FLUX.2 colorization of one image (the reference workflow's graph).
 
-    `steps` is a free parameter (the Turbo LoRA's native schedule is 2 steps);
-    `guidance` is the FluxGuidance value, defaulting to the pipeline's own
-    (config key "guidance", see load_flux2_pipeline in dit_colorize_main.py).
+    `steps` is a free parameter (the Turbo LoRA's native schedule is 2 steps,
+    the Klein reference is 4); `guidance` is the FluxGuidance value, defaulting
+    to the pipeline's own (config key "guidance", see load_flux2_pipeline in
+    dit_colorize_main.py). A value <= 0 (Klein) skips the FluxGuidance node.
     """
-    if guidance is None:
-        guidance = pipeline.get("_guidance", FLUX2_DEFAULT_GUIDANCE) if isinstance(pipeline, dict) else FLUX2_DEFAULT_GUIDANCE
+    effective = _flux2_effective_guidance(pipeline, guidance)
     with torch.inference_mode():
         img_np = np.array(image.convert("RGB")).astype(np.float32) / 255.0
         img_tensor = torch.from_numpy(img_np).unsqueeze(0)
-        positive, latent_dict = _flux2_prepare(pipeline, img_tensor, prompt, resolution, guidance)
+        positive, latent_dict = _flux2_prepare(pipeline, img_tensor, prompt, resolution, effective)
         result = _flux2_sample_decode(pipeline, positive, latent_dict, steps, seed)
     return result
 
@@ -1394,16 +1426,18 @@ def encode_flux2_conditioning(pipeline, image, prompt, resolution=1024, guidance
     colorize flow): the CLIPTextEncode + FluxGuidance + reference-latent
     structure the live path hands to the sampler, without any sampling.
 
-    The text encoder is prompt-only, so phase A costs one Mistral pass plus
-    one VAE encode. Returns {"conditioning", "latent", "prompt"} (the prompt
-    is passed through unchanged: this family has no prompt enhancer).
+    The text encoder is prompt-only, so phase A costs one text-encoder pass
+    plus one VAE encode (Mistral-3 for Flux.2-dev, Qwen3 for Klein). Returns
+    {"conditioning", "latent", "prompt"} (the prompt is passed through
+    unchanged: this family has no prompt enhancer). A guidance <= 0 (Klein)
+    caches a conditioning with no FluxGuidance value, exactly like the live
+    path.
     """
-    if guidance is None:
-        guidance = pipeline.get("_guidance", FLUX2_DEFAULT_GUIDANCE) if isinstance(pipeline, dict) else FLUX2_DEFAULT_GUIDANCE
+    effective = _flux2_effective_guidance(pipeline, guidance)
     with torch.inference_mode():
         img_np = np.array(image.convert("RGB")).astype(np.float32) / 255.0
         img_tensor = torch.from_numpy(img_np).unsqueeze(0)
-        positive, latent_dict = _flux2_prepare(pipeline, img_tensor, prompt, resolution, guidance)
+        positive, latent_dict = _flux2_prepare(pipeline, img_tensor, prompt, resolution, effective)
     return {"conditioning": positive, "latent": latent_dict, "prompt": prompt}
 
 

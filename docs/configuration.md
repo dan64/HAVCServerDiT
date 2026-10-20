@@ -360,10 +360,9 @@ VRAM aimdo's DynamicVRAM must keep free — see below) and the family's
 safetensors — a `.gguf` here is rejected with an explicit message (no GGUF
 repack of it exists) — and the VAE defaults to the **FLUX.2 small decoder**.
 
-Four configs ship; all set `steps: 2` (the Turbo LoRA's distilled count),
+Three configs ship; all set `steps: 2` (the Turbo LoRA's distilled count),
 `guidance: 4.0` and the **paired split** (`fast_split_TE: true`); they differ
 in the UNet only. Example (`config/flux2_dev_int4.json`):
-
 ```json
 {
     "model_name":          "flux2",
@@ -401,6 +400,33 @@ in the UNet only. Example (`config/flux2_dev_int4.json`):
 > `flux2-vae`'s, so phase A and any conditioning cache already on disk stay
 > valid; only the decoder is smaller and ~1.55× faster (see
 > [What's New](whats-new.md) and [Backends](backends.md)).
+
+#### Flux.2 Klein : `config/flux2_klein_*.json`
+
+The **Flux.2 Klein** checkpoints (9B and 4B, Black Forest Labs) belong to the
+same `model_name: "flux2"` family — same graph, same VAE, same split and paired
+flows — with three differences that live entirely in the config:
+
+- **`guidance: 0`** — Klein's reference workflow has no FluxGuidance node: it
+  samples through `CFGGuider(cfg=1.0)`, which is the same thing as CFG off
+  (comfy's `sampling_function` takes the `uncond=None` fast path at cfg 1.0, so
+  the negative branch the reference graph encodes is never evaluated). The
+  engine skips the node, so the cached conditioning carries no `guidance` key.
+- **a Qwen3 text encoder** instead of Mistral-3: `qwen_3_8b_fp8mixed` for the
+  9B, `qwen_3_4b` for the 4B (same `type="flux2"` loader).
+- **no LoRA** (`lora_path: ""`) and `steps: 4`, Klein's own distilled schedule.
+
+| Config                     | UNet                        | Size    | Text encoder                |
+| -------------------------- | --------------------------- | ------- | --------------------------- |
+| `flux2_klein_9b_fp8.json`  | `flux-2-klein-9b-fp8`       | 8.8 GB  | `qwen_3_8b_fp8mixed`        |
+| `flux2_klein_4b_fp8.json`  | `flux-2-klein-4b-fp8`       | 3.8 GB  | `qwen_3_4b`                 |
+
+> Both downloads come from `black-forest-labs/FLUX.2-klein-{9b,4b}-fp8` (the
+> checkpoint sits at the repo root, hence `unet_hf_name`), the text encoders
+> from `Comfy-Org/flux2-klein-9b` and `Comfy-Org/flux2-klein`, and the VAE from
+> the same BFL small-decoder repo as the dev configs. `vram_headroom` stays
+> `0`: the fp8 checkpoints fit a 16 GB card, so there is nothing to reserve.
+> Launch with `start_server.cmd flux2_klein_9b_fp8`.
 
 #### `vram_headroom` : VRAM reserved for nothing, to keep streaming even
 

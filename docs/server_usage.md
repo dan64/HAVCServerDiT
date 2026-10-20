@@ -84,6 +84,8 @@ historical); select its configs by name:
 start_server.cmd flux2_dev_int4    # FLUX.2-dev int4 ConvRot, 16 GB (recommended)
 start_server.cmd flux2_dev_fp8     # FLUX.2-dev fp8-mixed, 33 GB streamed
 start_server.cmd flux2_dev_q3      # FLUX.2-dev GGUF Q3_K_M
+start_server.cmd flux2_klein_9b_fp8  # Flux.2 Klein 9B fp8 (Qwen3 8B TE, no LoRA)
+start_server.cmd flux2_klein_4b_fp8  # Flux.2 Klein 4B fp8 (Qwen3 4B TE, no LoRA)
 ```
 
 The Qwen-Image-Edit family on the Nunchaku node follows the same rule:
@@ -143,6 +145,7 @@ argument it starts `int4`.
 | Qwen-Image-2.1 (qwen21-viggle) | **6**       | LoRA step schedules: `2`/`4`/`6`/`8` — `6` (the LoRA's native step count) gives the most accurate colors, `2` is the fastest |
 | Qwen-Image-2.1-Turbo (qwen21-turbo) | **8**  | Fixed by the checkpoint's own sigma table (its `sample_sigmas`); the GUI steps setting does not apply. `config/qwen21_turbo_int8.json` sets `fast_split_TE` — Fast Pipeline pairs consecutive frames |
 | FLUX.2-dev (flux2)       | **2**             | The Flux.2 Turbo LoRA's distilled step count (all four configs ship `steps: 2`); the panel's setting applies. Paired split on by default, `guidance` 4.0 |
+| Flux.2 Klein (flux2)     | **4**             | `flux2_klein_9b_fp8` / `flux2_klein_4b_fp8` — Klein's own distilled schedule (the configs ship `steps: 4`); no LoRA, no FluxGuidance (`guidance: 0`), Qwen3 text encoder |
 | Qwen-Image-Edit, Nunchaku node (qwen25-nunchaku) | **4** | `qwen-2511-nunchaku_fp4` / `qwen-2509-nunchaku_fp4` — the Lightning distilled step count (2509 fused, 2511 via LoRA); the config files ship `steps: 4` |
 
 > **Prompt tip (qwen21-viggle)**: on subjects with a strong color convention

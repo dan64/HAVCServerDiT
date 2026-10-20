@@ -339,6 +339,32 @@ count), `guidance: 4.0` and the **paired split** on (`fast_split_TE`):
 > twice as much per frame. On an 8-frame run the first frame pays the
 > one-time warm-up (~3 min) on every config.
 
+#### Flux.2 Klein 9B / 4B — the same family, no guidance, no LoRA
+
+Two **Flux.2 Klein** checkpoints (Black Forest Labs) ship as extra configs of
+the same `flux2` family — so they get the same split and paired flows, the same
+VAE and the same GUI wiring without a new backend:
+
+| Config                     | UNet                | Size   | Text encoder         | Steps |
+| -------------------------- | ------------------- | ------ | -------------------- | ----- |
+| `flux2_klein_9b_fp8.json`  | `flux-2-klein-9b-fp8` | 8.8 GB | Qwen3 8B fp8-mixed    | 4     |
+| `flux2_klein_4b_fp8.json`  | `flux-2-klein-4b-fp8` | 3.8 GB | Qwen3 4B             | 4     |
+
+> Klein differs from Flux.2-dev in exactly three config keys: the **Qwen3**
+text encoder (both are prompt-only, like the dev family, so the frame still
+reaches the transformer only as a VAE **reference latent**), **no Turbo LoRA**
+(`lora_path: ""`) and **`guidance: 0`**, which skips the FluxGuidance node —
+Klein's reference workflow samples through `CFGGuider(cfg=1.0)`, i.e. with no
+guidance at all. `vram_headroom` stays `0`: the fp8 checkpoints fit a 16 GB
+card.
+>
+> **Not measured yet**: no per-frame timing for either size. The 9B fp8 is
+> about half the dev int4 checkpoint, so it has room to be faster, but treat
+> the speed as unknown until a bench run replaces this note. The 4B is the
+> lightest FLUX.2 option here (~3.8 GB of weights).
+
+Launch with `start_server.cmd flux2_klein_9b_fp8` (or `_4b_fp8`).
+
 #### `vram_headroom` — the int4 checkpoint's setting per VRAM size
 
 `"vram_headroom": N` tells aimdo's DynamicVRAM to keep N GB of VRAM free

@@ -652,7 +652,12 @@ def load_flux2_pipeline(model_name: str, unet_path: str, clip_path: str,
     guidance : the FluxGuidance value of the reference workflow (Flux.2-dev
     has embedded guidance; CFG stays off -- one sampling pass, like the other
     turbo-style families). Carried on the pipeline dict and used by phase A of
-    the split flow, so it is baked into the cached conditioning.
+    the split flow, so it is baked into the cached conditioning. **0 disables
+    the node**, which is what the Flux.2 Klein checkpoints need: their
+    reference workflow samples through CFGGuider(cfg=1.0) with no guidance at
+    all (see the flux2 section of comfy_bridge). The same family therefore
+    serves Flux.2-dev and both Klein sizes, with the Qwen3 text encoders and
+    no LoRA in the Klein configs.
 
     *_hf_name : optional overrides of the assumed HuggingFace paths. The
     defaults follow the Comfy-Org "split_files/<kind>/" layout (and the repo
@@ -701,7 +706,6 @@ def load_flux2_pipeline(model_name: str, unet_path: str, clip_path: str,
     except (TypeError, ValueError):
         pipeline["_guidance"] = 4.0
     return pipeline
-
 
 def upscale_with_lanczos(image, target_size):
     return image.resize(target_size, Image.Resampling.LANCZOS)

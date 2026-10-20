@@ -1,6 +1,6 @@
 {
     "model_name":          "flux2",
-    "prompt":              "Colorize this image, natural skin tones, vibrant environment. Maintain consistency and details.",
+    "prompt":              "Colorize this image, natural colors. Strictly preserve all shapes, edges and background details.",
     "unet_name":           "models/diffusion_models/flux2_dev_fp8mixed.safetensors",
     "unet_hf_name":        "",
     "clip_name":           "models/text_encoders/mistral_3_small_flux2_fp4_mixed.safetensors",

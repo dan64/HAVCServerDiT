@@ -36,12 +36,12 @@ The sensitivity is per-wording and not monotonic: long emphatic prompts can colo
 
 > Colorize this image, natural skin tones, vibrant environment. Maintain consistency and details.
 
-The shipped Qwen-Image-Edit configs carry their own wording (`prompt`), so with
-**Enable Prompt Config** the field and the preset list are not what a run sends:
-the wording in use is *"Colorize this image, natural colors. Strictly preserve
-all shapes, edges and background details."* If it misbehaves on your frames, the
-two prompts above are the ones with side-by-side evidence — try them before
-changing other settings.
+The shipped default is *"Colorize this image, natural colors. Strictly preserve
+all shapes, edges and background details."* — GUI protected preset #1 and the
+`prompt` of every Qwen-Image-Edit and FLUX.2 config. With **Enable Prompt
+Config** the field and the preset list are not what a run sends: the config's
+`prompt` is. If it misbehaves on your frames, the two prompts above are the
+ones with side-by-side evidence — try them before changing other settings.
 
 (Grainy film sources are a separate known trigger — the model can leave them fully B&W; use the **Unsharp Mask** pre-filter, see [GUI usage](gui_usage.md).)
 

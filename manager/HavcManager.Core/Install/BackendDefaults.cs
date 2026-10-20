@@ -5,7 +5,8 @@ namespace HavcManager.Core.Install;
 /// its argument with file-first precedence (<c>config\&lt;name&gt;.json</c>
 /// wins over the historical aliases), so the model chosen by the preflight
 /// (2026-10-18: <c>qwen-2509-nunchaku</c> — fp4 on RTX 50, int4 on RTX 30/40 —
-/// or <c>longcat_gguf_q3</c> on small machines) is addressed by its config
+/// or <c>flux2_klein_4b_int8</c> on small machines, since 2026-10-20)
+/// is addressed by its config
 /// stem directly. The viggle value stays as the historical nominal default
 /// for installs whose stored <c>backend_default</c> predates the new rule.
 /// </summary>
@@ -30,14 +31,20 @@ public static class BackendDefaults
     public const string TurboArg = "qwen21_turbo_int8";
 
     /// <summary>Launcher argument of the lighter model (below the thresholds).</summary>
-    public const string LighterArg = "longcat3";
+    public const string LighterArg = "flux2_klein_4b_int8";
+
+    /// <summary>Launcher alias of the model that held this slot until 2026-10-20.</summary>
+    public const string LongcatArg = "longcat3";
 
     /// <summary>HAVC-Server.cmd argument for a --default-model value (launcher mapping).</summary>
     public static string ArgFor(string? guiModelName) => guiModelName switch
     {
         "qwen25-nunchaku-fp4" => Fp4Arg,
         "qwen25-nunchaku-int4" => Int4Arg,
-        "longcat-gguf" => LighterArg,
+        "flux2-klein-4b-int8" => LighterArg,
+        // A manager built before 2026-10-20 still passes the old nominal name;
+        // keep it pointing at the checkpoint it always meant.
+        "longcat-gguf" => LongcatArg,
         "qwen21-viggle" => ViggleArg,
         "qwen21-turbo" => TurboArg,
         _ => DefaultArg,
@@ -58,8 +65,8 @@ public static class BackendDefaults
 
     /// <summary>
     /// Rewrites a legacy/empty <c>backend_default</c> to the argument of the
-    /// machine's nominal default (fp4 on RTX 50, int4 on RTX 30/40, longcat Q3
-    /// on small machines); an explicit stored value is kept. Used by update and
+    /// machine's nominal default (fp4 on RTX 50, int4 on RTX 30/40,
+    /// flux2-klein-4b-int8 on small machines); an explicit stored value is kept. Used by update and
     /// repair so the saved state catches up with the per-GPU rule of
     /// 2026-10-18 without overriding a choice the user made.
     /// </summary>

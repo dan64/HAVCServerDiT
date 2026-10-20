@@ -21,7 +21,13 @@ public class BackendDefaultsTests
         => Assert.Equal("qwen21_turbo_int8", BackendDefaults.ArgFor("qwen21-turbo"));
 
     [Fact]
-    public void Lighter_model_maps_to_longcat3()
+    public void Lighter_model_maps_to_the_klein_4b_config()
+        => Assert.Equal("flux2_klein_4b_int8",
+            BackendDefaults.ArgFor("flux2-klein-4b-int8"));
+
+    [Fact]
+    public void The_old_light_model_name_still_reaches_longcat()
+        // A manager built before 2026-10-20 passes this nominal value.
         => Assert.Equal("longcat3", BackendDefaults.ArgFor("longcat-gguf"));
 
     [Fact]
@@ -48,7 +54,8 @@ public class BackendDefaultsTests
             BackendDefaults.Resolve("qwen21", "qwen25-nunchaku-fp4"));
         Assert.Equal("qwen-2509-nunchaku_int4",
             BackendDefaults.Resolve("qwen21", "qwen25-nunchaku-int4"));
-        Assert.Equal("longcat3", BackendDefaults.Resolve(null, "longcat-gguf"));
+        Assert.Equal("flux2_klein_4b_int8",
+            BackendDefaults.Resolve(null, "flux2-klein-4b-int8"));
     }
 
     [Fact]

@@ -183,6 +183,7 @@ public class GuiSettingsUpdateTests
         {
             "qwen25-nunchaku-fp4" => "qwen-2509-nunchaku_fp4",
             "qwen25-nunchaku-int4" => "qwen-2509-nunchaku_int4",
+            "flux2-klein-4b-int8" => "flux2_klein_4b_int8",
             "longcat-gguf" => "longcat_gguf_q3",
             "qwen21-turbo" => "qwen21_turbo_int8",
             _ => "qwen21_viggle-soft_int8",

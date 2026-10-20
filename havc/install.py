@@ -152,22 +152,25 @@ CMNET2_DINOV2 = (
 # --default-model value the manager passes. Since 2026-10-18 the installer
 # picks qwen-2509-nunchaku (fp4 on RTX 50, int4 on RTX 30/40) and falls back
 # to longcat-gguf Q3 on small machines (VRAM < 12 GB, or VRAM <= 16 GB with
-# RAM < 24 GB); the manager computes that per machine. This constant is only
-# the CLI fallback when --default-model is not given (int4, the checkpoint
-# that runs on both RTX 30/40 and RTX 50).
+# RAM < 24 GB, and flux2-klein-4b-int8 there since 2026-10-20); the manager
+# computes that per machine. This constant is only the CLI fallback when
+# --default-model is not given (int4, the checkpoint that runs on both
+# RTX 30/40 and RTX 50).
 DEFAULT_MODEL_NAME = "qwen25-nunchaku-int4"
 
 # GUI "Model Config" (the config/ file stem, without .json) seeded/wired for
 # each --default-model value: the config folder is what selects the model.
 # The 2026-10-18 rule seeds `qwen-2509-nunchaku_fp4` on RTX 50 and
 # `qwen-2509-nunchaku_int4` on RTX 30/40 (the manager picks from the GPU);
-# below the thresholds it seeds longcat-gguf Q3. The viggle/turbo values stay
+# below the thresholds it seeds flux2-klein-4b-int8 (since 2026-10-20;
+# longcat-gguf stays for older manager builds). The viggle/turbo values stay
 # for older manager builds (the base `qwen21_viggle` runtime-LoRA config was
 # retired as redundant on 2026-10-18).
 DEFAULT_MODEL_CONFIG = {"qwen25-nunchaku-fp4": "qwen-2509-nunchaku_fp4",
                         "qwen25-nunchaku-int4": "qwen-2509-nunchaku_int4",
                         "qwen21-viggle": "qwen21_viggle-soft_int8",
                         "qwen21-turbo": "qwen21_turbo_int8",
+                        "flux2-klein-4b-int8": "flux2_klein_4b_int8",
                         "longcat-gguf": "longcat_gguf_q3"}
 
 
@@ -1567,8 +1570,8 @@ def main(argv=None) -> int:
                         help="GUI default model seeded/wired in the GUI settings "
                              f"when empty (default: {DEFAULT_MODEL_NAME}; "
                              "qwen25-nunchaku-fp4 / qwen25-nunchaku-int4 seed the "
-                             "qwen-2509-nunchaku configs, longcat-gguf seeds "
-                             "longcat_gguf_q3)")
+                             "qwen-2509-nunchaku configs, flux2-klein-4b-int8 seeds "
+                             "flux2_klein_4b_int8, longcat-gguf seeds longcat_gguf_q3)")
     parser.add_argument("--only", default="",
                         help="run only these steps (comma-separated ids)")
     parser.add_argument("--plan", action="store_true",

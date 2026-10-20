@@ -19,20 +19,20 @@ public class PreflightTests
     }
 
     [Fact]
-    public void DecideDefaultModel_switches_to_longcat_below_12_gb_of_vram()
+    public void DecideDefaultModel_switches_to_the_lighter_model_below_12_gb_of_vram()
     {
         // Low VRAM alone is enough, even with plenty of RAM.
-        Assert.Equal("longcat-gguf", DecideDefaultModel(64 * GiB, 8 * 1024));
-        Assert.Equal("longcat-gguf", DecideDefaultModel(128 * GiB, 11 * 1024));
+        Assert.Equal("flux2-klein-4b-int8", DecideDefaultModel(64 * GiB, 8 * 1024));
+        Assert.Equal("flux2-klein-4b-int8", DecideDefaultModel(128 * GiB, 11 * 1024));
     }
 
     [Fact]
-    public void DecideDefaultModel_switches_to_longcat_on_a_midrange_gpu_with_low_ram()
+    public void DecideDefaultModel_switches_to_the_lighter_model_on_a_midrange_gpu_with_low_ram()
     {
         // VRAM <= 16 GB and RAM < 24 GB (the author's rule of 2026-10-18).
-        Assert.Equal("longcat-gguf", DecideDefaultModel(16 * GiB, 16 * 1024));
-        Assert.Equal("longcat-gguf", DecideDefaultModel(23 * GiB, 12 * 1024));
-        Assert.Equal("longcat-gguf", DecideDefaultModel((long)(23.4 * GiB), 16303));
+        Assert.Equal("flux2-klein-4b-int8", DecideDefaultModel(16 * GiB, 16 * 1024));
+        Assert.Equal("flux2-klein-4b-int8", DecideDefaultModel(23 * GiB, 12 * 1024));
+        Assert.Equal("flux2-klein-4b-int8", DecideDefaultModel((long)(23.4 * GiB), 16303));
     }
 
     [Fact]
@@ -56,13 +56,13 @@ public class PreflightTests
     }
 
     [Fact]
-    public void DecideDefaultModel_uses_longcat_without_a_gpu_reading()
+    public void DecideDefaultModel_uses_the_lighter_model_without_a_gpu_reading()
     {
         // Without VRAM the fp4/int4 half cannot be chosen: the lighter model.
-        Assert.Equal("longcat-gguf", DecideDefaultModel(null));
-        Assert.Equal("longcat-gguf", DecideDefaultModel(null, null));
-        Assert.Equal("longcat-gguf", DecideDefaultModel(64 * GiB, null));
-        Assert.Equal("longcat-gguf", DecideDefaultModel(null, 6 * 1024));
+        Assert.Equal("flux2-klein-4b-int8", DecideDefaultModel(null));
+        Assert.Equal("flux2-klein-4b-int8", DecideDefaultModel(null, null));
+        Assert.Equal("flux2-klein-4b-int8", DecideDefaultModel(64 * GiB, null));
+        Assert.Equal("flux2-klein-4b-int8", DecideDefaultModel(null, 6 * 1024));
     }
 
     [Fact]
@@ -72,8 +72,8 @@ public class PreflightTests
         Assert.Equal("qwen25-nunchaku-int4", DecideDefaultModel((long)(31.9 * GiB), 12288));
         // RTX 5070 Ti 16 GB / 112 GB RAM: fp4.
         Assert.Equal("qwen25-nunchaku-fp4", DecideDefaultModel(112 * GiB, 16303, blackwell: true));
-        // The 8 GB / 16 GB machine: LongCat Q3 runs there.
-        Assert.Equal("longcat-gguf", DecideDefaultModel(16 * GiB, 8 * 1024));
+        // The 8 GB / 16 GB machine: the lighter model runs there.
+        Assert.Equal("flux2-klein-4b-int8", DecideDefaultModel(16 * GiB, 8 * 1024));
     }
 
     [Theory]

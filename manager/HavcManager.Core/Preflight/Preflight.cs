@@ -59,19 +59,24 @@ public sealed class Preflight
     /// <summary>Family label quoted in the wizard messages.</summary>
     public const string DefaultModelFamily = "qwen-2509-nunchaku";
 
-    private const string LighterModelName = "longcat-gguf";  // below the thresholds
+    private const string LighterModelName = "flux2-klein-4b-int8";  // below the thresholds
 
-    // Default-model rule (author decision, 2026-10-18):
-    //   VRAM < 12 GB, or (VRAM <= 16 GB and RAM < 24 GB) -> longcat-gguf (Q3)
+    // Default-model rule (author decision, 2026-10-18; lighter model changed
+    // to Flux.2 Klein 4B INT8 on 2026-10-20):
+    //   VRAM < 12 GB, or (VRAM <= 16 GB and RAM < 24 GB) -> flux2-klein-4b-int8
     //   otherwise -> qwen-2509-nunchaku (fp4 on RTX 50, int4 on RTX 30/40)
     private const long MinDefaultModelVramGiB = 12;
     private const long MaxMidrangeVramGiB = 16;
     private const long MinDefaultModelRamGiB = 24;
 
     /// <summary>
-    /// What the lighter model itself needs: longcat-gguf Q3 runs on an 8 GB
-    /// card with 16 GB of RAM (author's field test, 2026-10-18). Quoted in the
-    /// wizard so a user below the thresholds knows what the fallback buys.
+    /// What the lighter model itself needs. The figures come from the field
+    /// test of longcat-gguf Q3 on an 8 GB card with 16 GB of RAM (2026-10-18);
+    /// Flux.2 Klein 4B INT8 replaced it on 2026-10-20 and is smaller (7.60 GB
+    /// of weights against 8.83 GB, and 3.8 GB against 5.8 GB in phase A, where
+    /// the text encoder is the only model resident), so the same minimums are
+    /// kept as a deliberately conservative statement. Quoted in the wizard so
+    /// a user below the thresholds knows what the fallback buys.
     /// </summary>
     private const long LighterModelMinVramMiB = 8 * 1024;                  // 8 GiB
     private const long LighterModelMinRamBytes = 16L * 1024 * 1024 * 1024;  // 16 GiB
@@ -128,7 +133,7 @@ public sealed class Preflight
                     + (enough
                         ? $"meets the {requirement} minimum of the default model ({DefaultModelFamily})"
                         : $"below the {requirement} minimum of the default model ({DefaultModelFamily}); "
-                          + $"the installer will use {LighterModelName} (Q3) as the default model instead, "
+                          + $"the installer will use {LighterModelName} as the default model instead, "
                           + $"which runs from {LighterModelRequirementsText()} — you can still pick another "
                           + "model in the HAVC GUI")));
             }
@@ -140,9 +145,10 @@ public sealed class Preflight
                 "nvidia-smi not available — install or update the NVIDIA driver"));
         }
 
-        // System RAM / VRAM (rule of 2026-10-18): longcat-gguf (Q3) when the
-        // card has less than 12 GB of VRAM, or when a card up to 16 GB is
-        // paired with less than 24 GB of RAM; otherwise qwen-2509-nunchaku.
+        // System RAM / VRAM (rule of 2026-10-18, lighter model since
+        // 2026-10-20): flux2-klein-4b-int8 when the card has less than 12 GB of
+        // VRAM, or when a card up to 16 GB is paired with less than 24 GB of
+        // RAM; otherwise qwen-2509-nunchaku.
         // Both sizes are rounded to whole GB first: a 32 GB machine reports
         // ~31.9 GB and a 12 GB card 12282 MiB, and neither may be read as
         // just below its own nominal threshold.
@@ -153,22 +159,22 @@ public sealed class Preflight
         {
             long ramGiB = RoundToGiB(ramTotal);
             long? vramGiB = vramMiB is { } value ? RoundMibToGiB(value) : null;
-            bool longcatByRam = vramGiB is { } card
+            bool lighterByRam = vramGiB is { } card
                                 && card <= MaxMidrangeVramGiB
                                 && ramGiB < MinDefaultModelRamGiB;
             string ramRequirement = $"{MinDefaultModelRamGiB} GB";
-            PreflightStatus status = longcatByRam || (vramGiB is null && ramGiB < MinDefaultModelRamGiB)
+            PreflightStatus status = lighterByRam || (vramGiB is null && ramGiB < MinDefaultModelRamGiB)
                 ? PreflightStatus.Warning
                 : PreflightStatus.Ok;
             string detail = $"{FormatBytes(ramTotal)} in total — "
-                + (longcatByRam
+                + (lighterByRam
                     ? $"below the {ramRequirement} the default model ({DefaultModelFamily}) needs on a GPU "
                       + $"with up to {MaxMidrangeVramGiB} GB of VRAM; the installer will use {LighterModelName} "
-                      + $"(Q3) as the default model instead, which runs from {LighterModelRequirementsText()}"
+                      + $"as the default model instead, which runs from {LighterModelRequirementsText()}"
                     : vramGiB is null && ramGiB < MinDefaultModelRamGiB
                         ? $"below the {ramRequirement} requirement of the default model ({DefaultModelFamily}), "
                           + "and the GPU could not be measured; the installer will use "
-                          + $"{LighterModelName} (Q3) as the default model instead"
+                          + $"{LighterModelName} as the default model instead"
                         : ramGiB >= MinDefaultModelRamGiB
                             ? $"meets the {ramRequirement} minimum of the default model ({DefaultModelFamily})"
                             : $"the default model ({DefaultModelFamily}) is kept because the GPU has more "
@@ -239,8 +245,9 @@ public sealed class Preflight
     public static long? TotalVramMiBForThisMachine() => GpuInfoForThisMachine()?.VramMiB;
 
     /// <summary>
-    /// Machine-readable default-model decision (author rule, 2026-10-18):
-    /// longcat-gguf (Q3) when the GPU has less than 12 GB of VRAM, or when a
+    /// Machine-readable default-model decision (author rule, 2026-10-18;
+    /// lighter model changed to Flux.2 Klein 4B INT8 on 2026-10-20):
+    /// flux2-klein-4b-int8 when the GPU has less than 12 GB of VRAM, or when a
     /// GPU up to 16 GB is paired with less than 24 GB of RAM; otherwise
     /// qwen-2509-nunchaku — fp4 on RTX 50 (Blackwell), int4 on RTX 30/40.
     /// RAM and VRAM are rounded to whole GB first (a 32 GB machine reports

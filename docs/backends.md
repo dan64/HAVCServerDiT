@@ -182,12 +182,15 @@ with a plain and a `-fast` (paired split) variant:
 
 > **The lowest hardware requirement in the stack**: the family runs on a
 > machine with **8 GB of VRAM and 16 GB of RAM** (author's field test,
-> 2026-10-18, `longcat_gguf_q3`), which is why the installer picks Q3 as the
-> default model when the GPU has **less than 12 GB of VRAM**, or when it has
-> **up to 16 GB of VRAM and the machine has less than 24 GB of RAM** (the
-> 2026-10-18 rule; above those thresholds the installer picks
-> `qwen-2509-nunchaku`). It is also the slowest
-> backend, so use it when nothing else fits rather than by preference.
+> 2026-10-18, `longcat_gguf_q3`). That test is the proof that the **8 GB / 16 GB
+> class works at all**, and since 2026-10-20 the installer sends that class to
+> `flux2_klein_4b_int8` instead — smaller in weights (7.60 GB against 8.83 GB)
+> and faster — keeping LongCat Q3 available in the GUI for anyone who prefers
+> it. The rule is unchanged: below **less than 12 GB of VRAM**, or **up to
+> 16 GB of VRAM with less than 24 GB of RAM**, the installer picks the light
+> model; above those thresholds it picks `qwen-2509-nunchaku`. LongCat is the
+> slowest backend of the stack, so use it when nothing else fits rather than by
+> preference.
 >
 > LongCat-Image-Edit-Turbo delivers noticeably better colorization than the
 > gguf-qwen model — richer colors, more natural skin tones, and better
@@ -376,9 +379,11 @@ VAE and the same GUI wiring without a new backend:
 > Both are plain downloads — no gate, no HF account needed.
 >
 > **Field verdict (author, 2026-10-20)**: **the 4B is the fastest model in the
-> stack**, and is a candidate to replace `longcat_gguf_q3` as the pick for
-> low-RAM machines (it is also the lightest download: ~3.8 GB of UNet plus
-> 3.6 GB of text encoder). The 9B was not measured against the dev configs.
+> stack** and it is the installer's pick for small machines since 2026-10-20
+> (the rule moved off `longcat_gguf_q3`). It is smaller too: **7.60 GB of
+> weights** (3.79 UNet + 3.58 text encoder + 0.23 VAE) against LongCat Q3's
+> 8.83 GB, and **3.8 GB against 5.8 GB in phase A**, where the text encoder is
+> the only model resident. The 9B was not measured against the dev configs.
 >
 > Klein differs from Flux.2-dev in exactly three config keys: the **Qwen3**
 > text encoder, **no Turbo LoRA** (`lora_path: ""`) and **`guidance: 0`**,

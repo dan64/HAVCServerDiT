@@ -31,6 +31,14 @@ on first use.
   chosen folder is on a hard disk (measured on an RTX 3060 with 32 GB of RAM
   and an HDD: ~65 s per image on the single-frame path against ~4 s on the
   paired split).
+- **The preflight warns; it does not block.** The wizard checks the GPU, its
+  VRAM, the system RAM and the disk, and picks the default model from the
+  hardware. When a machine is below the requirements you get a **warning** and
+  an explanation, and you can still go ahead: the smallest shipped model
+  (`flux2_klein_4b_int8`) needs **8 GB of VRAM and 16 GB of RAM**, and below
+  that the message says so and warns that the weights will be streamed with
+  degraded performance, or that a run may fail. Only a Windows version below
+  10.0.17763 stops the wizard.
 - The manager (installed copy or the setup exe) offers *Open GUI*,
   *Start server*, *Check for updates*, *Repair* and *Uninstall*. Installed
   layouts also ship the launcher scripts — see

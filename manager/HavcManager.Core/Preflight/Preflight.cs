@@ -79,6 +79,7 @@ public sealed class Preflight
     /// a user below the thresholds knows what the fallback buys.
     /// </summary>
     private const long LighterModelMinVramMiB = 8 * 1024;                  // 8 GiB
+    private const long LighterModelMinVramGiB = LighterModelMinVramMiB / 1024;
     private const long LighterModelMinRamBytes = 16L * 1024 * 1024 * 1024;  // 16 GiB
 
     /// <summary>"8 GB of VRAM and 16 GB of RAM" — the fallback's own minimums.</summary>
@@ -121,22 +122,10 @@ public sealed class Preflight
                 $"{gpu.Name}, {gpu.Driver}"
                 + (vramMiB is { } detected ? $", {FormatBytes(detected * 1024 * 1024)}" : "")));
             // The wizard no longer offers a model choice: check the fixed
-            // default model's VRAM requirement (non-blocking warning below).
+            // default model's VRAM requirement (non-blocking warning, see
+            // DescribeVramForDefaultModel).
             if (vramMiB is { } detectedVram)
-            {
-                bool enough = RoundMibToGiB(detectedVram) >= MinDefaultModelVramGiB;
-                string requirement = $"{MinDefaultModelVramGiB} GB";
-                checks.Add(new PreflightCheck(
-                    "VRAM (default model)",
-                    enough ? PreflightStatus.Ok : PreflightStatus.Warning,
-                    $"{FormatBytes(detectedVram * 1024 * 1024)} in total — "
-                    + (enough
-                        ? $"meets the {requirement} minimum of the default model ({DefaultModelFamily})"
-                        : $"below the {requirement} minimum of the default model ({DefaultModelFamily}); "
-                          + $"the installer will use {LighterModelName} as the default model instead, "
-                          + $"which runs from {LighterModelRequirementsText()} — you can still pick another "
-                          + "model in the HAVC GUI")));
-            }
+                checks.Add(DescribeVramForDefaultModel(detectedVram));
         }
         else
         {
@@ -148,40 +137,13 @@ public sealed class Preflight
         // System RAM / VRAM (rule of 2026-10-18, lighter model since
         // 2026-10-20): flux2-klein-4b-int8 when the card has less than 12 GB of
         // VRAM, or when a card up to 16 GB is paired with less than 24 GB of
-        // RAM; otherwise qwen-2509-nunchaku.
-        // Both sizes are rounded to whole GB first: a 32 GB machine reports
-        // ~31.9 GB and a 12 GB card 12282 MiB, and neither may be read as
-        // just below its own nominal threshold.
-        ulong? ramBytes = TotalPhysicalMemoryBytes();
-        long? totalRam = ramBytes is { } ram ? (long)ram : null;
+        // RAM; otherwise qwen-2509-nunchaku. Both sizes are rounded to whole GB
+        // first (a 32 GB machine reports ~31.9 GB, a 12 GB card 12282 MiB), so
+        // a nominal size is never read as just below its own threshold.
+        long? totalRam = TotalPhysicalMemoryBytes() is { } ram ? (long)ram : null;
         string defaultModel = DecideDefaultModel(totalRam, vramMiB, gpu?.Blackwell ?? false);
         if (totalRam is { } ramTotal)
-        {
-            long ramGiB = RoundToGiB(ramTotal);
-            long? vramGiB = vramMiB is { } value ? RoundMibToGiB(value) : null;
-            bool lighterByRam = vramGiB is { } card
-                                && card <= MaxMidrangeVramGiB
-                                && ramGiB < MinDefaultModelRamGiB;
-            string ramRequirement = $"{MinDefaultModelRamGiB} GB";
-            PreflightStatus status = lighterByRam || (vramGiB is null && ramGiB < MinDefaultModelRamGiB)
-                ? PreflightStatus.Warning
-                : PreflightStatus.Ok;
-            string detail = $"{FormatBytes(ramTotal)} in total — "
-                + (lighterByRam
-                    ? $"below the {ramRequirement} the default model ({DefaultModelFamily}) needs on a GPU "
-                      + $"with up to {MaxMidrangeVramGiB} GB of VRAM; the installer will use {LighterModelName} "
-                      + $"as the default model instead, which runs from {LighterModelRequirementsText()}"
-                    : vramGiB is null && ramGiB < MinDefaultModelRamGiB
-                        ? $"below the {ramRequirement} requirement of the default model ({DefaultModelFamily}), "
-                          + "and the GPU could not be measured; the installer will use "
-                          + $"{LighterModelName} as the default model instead"
-                        : ramGiB >= MinDefaultModelRamGiB
-                            ? $"meets the {ramRequirement} minimum of the default model ({DefaultModelFamily})"
-                            : $"the default model ({DefaultModelFamily}) is kept because the GPU has more "
-                              + $"than {MaxMidrangeVramGiB} GB of VRAM; the {ramRequirement} minimum applies to "
-                              + $"GPUs up to {MaxMidrangeVramGiB} GB");
-            checks.Add(new PreflightCheck("System memory (default model)", status, detail));
-        }
+            checks.Add(DescribeRamForDefaultModel(ramTotal, vramMiB));
 
         checks.Add(SpaceCheck("Disk space (install)", installDir, MinInstallBytes));
         if (DescribeStorage(StorageMedia.KindForPath(installDir), totalRam) is { } storage)
@@ -243,6 +205,97 @@ public sealed class Preflight
 
     /// <summary>Total VRAM in MiB via nvidia-smi, or null when it is missing.</summary>
     public static long? TotalVramMiBForThisMachine() => GpuInfoForThisMachine()?.VramMiB;
+
+    /// <summary>
+    /// The VRAM line of the preflight, in three tiers — and it is a
+    /// <b>warning in every tier below the default model</b>, never a gate: the
+    /// decision to install on an undersized machine belongs to the user
+    /// (author's call, 2026-10-20).
+    /// <list type="bullet">
+    /// <item>at or above the default model's minimum: Ok.</item>
+    /// <item>below it but at or above the lighter model's minimum: the
+    /// installer switches to <see cref="LighterModelName"/> and says what it
+    /// needs.</item>
+    /// <item>below the lighter model's minimum too: no shipped model fits, so
+    /// the line says exactly that and warns about degraded performance.</item>
+    /// </list>
+    /// </summary>
+    public static PreflightCheck DescribeVramForDefaultModel(long vramMiB)
+    {
+        long vramGiB = RoundMibToGiB(vramMiB);
+        string size = FormatBytes(vramMiB * 1024 * 1024);
+        if (vramGiB >= MinDefaultModelVramGiB)
+        {
+            return new PreflightCheck(
+                "VRAM (default model)", PreflightStatus.Ok,
+                $"{size} in total — meets the {MinDefaultModelVramGiB} GB minimum of the default model ({DefaultModelFamily})");
+        }
+        if (vramGiB >= LighterModelMinVramGiB)
+        {
+            return new PreflightCheck(
+                "VRAM (default model)", PreflightStatus.Warning,
+                $"{size} in total — below the {MinDefaultModelVramGiB} GB minimum of the default model ({DefaultModelFamily}); "
+                + $"the installer will use {LighterModelName} as the default model instead, "
+                + $"which runs from {LighterModelRequirementsText()}");
+        }
+        return new PreflightCheck(
+            "VRAM (default model)", PreflightStatus.Warning,
+            $"{size} in total — this machine does not meet the requirements: every shipped model needs at least "
+            + $"{LighterModelRequirementsText()} (the lightest is {LighterModelName}), and this card has {size}. "
+            + "You can continue if you want to try anyway, but expect degraded performance: the weights do not fit "
+            + "and are streamed, and a run may fail.");
+    }
+
+    /// <summary>
+    /// The system-memory line of the preflight. A warning (never a gate) when
+    /// the machine is on the lighter model because of its RAM, and a stronger
+    /// one when it is below the lighter model's own 16 GB: that is the point
+    /// where "degraded performance" is the honest expectation, because the
+    /// weights no longer stay cached and are re-read from disk.
+    /// </summary>
+    public static PreflightCheck DescribeRamForDefaultModel(long totalRamBytes, long? vramMiB)
+    {
+        long ramGiB = RoundToGiB(totalRamBytes);
+        long? vramGiB = vramMiB is { } value ? RoundMibToGiB(value) : null;
+        string size = FormatBytes(totalRamBytes);
+        string ramRequirement = $"{MinDefaultModelRamGiB} GB";
+        long lighterMinGiB = RoundToGiB(LighterModelMinRamBytes);
+        bool lighterByRam = vramGiB is { } card
+                            && card <= MaxMidrangeVramGiB
+                            && ramGiB < MinDefaultModelRamGiB;
+
+        if (ramGiB < lighterMinGiB && (lighterByRam || vramGiB is null || vramGiB < LighterModelMinVramGiB))
+        {
+            return new PreflightCheck(
+                "System memory (default model)", PreflightStatus.Warning,
+                $"{size} in total — below the {lighterMinGiB} GB the lightest model ({LighterModelName}) needs, "
+                + "so this machine does not meet the requirements. You can continue if you want to try anyway, "
+                + "but expect degraded performance: the model files are re-read from disk while running.");
+        }
+        if (lighterByRam)
+        {
+            return new PreflightCheck(
+                "System memory (default model)", PreflightStatus.Warning,
+                $"{size} in total — below the {ramRequirement} the default model ({DefaultModelFamily}) needs on a GPU "
+                + $"with up to {MaxMidrangeVramGiB} GB of VRAM; the installer will use {LighterModelName} "
+                + $"as the default model instead, which runs from {LighterModelRequirementsText()}");
+        }
+        if (vramGiB is null && ramGiB < MinDefaultModelRamGiB)
+        {
+            return new PreflightCheck(
+                "System memory (default model)", PreflightStatus.Warning,
+                $"{size} in total — below the {ramRequirement} requirement of the default model ({DefaultModelFamily}), "
+                + $"and the GPU could not be measured; the installer will use {LighterModelName} as the default model instead");
+        }
+        return new PreflightCheck(
+            "System memory (default model)", PreflightStatus.Ok,
+            $"{size} in total — "
+            + (ramGiB >= MinDefaultModelRamGiB
+                ? $"meets the {ramRequirement} minimum of the default model ({DefaultModelFamily})"
+                : $"the default model ({DefaultModelFamily}) is kept because the GPU has more than "
+                  + $"{MaxMidrangeVramGiB} GB of VRAM; the {ramRequirement} minimum applies to GPUs up to "
+                  + $"{MaxMidrangeVramGiB} GB"));
+    }
 
     /// <summary>
     /// Machine-readable default-model decision (author rule, 2026-10-18;

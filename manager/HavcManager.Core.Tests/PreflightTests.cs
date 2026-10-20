@@ -98,6 +98,70 @@ public class PreflightTests
     }
 
     [Fact]
+    public void Vram_at_the_default_minimum_is_ok()
+    {
+        var check = DescribeVramForDefaultModel(12 * 1024);
+        Assert.Equal(PreflightStatus.Ok, check.Status);
+        Assert.Contains("meets the 12 GB minimum", check.Detail!);
+    }
+
+    [Fact]
+    public void Vram_between_the_two_minimums_switches_to_the_lighter_model()
+    {
+        // 8 GB: below the default model, at the lighter model's minimum.
+        var check = DescribeVramForDefaultModel(8 * 1024);
+        Assert.Equal(PreflightStatus.Warning, check.Status);
+        Assert.Contains("flux2-klein-4b-int8", check.Detail!);
+        Assert.DoesNotContain("does not meet the requirements", check.Detail!);
+    }
+
+    [Fact]
+    public void Vram_below_every_shipped_minimum_says_so_and_still_only_warns()
+    {
+        // The author's GTX 1650 4 GB case: no shipped model fits, but the
+        // wizard must let the user decide, so this stays a Warning.
+        var check = DescribeVramForDefaultModel(4 * 1024);
+        Assert.Equal(PreflightStatus.Warning, check.Status);
+        Assert.Contains("does not meet the requirements", check.Detail!);
+        Assert.Contains("degraded performance", check.Detail!);
+        Assert.Contains("8 GB of VRAM", check.Detail!);
+        Assert.Contains("16 GB of RAM", check.Detail!);
+        Assert.Contains("4 GB", check.Detail!);
+        // Never an Error: only the OS check blocks the wizard.
+        Assert.NotEqual(PreflightStatus.Error, check.Status);
+    }
+
+    [Fact]
+    public void Ram_below_the_lighter_minimum_says_so_and_still_only_warns()
+    {
+        var check = DescribeRamForDefaultModel(8 * GiB, 4 * 1024);
+        Assert.Equal(PreflightStatus.Warning, check.Status);
+        Assert.Contains("does not meet the requirements", check.Detail!);
+        Assert.Contains("16 GB", check.Detail!);
+        Assert.Contains("degraded performance", check.Detail!);
+        Assert.NotEqual(PreflightStatus.Error, check.Status);
+    }
+
+    [Fact]
+    public void Ram_at_sixteen_gb_on_a_small_card_switches_to_the_lighter_model()
+    {
+        // 16 GB of RAM, 8 GB card: below the 24 GB the default model wants on
+        // that class of GPU, but at the lighter model's own minimum.
+        var check = DescribeRamForDefaultModel(16 * GiB, 8 * 1024);
+        Assert.Equal(PreflightStatus.Warning, check.Status);
+        Assert.Contains("flux2-klein-4b-int8", check.Detail!);
+        Assert.DoesNotContain("does not meet the requirements", check.Detail!);
+    }
+
+    [Fact]
+    public void Ram_above_the_default_minimum_is_ok()
+    {
+        Assert.Equal(PreflightStatus.Ok, DescribeRamForDefaultModel(32 * GiB, 12282).Status);
+        // A 24 GB card keeps the default model even with 16 GB of RAM.
+        Assert.Equal(PreflightStatus.Ok, DescribeRamForDefaultModel(16 * GiB, 24 * 1024).Status);
+    }
+
+    [Fact]
     public void DescribeStorage_warns_on_an_hdd_below_64_gb_of_ram()
     {
         var check = DescribeStorage(StorageKind.Hdd, 32 * GiB);

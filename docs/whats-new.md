@@ -1,5 +1,30 @@
 # What's New
 
+### 2026-10-20 (v2.7.3) — Saturation control, and the config owns the prompt
+
+**Both colorization tabs can boost the saturation of the result.** Tab 2 and
+**4. Fix Image** gain a **Saturation** slider (1.0–2.0 in 0.1 steps, default
+`1.4`): **1.0 leaves the model's colors untouched**, 2.0 doubles the chroma.
+The boost is a PIL post-process on the CPU, applied **after** the model, so it
+costs nothing on the GPU and works for every backend — standard, Fast Pipeline
+and paired. Frames that are already colorized keep the saturation they were
+written with, exactly like a changed prompt or step count.
+
+**Enable Prompt Config is now on by default.** The selected config's `prompt`
+becomes the single source of truth for the wording, instead of the Prompt field
+and the preset list competing with what each backend actually ships. The field
+turns read-only while the box is checked; uncheck it to go back to your own
+text and presets. A config with no `"prompt"` key is reported and *Run*
+refuses to start, so a model never runs with an empty prompt.
+
+**One wording everywhere.** The preset that the GUI protects as #1, and the
+`prompt` of the three FLUX.2 configs, are now the same sentence the
+Qwen-Image-Edit configs ship: *"Colorize this image, natural colors. Strictly
+preserve all shapes, edges and background details."* The skin-tones wording
+that the 2026-10 prompt test found clean stays available as a preset in both
+lists. The default window is a slightly narrower `860×860`, which fits the
+current layout better.
+
 ### 2026-10-18 (v2.7.2) — One prompt for every Qwen-Image-Edit config
 
 **The nine `qwen-2509-nunchaku*` / `qwen-2511*` configs now carry the same

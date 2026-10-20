@@ -44,8 +44,45 @@ def set_hf_cache_dir(hf_cache_dir: str):
 # ----------------------------
 # HuggingFace auto-download helper
 # ----------------------------
+def _download_failure_hint(exc, repo_id: str, hf_filename: str) -> str:
+    """A user-facing sentence for a failed model download, or "" when the
+    failure is generic (network, disk, ...) and the raw message is enough.
+
+    Gated HuggingFace repos are the case that matters: the file exists in the
+    metadata, the loader builds the right URL, and the download then fails
+    with a 401 that means "accept the license", not "wrong path". Telling the
+    two apart here is what makes the difference between a dead end and a
+    one-minute fix for the user.
+    """
+    text = f"{type(exc).__name__}: {exc}".lower()
+    status = getattr(getattr(exc, "response", None), "status_code", None)
+    if status is None:
+        status = getattr(exc, "status_code", None)
+    gated = (status in (401, 403)
+             or "gatedrepo" in type(exc).__name__.lower()
+             or "restricted" in text
+             or "you must have access" in text
+             or "gated" in text)
+    if gated:
+        return (f"'{repo_id}' is a gated HuggingFace repository: accept its "
+                f"license at https://huggingface.co/{repo_id} with the same "
+                f"account whose token this machine uses (HF_TOKEN, or "
+                f"`huggingface-cli login`), then retry.")
+    if status == 404 or "404" in text or "entry not found" in text:
+        return (f"'{repo_id}' has no file '{hf_filename}': check the config's "
+                f"<kind>_hf_name / hf_* keys against the repository listing "
+                f"at https://huggingface.co/{repo_id}/tree/main.")
+    return ""
+
+
 def _ensure_models(files: dict):
-    """Download missing model files from HuggingFace."""
+    """Download missing model files from HuggingFace.
+
+    A gated repository or a wrong remote file name is reported as a
+    RuntimeError carrying the fix (see _download_failure_hint) instead of a
+    warning followed by an unrelated "file not found" deeper in the loader;
+    other failures keep the old warn-and-continue behaviour.
+    """
     import logging
     from huggingface_hub import hf_hub_download
     _log = logging.getLogger(__name__)
@@ -70,6 +107,10 @@ def _ensure_models(files: dict):
                 os.rename(downloaded, local_path)
             _log.info(f"  -> {local_path}")
         except Exception as e:
+            hint = _download_failure_hint(e, repo_id, hf_filename)
+            if hint:
+                _log.error("Cannot download %s: %s", name, hint)
+                raise RuntimeError(f"Model download failed ({name}): {hint}") from e
             _log.warning(f"Failed to download {name}: {e}")
 
 

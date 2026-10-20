@@ -56,6 +56,15 @@ edited the config to `0`, that is the cause. See
 [Backends](backends.md#vram_headroom--the-int4-checkpoints-setting-per-vram-size)
 for the right value per VRAM size (12 GB and 24 GB+: `0`).
 
+**Downloading a model fails with 401 / "access is restricted"**
+That repository is **gated**: the file listing is public but the download needs
+the license accepted. `black-forest-labs/FLUX.2-klein-9b-fp8` is one of them.
+Open `https://huggingface.co/<repo>` in a browser, accept the license with the
+account whose token this machine uses (`HF_TOKEN`, or `huggingface-cli login`),
+then retry — no reinstall needed. The engine names the repository in the error
+instead of failing later with a missing file. `flux2_klein_4b_fp8`, the
+text encoders and the Flux.2-dev checkpoints are **not** gated.
+
 ---
 
 ## Installation and updates

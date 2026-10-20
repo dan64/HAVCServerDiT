@@ -427,6 +427,17 @@ flows — with three differences that live entirely in the config:
 > the same BFL small-decoder repo as the dev configs. `vram_headroom` stays
 > `0`: the fp8 checkpoints fit a 16 GB card, so there is nothing to reserve.
 > Launch with `start_server.cmd flux2_klein_9b_fp8`.
+>
+> **The 9B checkpoint is a gated HuggingFace repo.**
+> `black-forest-labs/FLUX.2-klein-9b-fp8` requires **accepting the license on
+> the HuggingFace website** with the account whose token this machine uses
+> (`HF_TOKEN`, or `huggingface-cli login`). Without that the download answers
+> **HTTP 401**, even though the file listing is public. HAVC reports it as
+> *"… is a gated HuggingFace repository: accept its license at
+> https://huggingface.co/…"* and stops there, instead of failing later with a
+> missing-file error. The **4B is not gated**, and neither are the text
+> encoders, the VAE or the Flux.2-dev checkpoints — so a machine with no HF
+> account can still run `flux2_klein_4b_fp8`.
 
 #### `vram_headroom` : VRAM reserved for nothing, to keep streaming even
 

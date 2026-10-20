@@ -383,8 +383,7 @@ def load_all_configs():
         "fast_pipe":              True,
         "usm":                    False,
         "usm_radius":             "2",
-        "saturation":             False,
-        "saturation_factor":      "1.2",
+        "saturation":             1.0,
         "enhance_prompt":         False,
         "run_server_external":    False,
         # --- fix image ---
@@ -392,8 +391,7 @@ def load_all_configs():
         "fix_bw":                 True,
         "fix_usm":                False,
         "fix_usm_radius":         "2",
-        "fix_saturation":         False,
-        "fix_saturation_factor":  "1.2",
+        "fix_saturation":         1.0,
         "fix_batch":              False,
         "fix_enhance_prompt":     False,
         "fix_prompt_max":         "30",
@@ -856,20 +854,28 @@ def usm_radius_of(values, checkbox_key, radius_key, default=2.0):
     return min(max(radius, 1.0), 4.0)
 
 
-def saturation_factor_of(values, checkbox_key, amount_key, default=1.2):
-    """Saturation boost to apply to the colorized output: 1.0 (no-op) when
-    the checkbox is off. The factor runs on a 1.1-2.0 range (default 1.2):
-    1.0 leaves the model's colors untouched, higher values push them.
-    Invalid input falls back to the default and out-of-range values are
-    clamped. Self-contained on purpose -- the test harnesses exec this
-    source in an empty namespace."""
-    if not values.get(checkbox_key, False):
-        return 1.0
+def saturation_factor_of(values, key, default=1.0):
+    """Saturation factor read from a slider: 1.0 means off (the model's colors
+    are left untouched), 2.0 doubles the chroma. The range is 1.0-2.0 with a
+    0.1 step; the value is rounded to one decimal because the GUI slider hands
+    back float noise (1.2000000000000002). Invalid input falls back to the
+    default and out-of-range values are clamped. Self-contained on purpose --
+    the test harnesses exec this source in an empty namespace."""
+    raw = values.get(key, "")
     try:
-        factor = float(str(values.get(amount_key, "") or default).strip().replace(",", "."))
+        factor = (float(str(raw).strip().replace(",", "."))
+                  if raw is not None and str(raw).strip() else float(default))
     except (TypeError, ValueError):
         factor = float(default)
-    return min(max(factor, 1.0), 2.0)
+    return round(min(max(factor, 1.0), 2.0), 1)
+
+
+def saturation_default(value, default=1.0):
+    """Slider default for the saturation factor: the saved value when it is a
+    number in the 1.0-2.0 range, else 1.0 (off). A settings file written by
+    the checkbox+combo version carries `true`/`false`, which lands here as the
+    default: an existing installation starts with the boost off."""
+    return saturation_factor_of({0: value}, 0, default=default)
 
 
 def apply_output_saturation(img, factor):
@@ -1309,7 +1315,7 @@ def orchestrator(init_values, window):
         tot_time = 0.0
         count    = 0
         usm_radius = usm_radius_of(values, "-USM-", "-USM_RADIUS-")
-        saturation = saturation_factor_of(values, "-SATURATION-", "-SATURATION_AMOUNT-")
+        saturation = saturation_factor_of(values, "-SATURATION-")
         start_time = time.time()
 
         for i, img_path in enumerate(images):
@@ -1433,7 +1439,7 @@ def orchestrator(init_values, window):
         steps          = int(values.get("-STEPS-", cfg["steps"]))
         enhance_prompt = values.get("-ENHANCE_PROMPT-", False)
         usm_radius     = usm_radius_of(values, "-USM-", "-USM_RADIUS-")
-        saturation     = saturation_factor_of(values, "-SATURATION-", "-SATURATION_AMOUNT-")
+        saturation     = saturation_factor_of(values, "-SATURATION-")
         seed           = 42
         chunk_size     = 200
         # working area budget of the split-TE conditioning (config key
@@ -1689,7 +1695,7 @@ def orchestrator(init_values, window):
         steps          = int(values.get("-STEPS-", cfg["steps"]))
         enhance_prompt = values.get("-ENHANCE_PROMPT-", False)
         usm_radius     = usm_radius_of(values, "-USM-", "-USM_RADIUS-")
-        saturation     = saturation_factor_of(values, "-SATURATION-", "-SATURATION_AMOUNT-")
+        saturation     = saturation_factor_of(values, "-SATURATION-")
         seed           = 42
         # the edit conditioning is ~21 MB per frame, the te one ~1.4 MB: these
         # pair chunk sizes keep the same disk budget as the single split flows
@@ -1971,7 +1977,7 @@ def orchestrator(init_values, window):
         prompt     = values["-PROMPT-"]
         steps      = int(values.get("-STEPS-", cfg["steps"]))
         usm_radius = usm_radius_of(values, "-USM-", "-USM_RADIUS-")
-        saturation = saturation_factor_of(values, "-SATURATION-", "-SATURATION_AMOUNT-")
+        saturation = saturation_factor_of(values, "-SATURATION-")
         seed       = 42
         chunk_size = 100   # ~21 MB of conditioning per frame -> ~2 GB per chunk
 
@@ -2262,7 +2268,7 @@ def orchestrator(init_values, window):
         prompt         = values["-PROMPT-"]
         enhance_prompt = values.get("-ENHANCE_PROMPT-", False)
         usm_radius     = usm_radius_of(values, "-USM-", "-USM_RADIUS-")
-        saturation     = saturation_factor_of(values, "-SATURATION-", "-SATURATION_AMOUNT-")
+        saturation     = saturation_factor_of(values, "-SATURATION-")
         tot_time   = 0.0
         count      = 0
         n_images   = already
@@ -2787,7 +2793,8 @@ encoder_values:    list[str] = ['x264', 'x265', 'Nvenc']
 memory_values:     list[str] = [f"{x}" for x in range(10, 110, 10)]
 steps_values:      list[str] = ['2', '4', '6', '8']
 usm_radius_values: list[str] = ['1', '2', '3', '4']   # Unsharp Mask radius range
-saturation_values: list[str] = [f"{1 + x / 10:.1f}" for x in range(1, 11)]  # 1.1 .. 2.0
+saturation_range:  tuple = (1.0, 2.0)                  # 1.0 = off, 2.0 = double chroma
+saturation_step:   float = 0.1
 
 
 def usm_radius_default(value: str) -> str:
@@ -2796,10 +2803,6 @@ def usm_radius_default(value: str) -> str:
     return value if value in usm_radius_values else "2"
 
 
-def saturation_default(value: str) -> str:
-    """Combo default for the saturation factor: the saved value when it is in
-    the 1.1-2.0 range, else 1.2."""
-    return value if value in saturation_values else "1.2"
 speed_values:    list[str] = ['auto', 'fast', 'medium', 'slow', 'slower']
 backbone_values: list[str] = ['dinov3', 'dinov2']
 proximity_alpha_values: list[str] = [f"{x/100:.2f}" for x in range(10, 110, 10)]
@@ -2876,7 +2879,7 @@ def _fix_colorize_worker(values, window, seed, pil_in=None):
                               prompt_max_of(values, "-FIX_PROMPT_MAX-"))
         steps  = int(values["-FIX_STEPS-"])
         usm_radius = usm_radius_of(values, "-FIX_USM-", "-FIX_USM_RADIUS-")
-        saturation = saturation_factor_of(values, "-FIX_SATURATION-", "-FIX_SATURATION_AMOUNT-")
+        saturation = saturation_factor_of(values, "-FIX_SATURATION-")
         host   = values["-RPC_HOST-"].strip()
         # Honor the "Convert in B&W" checkbox
         skip_bw = not values.get("-FIX_BW-", True)
@@ -3125,14 +3128,15 @@ tab3_layout = [
          sg.Text("Radius:"),
          sg.Combo(usm_radius_values, default_value=usm_radius_default(cfg.get("usm_radius", "2")),
                   key="-USM_RADIUS-", tooltip="Unsharp Mask radius: 1-4 (default 2).", readonly=True, size=(4, 1))],
-        [sg.Checkbox("Saturation", key="-SATURATION-", default=cfg.get("saturation", False),
-                     tooltip="Boost the saturation of the colorized output (PIL, CPU, after the model). "
-                             "Frames already colorized keep the saturation they were written with."),
-         sg.Text("Amount:"),
-         sg.Combo(saturation_values, default_value=saturation_default(cfg.get("saturation_factor", "1.2")),
-                  key="-SATURATION_AMOUNT-", tooltip="Saturation factor: 1.1-2.0 (default 1.2). "
-                                                      "1.1 is subtle, 2.0 doubles the chroma.", readonly=True, size=(4, 1)),
-         sg.Text("1.1 = subtle, 2.0 = strong")],
+        [sg.Text("Saturation:"),
+         sg.Slider(range=saturation_range, resolution=saturation_step, orientation="h",
+                   default_value=saturation_default(cfg.get("saturation", 1.0)),
+                   key="-SATURATION-", size=(18, 14),
+                   tooltip="Saturation boost applied to the colorized output with PIL (CPU, "
+                           "after the model). 1.0 = off (the model's colors as they are), "
+                           "2.0 = double chroma. Frames already colorized keep the "
+                           "saturation they were written with."),
+         sg.Text("1.0 = off, 2.0 = strong")],
     ], expand_x=True)],
     [sg.Text("Prompt:"), sg.Multiline(cfg["prompt"], key="-PROMPT-", tooltip="Prompt sent to the model. Keep it short and direct for qwen-2511, detailed for qwen21-viggle / qwen21-turbo.", expand_x=True, size=(58,6), no_scrollbar=True),
      sg.Column([
@@ -3236,13 +3240,14 @@ tab5_layout = [
      sg.Combo(usm_radius_values, default_value=usm_radius_default(cfg.get("fix_usm_radius", "2")),
               key="-FIX_USM_RADIUS-", tooltip="Unsharp Mask radius: 1-4 (default 2).", readonly=True, size=(4, 1)),
      sg.Checkbox("Enhance Prompt", key="-FIX_ENHANCE_PROMPT-", tooltip="qwen21-viggle only: rewrite the prompt with Qwen3-VL. No effect on other backends.", default=cfg.get("fix_enhance_prompt", False))],
-    [sg.Checkbox("Saturation", key="-FIX_SATURATION-", default=cfg.get("fix_saturation", False),
-                 tooltip="Boost the saturation of the colorized image (PIL, CPU, after the model)."),
-     sg.Text("Amount:"),
-     sg.Combo(saturation_values, default_value=saturation_default(cfg.get("fix_saturation_factor", "1.2")),
-              key="-FIX_SATURATION_AMOUNT-", tooltip="Saturation factor: 1.1-2.0 (default 1.2). "
-                                                       "1.1 is subtle, 2.0 doubles the chroma.", readonly=True, size=(4, 1)),
-     sg.Text("1.1 = subtle, 2.0 = strong")],
+    [sg.Text("Saturation:"),
+     sg.Slider(range=saturation_range, resolution=saturation_step, orientation="h",
+               default_value=saturation_default(cfg.get("fix_saturation", 1.0)),
+               key="-FIX_SATURATION-", size=(18, 14),
+               tooltip="Saturation boost applied to the colorized image with PIL (CPU, after "
+                       "the model). 1.0 = off (the model's colors as they are), 2.0 = double "
+                       "chroma. Applies to the preview, Save As... and batch outputs."),
+     sg.Text("1.0 = off, 2.0 = strong")],
     [sg.Text("Prompt:"),
      sg.Multiline(state["fix_prompts"][0], key="-FIX_PROMPT-", tooltip="Prompt for the image. Short and direct for qwen-2511, detailed for qwen21-viggle / qwen21-turbo.", expand_x=True, size=(80,4), no_scrollbar=True)],
     [sg.Text("Preset #:"),
@@ -4829,7 +4834,6 @@ while True:
             "usm":                   values["-USM-"],
             "usm_radius":            values["-USM_RADIUS-"],
             "saturation":            values["-SATURATION-"],
-            "saturation_factor":     values["-SATURATION_AMOUNT-"],
             "enhance_prompt":        values["-ENHANCE_PROMPT-"],
             "run_server_external":   values["-RUN_SERVER_EXTERNAL-"],
             "fix_steps":              values["-FIX_STEPS-"],
@@ -4837,7 +4841,6 @@ while True:
             "fix_usm":                values["-FIX_USM-"],
             "fix_usm_radius":         values["-FIX_USM_RADIUS-"],
             "fix_saturation":         values["-FIX_SATURATION-"],
-            "fix_saturation_factor":  values["-FIX_SATURATION_AMOUNT-"],
             "fix_batch":              values["-FIX_BATCH-"],
             "fix_enhance_prompt":     values["-FIX_ENHANCE_PROMPT-"],
             "fix_prompt_max":         values["-FIX_PROMPT_MAX-"],

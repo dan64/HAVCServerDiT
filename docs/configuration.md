@@ -412,16 +412,21 @@ flows — with three differences that live entirely in the config:
   (comfy's `sampling_function` takes the `uncond=None` fast path at cfg 1.0, so
   the negative branch the reference graph encodes is never evaluated). The
   engine skips the node, so the cached conditioning carries no `guidance` key.
-- **a Qwen3 text encoder** instead of Mistral-3: `qwen_3_8b_fp8mixed` for the
-  9B, `qwen_3_4b` for the 4B (same `type="flux2"` loader).
+- **a Qwen3 text encoder** instead of Mistral-3: `qwen_3_8b_fp4mixed` for the
+  9B (6.34 GB) and `qwen_3_4b_fp4_flux2` for the 4B (3.58 GB) — the **fp4**
+  builds Comfy-Org publishes for Klein, from
+  `Comfy-Org/vae-text-encorder-for-flux-klein-9b` and `...-4b` (same
+  `type="flux2"` loader; prompt-only, so the size does not touch sampling
+  quality). They supersede the 8B fp8-mixed (8.07 GB) and the 4B bf16
+  (7.49 GB) the configs used first.
 - **no LoRA** (`lora_path: ""`) and `steps: 4`, Klein's own distilled schedule.
 
 | Config                     | UNet                        | Size    | Text encoder                |
 | -------------------------- | --------------------------- | ------- | --------------------------- |
-| `flux2_klein_9b_int8.json` | `flux-2-klein-9b` INT8 ConvRot | 8.8 GB | `qwen_3_8b_fp8mixed`     |
-| `flux2_klein_4b_int8.json` | `flux-2-klein-4b` INT8 ConvRot | 3.8 GB | `qwen_3_4b`              |
-| `flux2_klein_9b_fp8.json`  | `flux-2-klein-9b-fp8`       | 8.8 GB  | `qwen_3_8b_fp8mixed`        |
-| `flux2_klein_4b_fp8.json`  | `flux-2-klein-4b-fp8`       | 3.8 GB  | `qwen_3_4b`                 |
+| `flux2_klein_9b_int8.json` | `flux-2-klein-9b` INT8 ConvRot | 8.8 GB | `qwen_3_8b_fp4mixed`     |
+| `flux2_klein_4b_int8.json` | `flux-2-klein-4b` INT8 ConvRot | 3.8 GB | `qwen_3_4b_fp4_flux2`    |
+| `flux2_klein_9b_fp8.json`  | `flux-2-klein-9b-fp8`       | 8.8 GB  | `qwen_3_8b_fp4mixed`        |
+| `flux2_klein_4b_fp8.json`  | `flux-2-klein-4b-fp8`       | 3.8 GB  | `qwen_3_4b_fp4_flux2`       |
 
 > **INT8 ConvRot and fp8 are the same checkpoint at different precision.**
 > INT8 ConvRot is ComfyUI's native format (`int8_tensorwise` + `convrot` in the
@@ -440,8 +445,8 @@ flows — with three differences that live entirely in the config:
 
 > Both downloads come from `black-forest-labs/FLUX.2-klein-{9b,4b}-fp8` (the
 > checkpoint sits at the repo root, hence `unet_hf_name`), the text encoders
-> from `Comfy-Org/flux2-klein-9b` and `Comfy-Org/flux2-klein`, and the VAE from
-> the same BFL small-decoder repo as the dev configs. `vram_headroom` stays
+> from the two `Comfy-Org/vae-text-encorder-for-flux-klein-*` repos, and the VAE
+> from the same BFL small-decoder repo as the dev configs. `vram_headroom` stays
 > `0`: the fp8 checkpoints fit a 16 GB card, so there is nothing to reserve.
 > Launch with `start_server.cmd flux2_klein_9b_fp8`.
 >

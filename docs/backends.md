@@ -348,10 +348,21 @@ same model at different precision: **prefer INT8** (see below).
 
 | Config                     | UNet                        | Size   | Text encoder      | Steps |
 | -------------------------- | --------------------------- | ------ | ----------------- | ----- |
-| `flux2_klein_9b_int8.json` | `flux-2-klein-9b` INT8 ConvRot | 8.8 GB | Qwen3 8B fp8-mixed | 4     |
-| `flux2_klein_4b_int8.json` | `flux-2-klein-4b` INT8 ConvRot | 3.8 GB | Qwen3 4B          | 4     |
-| `flux2_klein_9b_fp8.json`  | `flux-2-klein-9b` fp8        | 8.8 GB | Qwen3 8B fp8-mixed | 4     |
-| `flux2_klein_4b_fp8.json`  | `flux-2-klein-4b` fp8        | 3.8 GB | Qwen3 4B          | 4     |
+| `flux2_klein_9b_int8.json` | `flux-2-klein-9b` INT8 ConvRot | 8.8 GB | Qwen3 8B **fp4** | 4     |
+| `flux2_klein_4b_int8.json` | `flux-2-klein-4b` INT8 ConvRot | 3.8 GB | Qwen3 4B **fp4** | 4     |
+| `flux2_klein_9b_fp8.json`  | `flux-2-klein-9b` fp8        | 8.8 GB | Qwen3 8B **fp4** | 4     |
+| `flux2_klein_4b_fp8.json`  | `flux-2-klein-4b` fp8        | 3.8 GB | Qwen3 4B **fp4** | 4     |
+
+> **The text encoders are the fp4 builds Comfy-Org publishes for Klein**
+> (`qwen_3_8b_fp4mixed`, 6.34 GB, and `qwen_3_4b_fp4_flux2`, 3.58 GB — against
+> 8.07 GB for the 8B fp8-mixed and 7.49 GB for the 4B bf16). The encoder is
+> **prompt-only** in this family and runs once per frame in phase A, so the
+> smaller file costs no sampling quality and saves ~1.7 GB (9B) / ~3.9 GB (4B)
+> of resident memory during phase A. They are ordinary ComfyUI quants
+> (per-layer `comfy_quant`, fp8 scales plus `nvfp4`/`float8` layers), loaded by
+> the same `CLIPLoader type="flux2"`. `nvfp4` matmul is native on Blackwell;
+> on RTX 30/40 those layers dequantize instead, which for a once-per-frame
+> encoder is noise.
 
 > **INT8 ConvRot is the one to use.** It is ComfyUI's *native* int8 format
 > (`int8_tensorwise` + `convrot` in the per-layer `comfy_quant` blobs), so the

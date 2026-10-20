@@ -344,6 +344,18 @@ count), `guidance: 4.0` and the **paired split** on (`fast_split_TE`):
 
 #### Flux.2 Klein 9B / 4B — the same family, no guidance, no LoRA
 
+<table>
+<tr>
+<td align="center"><img src="../assets/0_Flags_Ground_Truth.jpg" alt="Ground truth" width="220"><br><sub>Ground truth</sub></td>
+<td align="center"><img src="../assets/9_Flux2_klein-9b_int8.jpg" alt="Flux.2 Klein 9B INT8 result" width="220"><br><sub>Flux.2 Klein 9B (INT8)</sub></td>
+<td align="center"><img src="../assets/10_Flux2_klein-4b_int8.jpg" alt="Flux.2 Klein 4B INT8 result" width="220"><br><sub>Flux.2 Klein 4B (INT8)</sub></td>
+</tr>
+</table>
+
+> Both samples are the author's field run of the shipped INT8 configs at
+> **2 steps with the paired split** — the output is already vividly colored at
+> that setting, which is why the GUI ships saturation at `1.0`.
+
 Two **Flux.2 Klein** checkpoints (Black Forest Labs) ship as extra configs of
 the same `flux2` family — so they get the same split and paired flows, the same
 VAE and the same GUI wiring without a new backend:
@@ -383,6 +395,12 @@ VAE and the same GUI wiring without a new backend:
 > paired split** and the output was already very colourful, which is why the
 > shipped GUI default went back to **`saturation: 1.0`** (the slider's off
 > position) instead of 1.4.
+>
+> **2 steps are enough.** The configs ship `steps: 4` (Klein's distilled
+> count) but for `flux2` the GUI's *Colorization Steps* wins, and the author's
+> field run at **2 steps with the paired split** already gives vivid, stable
+> color — halving the sampling cost. Try 2 first; raise it only if a frame
+> comes out flat.
 >
 > **Field verdict (author, 2026-10-20)**: **the 4B is the fastest model in the
 > stack** and it is the installer's pick for small machines since 2026-10-20

@@ -425,8 +425,6 @@ flows — with three differences that live entirely in the config:
 | -------------------------- | --------------------------- | ------- | --------------------------- |
 | `flux2_klein_9b_int8.json` | `flux-2-klein-9b` INT8 ConvRot | 8.8 GB | `qwen_3_8b_fp4mixed`     |
 | `flux2_klein_4b_int8.json` | `flux-2-klein-4b` INT8 ConvRot | 3.8 GB | `qwen_3_4b_fp4_flux2`    |
-| `flux2_klein_9b_fp8.json`  | `flux-2-klein-9b-fp8`       | 8.8 GB  | `qwen_3_8b_fp4mixed`        |
-| `flux2_klein_4b_fp8.json`  | `flux-2-klein-4b-fp8`       | 3.8 GB  | `qwen_3_4b_fp4_flux2`       |
 
 > **INT8 ConvRot and fp8 are the same checkpoint at different precision.**
 > INT8 ConvRot is ComfyUI's native format (`int8_tensorwise` + `convrot` in the
@@ -439,16 +437,15 @@ flows — with three differences that live entirely in the config:
 > The two INT8 files come from community repos —
 > `obsxrver/ComfyUI-Native-INT8_ConvRot` (9B, file under `diffusion_models/`)
 > and `wraps/FLUX.2-klein-4B-INT8-ConvRot-ComfyUI` (4B, file at the repo root)
-> — both **not gated**; that is also why the 9B INT8 works without a HuggingFace
-> account, while the BFL `flux-2-klein-9b-fp8` repo requires accepting a
-> licence. The fp8 entries stay for anyone who already has them.
+> — both **not gated**, so neither needs a HuggingFace account. INT8 ConvRot
+> replaced the fp8 twins on 2026-10-20: same size, better quality.
 
 > Both downloads come from `black-forest-labs/FLUX.2-klein-{9b,4b}-fp8` (the
 > checkpoint sits at the repo root, hence `unet_hf_name`), the text encoders
 > from the two `Comfy-Org/vae-text-encorder-for-flux-klein-*` repos, and the VAE
 > from the same BFL small-decoder repo as the dev configs. `vram_headroom` stays
 > `0`: the fp8 checkpoints fit a 16 GB card, so there is nothing to reserve.
-> Launch with `start_server.cmd flux2_klein_9b_fp8`.
+> Launch with `start_server.cmd flux2_klein_4b_int8` (or `_9b_int8`).
 >
 > **The 9B checkpoint is a gated HuggingFace repo.**
 > `black-forest-labs/FLUX.2-klein-9b-fp8` requires **accepting the license on
@@ -459,7 +456,7 @@ flows — with three differences that live entirely in the config:
 > https://huggingface.co/…"* and stops there, instead of failing later with a
 > missing-file error. The **4B is not gated**, and neither are the text
 > encoders, the VAE or the Flux.2-dev checkpoints — so a machine with no HF
-> account can still run `flux2_klein_4b_fp8`.
+> account can still run the INT8 configs, which come from community mirrors.
 
 #### `vram_headroom` : VRAM reserved for nothing, to keep streaming even
 

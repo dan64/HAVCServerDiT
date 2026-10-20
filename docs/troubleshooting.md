@@ -62,8 +62,8 @@ the license accepted. `black-forest-labs/FLUX.2-klein-9b-fp8` is one of them.
 Open `https://huggingface.co/<repo>` in a browser, accept the license with the
 account whose token this machine uses (`HF_TOKEN`, or `huggingface-cli login`),
 then retry — no reinstall needed. The engine names the repository in the error
-instead of failing later with a missing file. `flux2_klein_4b_fp8`, the
-text encoders and the Flux.2-dev checkpoints are **not** gated.
+instead of failing later with a missing file. The shipped Klein configs,
+the text encoders and the Flux.2-dev checkpoints are **not** gated.
 
 ---
 

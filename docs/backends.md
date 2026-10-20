@@ -341,57 +341,52 @@ count), `guidance: 4.0` and the **paired split** on (`fast_split_TE`):
 
 #### Flux.2 Klein 9B / 4B — the same family, no guidance, no LoRA
 
-Four **Flux.2 Klein** checkpoints (Black Forest Labs) ship as extra configs of
+Two **Flux.2 Klein** checkpoints (Black Forest Labs) ship as extra configs of
 the same `flux2` family — so they get the same split and paired flows, the same
-VAE and the same GUI wiring without a new backend. INT8 ConvRot and fp8 are the
-same model at different precision: **prefer INT8** (see below).
+VAE and the same GUI wiring without a new backend:
 
-| Config                     | UNet                        | Size   | Text encoder      | Steps |
-| -------------------------- | --------------------------- | ------ | ----------------- | ----- |
+| Config                     | UNet                           | Size   | Text encoder     | Steps |
+| -------------------------- | ------------------------------ | ------ | ---------------- | ----- |
 | `flux2_klein_9b_int8.json` | `flux-2-klein-9b` INT8 ConvRot | 8.8 GB | Qwen3 8B **fp4** | 4     |
 | `flux2_klein_4b_int8.json` | `flux-2-klein-4b` INT8 ConvRot | 3.8 GB | Qwen3 4B **fp4** | 4     |
-| `flux2_klein_9b_fp8.json`  | `flux-2-klein-9b` fp8        | 8.8 GB | Qwen3 8B **fp4** | 4     |
-| `flux2_klein_4b_fp8.json`  | `flux-2-klein-4b` fp8        | 3.8 GB | Qwen3 4B **fp4** | 4     |
 
-> **The text encoders are the fp4 builds Comfy-Org publishes for Klein**
-> (`qwen_3_8b_fp4mixed`, 6.34 GB, and `qwen_3_4b_fp4_flux2`, 3.58 GB — against
-> 8.07 GB for the 8B fp8-mixed and 7.49 GB for the 4B bf16). The encoder is
-> **prompt-only** in this family and runs once per frame in phase A, so the
-> smaller file costs no sampling quality and saves ~1.7 GB (9B) / ~3.9 GB (4B)
-> of resident memory during phase A. They are ordinary ComfyUI quants
-> (per-layer `comfy_quant`, fp8 scales plus `nvfp4`/`float8` layers), loaded by
-> the same `CLIPLoader type="flux2"`. `nvfp4` matmul is native on Blackwell;
-> on RTX 30/40 those layers dequantize instead, which for a once-per-frame
-> encoder is noise.
-
-> **INT8 ConvRot is the one to use.** It is ComfyUI's *native* int8 format
-> (`int8_tensorwise` + `convrot` in the per-layer `comfy_quant` blobs), so the
-> stock `UNETLoader` takes it exactly like `qwen21_turbo_int8`: no custom node,
-> no conversion step. Upstream [metrics](https://github.com/BobJohnson24/ComfyUI-INT8-Fast/blob/main/Metrics.md)
-> rank `BF16 > INT8 ConvRot > MXFP8 > FP8 >= INT8 Row > INT8 Tensorwise`, and
-> on FLUX.2 Klein 9B specifically INT8 ConvRot scored *above* GGUF Q8 — at the
-> same file size as the fp8 checkpoint. Requires a ComfyUI core ≥ 0.27.0 for the
-> quantization format; the embedded core in the shipped `comfy_bridge` is newer.
+> **INT8 ConvRot is ComfyUI's native int8 format** (`int8_tensorwise` +
+> `convrot` in the per-layer `comfy_quant` blobs), so the stock `UNETLoader`
+> takes it exactly like `qwen21_turbo_int8`: no custom node, no conversion step.
+> Upstream [metrics](https://github.com/BobJohnson24/ComfyUI-INT8-Fast/blob/main/Metrics.md)
+> rank `BF16 > INT8 ConvRot > MXFP8 > FP8 >= INT8 Row > INT8 Tensorwise`, and on
+> FLUX.2 Klein 9B specifically INT8 ConvRot scored *above* GGUF Q8 — at the same
+> file size as the fp8 checkpoint, which is why the fp8 twins were dropped
+> (2026-10-20). Requires a ComfyUI core ≥ 0.27.0 for the quantization format;
+> the core embedded in the shipped `comfy_bridge` is newer.
 >
-> The BFL 9B fp8 repo is **gated** (licence acceptance + token); the INT8 9B
-> comes from the community repo `obsxrver/ComfyUI-Native-INT8_ConvRot`, which is
-> **not** gated, so the 9B works without an HF account. The 4B INT8 comes from
-> `wraps/FLUX.2-klein-4B-INT8-ConvRot-ComfyUI`. Both are plain downloads.
+> **The text encoders are the fp4 builds Comfy-Org publishes for Klein**
+> (`qwen_3_8b_fp4mixed`, 6.34 GB, and `qwen_3_4b_fp4_flux2`, 3.58 GB). The
+> encoder is **prompt-only** in this family and runs once per frame in phase A,
+> so the smaller file costs no sampling quality and saves ~1.7 GB (9B) /
+> ~3.9 GB (4B) of resident memory during phase A. They are ordinary ComfyUI
+> quants (per-layer `comfy_quant`, fp8 scales plus `nvfp4`/`float8` layers),
+> loaded by the same `CLIPLoader type="flux2"`. `nvfp4` matmul is native on
+> Blackwell; on RTX 30/40 those layers dequantize instead, which for a
+> once-per-frame encoder is noise.
+>
+> **Provenance**: the 9B comes from the community repo
+> `obsxrver/ComfyUI-Native-INT8_ConvRot` (file under `diffusion_models/`), the
+> 4B from `wraps/FLUX.2-klein-4B-INT8-ConvRot-ComfyUI` (file at the repo root).
+> Both are plain downloads — no gate, no HF account needed.
+>
+> **Field verdict (author, 2026-10-20)**: **the 4B is the fastest model in the
+> stack**, and is a candidate to replace `longcat_gguf_q3` as the pick for
+> low-RAM machines (it is also the lightest download: ~3.8 GB of UNet plus
+> 3.6 GB of text encoder). The 9B was not measured against the dev configs.
 >
 > Klein differs from Flux.2-dev in exactly three config keys: the **Qwen3**
-text encoder (both are prompt-only, like the dev family, so the frame still
-reaches the transformer only as a VAE **reference latent**), **no Turbo LoRA**
-(`lora_path: ""`) and **`guidance: 0`**, which skips the FluxGuidance node —
-Klein's reference workflow samples through `CFGGuider(cfg=1.0)`, i.e. with no
-guidance at all. `vram_headroom` stays `0`: every Klein checkpoint fits a
-16 GB card.
->
-> **Not measured yet**: no per-frame timing for any Klein size. The 9B is
-> about half the dev int4 checkpoint, so it has room to be faster, but treat
-> the speed as unknown until a bench run replaces this note. The 4B is the
-> lightest FLUX.2 option here (~3.8 GB of weights).
+> text encoder, **no Turbo LoRA** (`lora_path: ""`) and **`guidance: 0`**,
+> which skips the FluxGuidance node — Klein's reference workflow samples
+> through `CFGGuider(cfg=1.0)`, i.e. with no guidance at all. `vram_headroom`
+> stays `0`: every Klein checkpoint fits a 16 GB card.
 
-Launch with `start_server.cmd flux2_klein_9b_int8` (or `_4b_int8`).
+Launch with `start_server.cmd flux2_klein_4b_int8` (or `_9b_int8`).
 
 #### `vram_headroom` — the int4 checkpoint's setting per VRAM size
 

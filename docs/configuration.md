@@ -418,8 +418,25 @@ flows — with three differences that live entirely in the config:
 
 | Config                     | UNet                        | Size    | Text encoder                |
 | -------------------------- | --------------------------- | ------- | --------------------------- |
+| `flux2_klein_9b_int8.json` | `flux-2-klein-9b` INT8 ConvRot | 8.8 GB | `qwen_3_8b_fp8mixed`     |
+| `flux2_klein_4b_int8.json` | `flux-2-klein-4b` INT8 ConvRot | 3.8 GB | `qwen_3_4b`              |
 | `flux2_klein_9b_fp8.json`  | `flux-2-klein-9b-fp8`       | 8.8 GB  | `qwen_3_8b_fp8mixed`        |
 | `flux2_klein_4b_fp8.json`  | `flux-2-klein-4b-fp8`       | 3.8 GB  | `qwen_3_4b`                 |
+
+> **INT8 ConvRot and fp8 are the same checkpoint at different precision.**
+> INT8 ConvRot is ComfyUI's native format (`int8_tensorwise` + `convrot` in the
+> per-layer `comfy_quant` blobs), so it loads through the stock `UNETLoader`
+> exactly like `qwen21_turbo_int8` — no custom node, no conversion. It is the
+> one to prefer: upstream metrics put `BF16 > INT8 ConvRot > MXFP8 > FP8`, and
+> on Klein 9B INT8 ConvRot scored above GGUF Q8 at the same size as fp8. It
+> needs a ComfyUI core ≥ 0.27.0 (the embedded one in `comfy_bridge` is newer).
+>
+> The two INT8 files come from community repos —
+> `obsxrver/ComfyUI-Native-INT8_ConvRot` (9B, file under `diffusion_models/`)
+> and `wraps/FLUX.2-klein-4B-INT8-ConvRot-ComfyUI` (4B, file at the repo root)
+> — both **not gated**; that is also why the 9B INT8 works without a HuggingFace
+> account, while the BFL `flux-2-klein-9b-fp8` repo requires accepting a
+> licence. The fp8 entries stay for anyone who already has them.
 
 > Both downloads come from `black-forest-labs/FLUX.2-klein-{9b,4b}-fp8` (the
 > checkpoint sits at the repo root, hence `unet_hf_name`), the text encoders

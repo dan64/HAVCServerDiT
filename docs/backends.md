@@ -378,6 +378,12 @@ VAE and the same GUI wiring without a new backend:
 > 4B from `wraps/FLUX.2-klein-4B-INT8-ConvRot-ComfyUI` (file at the repo root).
 > Both are plain downloads — no gate, no HF account needed.
 >
+> **Already vivid: no saturation boost needed.** Klein produces saturated
+> frames out of the box — the author's field test ran it at **2 steps with the
+> paired split** and the output was already very colourful, which is why the
+> shipped GUI default went back to **`saturation: 1.0`** (the slider's off
+> position) instead of 1.4.
+>
 > **Field verdict (author, 2026-10-20)**: **the 4B is the fastest model in the
 > stack** and it is the installer's pick for small machines since 2026-10-20
 > (the rule moved off `longcat_gguf_q3`). It is smaller too: **7.60 GB of

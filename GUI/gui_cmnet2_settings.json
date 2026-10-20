@@ -11,23 +11,26 @@
     "fast_pipe": true,
     "usm": false,
     "usm_radius": "2",
+    "saturation": false,
+    "saturation_factor": "1.2",
     "enhance_prompt": false,
     "run_server_external": false,
     "fix_steps": "4",
     "fix_bw": true,
     "fix_usm": false,
     "fix_usm_radius": "2",
+    "fix_saturation": false,
+    "fix_saturation_factor": "1.2",
     "fix_batch": false,
     "fix_enhance_prompt": false,
     "fix_prompt_max": "50",
     "fix_prompts": [
-        "Colorize this image, natural skin tones, vibrant environment. Maintain consistency and details.",
+        "Colorize this image, natural colors. Strictly preserve all shapes, edges and background details.",
         "Color this image, natural colors.",
         "Add color to this black-and-white image without hesitation regarding the appropriate colors. For any subject, garment, object, or setting where the color is common knowledge or established by convention, confidently apply the expected color; otherwise use natural colors. Color the image by strictly preserving all shapes, outlines, and background details.",
         "Add colors to this black-and-white image, not to hedge about what colors might be present. For any subject, garment, object, or setting whose color is a matter of common knowledge or strong convention, assign the expected color directly and confidently. Colorize this image using natural colors. Strictly preserve all shapes, edges and background details.",
         "Color this image with realistic, vibrant colors while preserving skin tones. Strictly preserve all shapes, edges and background details.",
-        "Colorize the image to restore its original color, preserving the texture while maintaining the background details exactly as they appear in the input image.",
-        "Colorize this image, natural colors. Strictly preserve all shapes, edges and background details."
+        "Colorize the image to restore its original color, preserving the texture while maintaining the background details exactly as they appear in the input image."
     ],
     "fixv_base_dir": "D:\\HAVCServerDiT\\gui\\samples",
     "fixv_video": "",
@@ -46,7 +49,7 @@
     "mkv_path": "D:\\HAVCServerDiT\\tools\\MKVToolNix\\mkvmerge.exe",
     "mux_all_streams": false,
     "hf_cache": "",
-    "prompt": "Colorize this image, natural skin tones, vibrant environment. Maintain consistency and details.",
+    "prompt": "Colorize this image, natural colors. Strictly preserve all shapes, edges and background details.",
     "shutdown_on_complete": false,
     "dupe_first_frame": false,
     "do_step1": false,
@@ -80,13 +83,12 @@
     "window_w": 926,
     "window_h": 814,
     "color_prompts": [
-        "Colorize this image, natural skin tones, vibrant environment. Maintain consistency and details.",
+        "Colorize this image, natural colors. Strictly preserve all shapes, edges and background details.",
         "Color this image, natural colors.",
         "Add color to this black-and-white image without hesitation regarding the appropriate colors. For any subject, garment, object, or setting where the color is common knowledge or established by convention, confidently apply the expected color; otherwise use natural colors. Color the image by strictly preserving all shapes, outlines, and background details.",
         "Add colors to this black-and-white image, not to hedge about what colors might be present. For any subject, garment, object, or setting whose color is a matter of common knowledge or strong convention, assign the expected color directly and confidently. Colorize this image using natural colors. Strictly preserve all shapes, edges and background details.",
         "Color this image with realistic, vibrant colors while preserving skin tones. Strictly preserve all shapes, edges and background details.",
-        "Colorize the image to restore its original color, preserving the texture while maintaining the background details exactly as they appear in the input image.",
-        "Colorize this image, natural colors. Strictly preserve all shapes, edges and background details."
+        "Colorize the image to restore its original color, preserving the texture while maintaining the background details exactly as they appear in the input image."
     ],
     "color_prompt_max": "20"
 }

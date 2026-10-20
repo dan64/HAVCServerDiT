@@ -1,5 +1,45 @@
 # What's New
 
+### 2026-10-20 (v2.8.0) — Two new Flux.2 Klein models, and a lighter default
+
+**Flux.2 Klein 9B and 4B, in INT8 ConvRot.** Two new configs join the `flux2`
+family: `flux2_klein_9b_int8` and `flux2_klein_4b_int8` (Black Forest Labs
+checkpoints, ComfyUI's native int8 format, so the stock loader takes them —
+nothing to install). They keep the Flux.2 graph, with a **Qwen3** text encoder
+in the fp4 build, **no Turbo LoRA** and **no guidance node**, which is how the
+reference workflow samples. Klein needs no saturation correction: the shipped
+slider now rests at **1.0** (off), because these models come out vividly
+colored even at **2 steps with the paired split**. Sample frames for both
+sizes are on the [backends page](backends.md).
+
+**The small-machine default is now Klein 4B.** Below the thresholds the
+installer used to seed LongCat Q3; it now seeds `flux2_klein_4b_int8`, which is
+smaller (7.6 GB of weights against 8.8 GB, and 3.8 GB against 5.8 GB in the
+text-encoder phase) and, in the author's field test, the **fastest config in
+the stack**. A saved model choice is untouched: this is only what a new
+installation starts with.
+
+**The setup warns, and lets you decide.** When a machine is below the
+requirements the wizard now says so in plain words — *this machine does not
+meet the requirements*, with the minimums of the smallest model (8 GB of VRAM
+and 16 GB of RAM) and a warning that performance will be degraded — but it no
+longer implies that another model would fit when none does. It is a
+**warning**, never a gate: only a Windows version below 10.0.17763 stops the
+installation.
+
+**Saturation control, and the config owns the prompt.** Both colorization tabs
+gained a **Saturation** slider (1.0–2.0 in 0.1 steps, 1.0 = the model's own
+colors), a PIL post-process on the CPU applied after the model. And
+**Enable Prompt Config is on by default**: the selected config's `prompt` is
+the single source of truth for the wording, instead of the field and the
+preset list competing with what each backend ships. Uncheck the box to go back
+to your own text and presets.
+
+**One wording everywhere.** The preset the GUI protects as #1, and the `prompt`
+of the three FLUX.2-dev configs, now carry the same sentence the
+Qwen-Image-Edit configs ship: *"Colorize this image, natural colors. Strictly
+preserve all shapes, edges and background details."*
+
 ### 2026-10-20 (v2.7.3) — Saturation control, and the config owns the prompt
 
 **Both colorization tabs can boost the saturation of the result.** Tab 2 and

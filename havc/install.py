@@ -74,11 +74,14 @@ NVENC = {
 # v0.36 (2026-10-18): the Fast Pipeline split for longcat-gguf (cached EditPlus
 # conditioning in its own `longcat-conditioning` kind; the negative text-encoder
 # pass is gone at cfg=1.0). Bucket: HAVC Assets v1.0.6.
+# v0.37 (2026-10-20): the `guidance: 0` sentinel (no FluxGuidance node at all),
+# which the Flux.2 Klein configs need; every other family is unchanged.
+# Bucket: HAVC Assets v1.0.7.
 COMFY_BRIDGE = {
-    "name": "comfy_bridge_v0.36.zip",
-    "url": "https://github.com/dan64/HAVCServerDiT/releases/download/v1.0.6/comfy_bridge_v0.36.zip",
-    "sha256": "fc46f16e58afc4f507082968d8deba90509ef8fadbb520dcd76628975582d389",
-    "size": 10739636,
+    "name": "comfy_bridge_v0.37.zip",
+    "url": "https://github.com/dan64/HAVCServerDiT/releases/download/v1.0.7/comfy_bridge_v0.37.zip",
+    "sha256": "67d17352d9a3b392a84e0a3d41fab6133cf3c53edb6ba7850d23c47afe1af906",
+    "size": 10740166,
 }
 
 # cmnet2 assets (plugins + weights) — pinned; sha256 also verified against

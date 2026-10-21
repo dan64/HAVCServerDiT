@@ -6,13 +6,63 @@ Each backend below shows a side-by-side comparison on the **same frame**: the gr
 
 > ¹ Measured with **Fast Pipeline** — for `qwen21-viggle`, `qwen21-turbo`, `gguf-qwen`, `qwen25-nunchaku`, `longcat-gguf`, `flux2` and `flux3` the cached text-encoder split (paired for `qwen21-turbo`'s fast variant, for `flux2` and `flux3`, for the `qwen25-nunchaku` `-fast` configs and for `longcat-gguf` with `fast_split_TE`), for `nunchaku-qwen` paired inference (two frames per forward pass) — at the backend's fastest recommended step count, warm-up excluded. ² `longcat-gguf`'s figure is its single-image live time: with Fast Pipeline it drops to ~12 s/frame (and ~7.5 paired, see its section).
 
-> **Recommended**: **qwen21-viggle** and **nunchaku-qwen** are both recommended for production use. Thanks to recent code optimizations — Dynamic VRAM and the text-encoder (TE) split — **qwen21-viggle** is now the fastest backend: **2.9 sec/frame** at the fastest usable step count (`steps=2`), or **2.65** with _Fast Pipeline_ (re-measured 2026-10-21; the older 1.7 / 3.5 pair predates DynamicVRAM — see the `⚠️ Fast Pipeline` note below) — and has the **lowest minimum requirements of the backends that run at a usable speed**: **12 GB VRAM / 32 GB RAM** (14GB+ VRAM on the standard path). The other backends that also fit a 12 GB card are far slower — `qwen-2511_q3` at ~7 sec/frame, `longcat-gguf` at ~12 sec/frame — so at that VRAM class viggle is not just the fastest, it is in a different league. Only `longcat-gguf` goes lower (8 GB / 16 GB — see its section), at a much higher per-frame cost; it is what the installer picks when the machine cannot run the Qwen families (see its section). `nunchaku-qwen` runs at about **4 sec/frame** using its paired _Fast Pipeline_ (`steps=2`) and needs 16GB+ VRAM / 64GB+ RAM. **`gguf-qwen`** (Qwen-Image-Edit 2511) now also supports the cached-TE split: **~7.3 sec/frame** against ~10.5 sec/frame for the standard path (~1.4×, 17-frame test at 2 steps), on a 16 GB+ GPU / 48 GB+ RAM for the recommended `qwen-2511_int8` config (12 GB+ with `qwen-2511_q3`). **`qwen21-turbo`** is the rendition-maximizing option — **~4.5 sec/frame** on the single split, **~2.3** with the paired `fast_split_TE` one — richer colors than the viggle family, but noticeably less stable between similar frames (see the field verdict below). `longcat-gguf` remain the choice for VRAM-constrained setups where neither of the above fits, at a real speed cost (see the `⚠️ Experimental` note under GGUF below). **`flux2`** (2.6.0) adds the FLUX.2-dev family: 16 GB+ VRAM / 64 GB+ RAM, **~4.0 s/frame** on the int4 config with `"vram_headroom": 3` (~5.5 on fp8 mixed) — see its section below. **`qwen25-nunchaku`** (2.7.0) runs the same Qwen-Image-Edit models through the **ComfyUI-nunchaku node**: **~4.1–4.4 s/frame** on the paired `-fast` configs and ~7.4–9.2 on the single-frame ones, on an RTX 50 card with 16 GB+ VRAM — its **2509** config is the pick of the family, while for 2511 the reference stays `qwen-2511_int8` (see the field verdict in its section). **`flux3`** (2026-10-21) adds **FLUX.3 Image Klein** with its **Qwen3.5-9B prompt upsampler** — the encoder reads the frame and expands the request, which is what makes the family recognize conventionally-colored subjects (a Santa suit is red, not "natural"); **~4.9-5.3 s/image** end to end, paired (see its section).
+> **Recommended**: **qwen21-viggle** and **nunchaku-qwen** are both recommended for production use. Thanks to recent code optimizations — Dynamic VRAM and the text-encoder (TE) split — **qwen21-viggle** is the fastest backend **in the 12 GB class**: **2.9 sec/frame** at the fastest usable step count (`steps=2`), or **2.65** with _Fast Pipeline_ (re-measured 2026-10-21; the older 1.7 / 3.5 pair predates DynamicVRAM — see the `⚠️ Fast Pipeline` note below). Faster configs exist above that VRAM class — see the field comparison below — and it has the **lowest minimum requirements of the backends that run at a usable speed**: **12 GB VRAM / 32 GB RAM** (14GB+ VRAM on the standard path). The other backends that also fit a 12 GB card are far slower — `qwen-2511_q3` at ~7 sec/frame, `longcat-gguf` at ~12 sec/frame — so at that VRAM class viggle is not just the fastest, it is in a different league. Only `longcat-gguf` goes lower (8 GB / 16 GB — see its section), at a much higher per-frame cost; it is what the installer picks when the machine cannot run the Qwen families (see its section). `nunchaku-qwen` runs at about **4 sec/frame** using its paired _Fast Pipeline_ (`steps=2`) and needs 16GB+ VRAM / 64GB+ RAM. **`gguf-qwen`** (Qwen-Image-Edit 2511) now also supports the cached-TE split: **~7.3 sec/frame** against ~10.5 sec/frame for the standard path (~1.4×, 17-frame test at 2 steps), on a 16 GB+ GPU / 48 GB+ RAM for the recommended `qwen-2511_int8` config (12 GB+ with `qwen-2511_q3`). **`qwen21-turbo`** is the rendition-maximizing option — **~4.5 sec/frame** on the single split, **~2.3** with the paired `fast_split_TE` one — richer colors than the viggle family, but noticeably less stable between similar frames (see the field verdict below). `longcat-gguf` remain the choice for VRAM-constrained setups where neither of the above fits, at a real speed cost (see the `⚠️ Experimental` note under GGUF below). **`flux2`** (2.6.0) adds the FLUX.2-dev family: 16 GB+ VRAM / 64 GB+ RAM, **~4.0 s/frame** on the int4 config with `"vram_headroom": 3` (~5.5 on fp8 mixed) — see its section below. **`qwen25-nunchaku`** (2.7.0) runs the same Qwen-Image-Edit models through the **ComfyUI-nunchaku node**: **~4.1–4.4 s/frame** on the paired `-fast` configs and ~7.4–9.2 on the single-frame ones, on an RTX 50 card with 16 GB+ VRAM — its **2509** config is the pick of the family, while for 2511 the reference stays `qwen-2511_int8` (see the field verdict in its section). **`flux3`** (2026-10-21) adds **FLUX.3 Image Klein** with its **Qwen3.5-9B prompt upsampler** — the encoder reads the frame and expands the request, which is what makes the family recognize conventionally-colored subjects (a Santa suit is red, not "natural"); **~4.9-5.3 s/image** end to end, paired (see its section).
 >
 > ⚠️ **Fast Pipeline + `qwen21-viggle`** (2.4.0): this backend no longer uses paired inference — _Fast Pipeline_ runs a **cached text-encoder split**: each frame's text-encoder conditioning is computed once and cached, then the sampling runs with the UNet resident, in chunks of 200 frames (~**2.65 sec/frame** at `steps=2`, about **1.09×** the standard path — measured 2026-10-21, see the note below). (The paired `fast_split_TE` flows chunk by *pairs* instead: 100 pairs for the `te` families, 50 for the edit ones — see [GUI usage](gui_usage.md#step-3-colorize-frames-ai).) There is no merge boundary, nor the paired-mode resolution trade-off it required. A chunk's cache is deleted once its frames are colorized, and a cancelled run resumes from the first missing frame. In standard (non-Fast) mode the single-frame path runs at about **2.9 sec/frame** at `steps=2`. On secondary, color-ambiguous details (e.g. a flower's petals) a run can still land on a noticeably different but plausible hue — the color-hedging behavior described above, not a defect. The [Viggle-Turbo](https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo) LoRA is still an experimental release: spot-check the output before a long batch run.
 >
 > **Color stability vs. variety**: based on real-world use across thousands of frames, `nunchaku-qwen` tends to show more color variability between similar frames — can look more vivid, but with weaker frame-to-frame consistency — while `qwen21-viggle` is more conservative in its color choices and more stable, likely a consequence of the Viggle-Turbo LoRA's aggressive step-distillation, which tends to narrow the range of plausible outputs toward "safe" choices. For video work, where flickering color between consecutive frames is a visible defect, this makes `qwen21-viggle`'s conservatism a practical advantage rather than just a stylistic difference — worth factoring in alongside the speed/hardware trade-offs above. The same pattern showed up in paired inference (which `qwen21-viggle` used before 2.4.0 and `nunchaku-qwen` still uses): when both frames of a pair shared an object, `qwen21-viggle` consistently colored it the same way in both halves, while `nunchaku-qwen` is less reliable at this — the exact cause (the LoRA itself vs. something more general about the two pipelines) is not established.
 
 > **Color stability, qwen21-turbo vs qwen21-viggle** (field verdict, 2026-10-11): the turbo family colors *better* — richer, often more accurate hues — but with noticeably more variability between similar frames; over a whole film that reads as visible color flicker and outweighs the better rendition. Its paired variant (`qwen21_turbo-fast_int8`, `fast_split_TE`) is a middle ground, though some frames come out almost black-and-white. `qwen21-viggle` at **2 steps** therefore stays the nominal default — the best speed / quality / stability trade-off.
+
+## Field comparison — one clip, every backend
+
+The author ran the same 15-frame clip through every shipped family, from the GUI,
+with each config's own defaults. All sessions are from **2026-10-15 onward**, so
+they were measured on the same stack (DynamicVRAM included). Figures are **end to
+end**: phase A + phase B, wall clock, first frame included.
+
+The clip is **920×672 (0.62 Mpx)**, while the per-backend sections below quote a
+~1 Mpx workload. That is why every absolute figure here is lower than the one in
+its own section: **compare the rows with each other, not with the sections.**
+
+| # | Config | s/image | Note |
+| -: | ------ | ------: | ---- |
+| 1 | `flux2_klein_4b_int8` | **1.67** | paired split |
+| 2 | `qwen-2509-nunchaku-fast_fp4` | 2.07 | paired split |
+| 3 | `qwen-2511-nunchaku-fast_fp4` | 2.33 | paired split |
+| 4 | `qwen21_turbo-fast_int8` | 2.67 | paired split |
+| 5 | `flux2_klein_9b_int8` | 2.80 | paired split |
+| 6 | `qwen21_viggle-soft-fast_q4` | 2.80 | paired split |
+| 7 | `qwen21_viggle-soft_int8` | 3.07 | the shipped default |
+| 8 | `qwen21_viggle-sharp_int8` | 3.40 | |
+| 9 | `qwen-2509-nunchaku_fp4` | 3.67 | single split |
+| 10 | `qwen_nunchaku_fp4` | 3.74 | live path |
+| 11 | `longcat_gguf-fast_q3` | 4.13 | paired split |
+| 12 | `qwen-2511-nunchaku_fp4` | 4.60 | single split |
+| 13 | `qwen21_turbo_int8` | 4.67 | single split |
+| 14 | `flux2_dev_int4` | 4.80 | paired split |
+| 15 | `flux3_klein_6b_int8` (6 steps) | 4.87 | paired split |
+| 16 | `qwen21_viggle-soft_q4` | 4.93 | |
+| 17 | `flux3_klein_6b_int8` (8 steps) | 5.33 | the shipped config |
+| 18 | `qwen-2511_int8` | 5.93 | single split |
+| 19 | `qwen-2511-fast_q3` | 5.93 | paired split |
+| 20 | `flux2_dev_fp8` | 6.67 | paired split |
+| 21 | `longcat_gguf_q3` (split) | 7.33 | |
+| 22 | `flux2_dev_q2` | 10.40 | **retired** (D17) |
+| 23 | `qwen-2511_q3` | 10.47 | single split |
+
+> **Read the ordering, not the absolute seconds.** The step count is each
+> config's shipped default and was not re-measured per row, the clip is smaller
+> than the section benchmarks (0.62 vs ~1 Mpx), and this is one scene: a config
+> that looks fast here can lose on other material. What the
+> table is good for is the shape of the field — the paired `-fast` configs and
+> the Klein 4B sit at the top, the single-split edit families in the middle, the
+> retired Q2/Q3 extremes at the bottom.
+>
+> Two consequences worth knowing: **`qwen21-viggle` is the fastest option that
+> fits 12 GB of VRAM**, not the fastest overall — `flux2_klein_4b_int8` is twice
+> as quick but wants 16 GB (see its section). And **`flux3` lands mid-field**
+> (4.9-5.3), which matches the separate measurement in its own section.
 
 ## Requirements by backend
 

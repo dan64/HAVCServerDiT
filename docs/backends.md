@@ -445,7 +445,7 @@ fits a 16 GB card:
 
 | Requirement | Details                            |
 | ----------- | ---------------------------------- |
-| **GPU**     | NVIDIA RTX 30/40/50 (16 GB+ VRAM)  |
+| **GPU**     | NVIDIA RTX 30/40/50 (**24 GB+ VRAM** — see the note below) |
 | **RAM**     | 64 GB+                             |
 | **CUDA**    | 13.0+                              |
 
@@ -486,11 +486,14 @@ the paired split apply unchanged. Three things are FLUX.3's own:
 > them. A 401 with the licence instructions is what you get otherwise — see
 > [Troubleshooting](troubleshooting.md).
 >
-> **RAM/VRAM**: where `flux2` streams the transformer from RAM, here the
-> upsampler adds a second large resident model. The 16 GB / 64 GB figures are
-> the `flux2` class, **not yet measured for this family** — the first field
-> run will confirm them (the upsampler is loaded and dropped inside phase A,
-> the same separator the other split families use).
+> **RAM/VRAM**: the four models do **not** fit a 16 GB card together. The
+> staged sizes in the field run (RTX 5070 Ti, 16 GB) were **6411 MB** for the
+> upsampler, **4632 MB** for the Qwen3-VL encoder, **5557 MB** for the
+> transformer and **160 MB** for the VAE: **16.7 GB against a 16.3 GB card**.
+> It still runs — the server evicts and re-stages between the phases — but the
+> upsampler then costs **~24 s per image** instead of staying warm, and the
+> encoder is re-read on every frame. **24 GB+ is the honest requirement**; on
+> 16 GB treat this family as a test configuration, not a production pick.
 >
 > **Steps**: the config ships **8**, and the GUI's *Colorization Steps* wins
 > (the reference workflow uses 16). Start at 8 and raise it only if a frame

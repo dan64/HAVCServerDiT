@@ -1656,6 +1656,22 @@ def load_flux3_pipeline(unet_path, clip_path, upsampler_clip_path="", vae_name="
     return {"model": model, "clip": clip, "upsampler": upsampler, "vae": vae}
 
 
+def _reset_generation_graph():
+    """Drop the malloc graph and prefetch state a text-generation call leaves behind.
+
+    ``comfy.model_prefetch.cleanup_prefetch_queues()`` aborts the recorded graph,
+    releases the prefetched modules and resets the counters -- the same call
+    ComfyUI 0.42.3 makes in ``BaseGenerate.generate()``'s finally block. Never
+    raises: this runs on the cleanup path, where the generation error (if any)
+    must stay the one the caller sees.
+    """
+    try:
+        import comfy.model_prefetch
+        comfy.model_prefetch.cleanup_prefetch_queues()
+    except Exception as exc:  # noqa: BLE001 - cleanup must not mask the caller's error
+        logger.debug("flux3: generation graph cleanup failed (%s)", exc)
+
+
 def flux3_enhance_prompt(pipeline, img_tensor, prompt, seed=42,
                          max_length=FLUX3_UPSAMPLER_MAX_LENGTH):
     """Expand a short colorization request into the instruction FLUX.3 receives.
@@ -1682,6 +1698,16 @@ def flux3_enhance_prompt(pipeline, img_tensor, prompt, seed=42,
     except Exception as exc:  # noqa: BLE001 - the frame must still be colorized
         logger.warning("flux3 prompt upsampler failed (%s); using the raw prompt", exc)
         return prompt
+    finally:
+        # ComfyUI 0.42.3 closes BaseGenerate.generate() with this cleanup; the
+        # generation stack vendored here predates it, and without it the malloc
+        # graph recorded by this call outlives the model. When the upsampler is
+        # unloaded between two frames (it does not fit beside the DiT on a
+        # 16 GB card) the next call replays the old graph against the new
+        # VBAR mappings: the KV cache gets bad page/position indices and the
+        # decode dies on an index_copy_ device assert. Dropping the graph here
+        # makes every call record a fresh one against the current mappings.
+        _reset_generation_graph()
 
     # TextGenerate's </think> handling: keep what follows the closing tag, and
     # drop an unterminated reasoning block

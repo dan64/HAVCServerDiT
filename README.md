@@ -58,6 +58,7 @@ CLI arguments, the full launch-script reference and the suggested inference step
 
 - [Installation](docs/installation.md) — installer, manual setup, updating, project layout
 - [Backends & requirements](docs/backends.md) — choosing the right backend
+- [Benchmarks](docs/benchmarks.md) — every config timed on one clip, with the method
 - [Server usage](docs/server_usage.md) — server startup, launch scripts, CLI arguments, suggested steps
 - [Pipeline configuration](docs/configuration.md) — config files and key reference
 - [RPC API](docs/rpc-api.md) — XML-RPC API, example clients, shared-memory transport

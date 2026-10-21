@@ -14,55 +14,19 @@ Each backend below shows a side-by-side comparison on the **same frame**: the gr
 
 > **Color stability, qwen21-turbo vs qwen21-viggle** (field verdict, 2026-10-11): the turbo family colors *better* — richer, often more accurate hues — but with noticeably more variability between similar frames; over a whole film that reads as visible color flicker and outweighs the better rendition. Its paired variant (`qwen21_turbo-fast_int8`, `fast_split_TE`) is a middle ground, though some frames come out almost black-and-white. `qwen21-viggle` at **2 steps** therefore stays the nominal default — the best speed / quality / stability trade-off.
 
-## Field comparison — one clip, every backend
+## Field comparison
 
-The author ran the same 15-frame clip through every shipped family, from the GUI,
-with each config's own defaults. All sessions are from **2026-10-15 onward**, so
-they were measured on the same stack (DynamicVRAM included). Figures are **end to
-end**: phase A + phase B, wall clock, first frame included.
+Every shipped config timed on the same 15-frame clip (920x672, 0.62 Mpx), end to
+end, all sessions from 2026-10-15 onward. The full table, its method and its
+caveats live in **[Benchmarks](benchmarks.md)**; what matters here is the shape:
 
-The clip is **920×672 (0.62 Mpx)**, while the per-backend sections below quote a
-~1 Mpx workload. That is why every absolute figure here is lower than the one in
-its own section: **compare the rows with each other, not with the sections.**
-
-| # | Config | s/image | Note |
-| -: | ------ | ------: | ---- |
-| 1 | `flux2_klein_4b_int8` | **1.67** | paired split |
-| 2 | `qwen-2509-nunchaku-fast_fp4` | 2.07 | paired split |
-| 3 | `qwen-2511-nunchaku-fast_fp4` | 2.33 | paired split |
-| 4 | `qwen21_turbo-fast_int8` | 2.67 | paired split |
-| 5 | `flux2_klein_9b_int8` | 2.80 | paired split |
-| 6 | `qwen21_viggle-soft-fast_q4` | 2.80 | paired split |
-| 7 | `qwen21_viggle-soft_int8` | 3.07 | the shipped default |
-| 8 | `qwen21_viggle-sharp_int8` | 3.40 | |
-| 9 | `qwen-2509-nunchaku_fp4` | 3.67 | single split |
-| 10 | `qwen_nunchaku_fp4` | 3.74 | live path |
-| 11 | `longcat_gguf-fast_q3` | 4.13 | paired split |
-| 12 | `qwen-2511-nunchaku_fp4` | 4.60 | single split |
-| 13 | `qwen21_turbo_int8` | 4.67 | single split |
-| 14 | `flux2_dev_int4` | 4.80 | paired split |
-| 15 | `flux3_klein_6b_int8` (6 steps) | 4.87 | paired split |
-| 16 | `qwen21_viggle-soft_q4` | 4.93 | |
-| 17 | `flux3_klein_6b_int8` (8 steps) | 5.33 | the shipped config |
-| 18 | `qwen-2511_int8` | 5.93 | single split |
-| 19 | `qwen-2511-fast_q3` | 5.93 | paired split |
-| 20 | `flux2_dev_fp8` | 6.67 | paired split |
-| 21 | `longcat_gguf_q3` (split) | 7.33 | |
-| 22 | `flux2_dev_q2` | 10.40 | **retired** (D17) |
-| 23 | `qwen-2511_q3` | 10.47 | single split |
-
-> **Read the ordering, not the absolute seconds.** The step count is each
-> config's shipped default and was not re-measured per row, the clip is smaller
-> than the section benchmarks (0.62 vs ~1 Mpx), and this is one scene: a config
-> that looks fast here can lose on other material. What the
-> table is good for is the shape of the field — the paired `-fast` configs and
-> the Klein 4B sit at the top, the single-split edit families in the middle, the
-> retired Q2/Q3 extremes at the bottom.
->
-> Two consequences worth knowing: **`qwen21-viggle` is the fastest option that
-> fits 12 GB of VRAM**, not the fastest overall — `flux2_klein_4b_int8` is twice
-> as quick but wants 16 GB (see its section). And **`flux3` lands mid-field**
-> (4.9-5.3), which matches the separate measurement in its own section.
+- the **paired `-fast` configs** and **`flux2_klein_4b_int8`** (1.67 s/image)
+  are at the top;
+- **`qwen21-viggle` is the fastest option that fits 12 GB** (3.07 s/image, 2.80
+  with `fast_split_TE`) — not the fastest overall;
+- **`flux3` lands mid-field** at 4.87-5.33 s/image;
+- the single-split edit families sit in the middle, the retired Q2/Q3 extremes
+  at the bottom.
 
 ## Requirements by backend
 

@@ -445,8 +445,8 @@ fits a 16 GB card:
 
 | Requirement | Details                            |
 | ----------- | ---------------------------------- |
-| **GPU**     | NVIDIA RTX 30/40/50 (16 GB+ with **Fast Pipeline** — see the note below) |
-| **RAM**     | 64 GB+                             |
+| **GPU**     | NVIDIA RTX 30/40/50 (**12 GB+ with Fast Pipeline** — see the note below) |
+| **RAM**     | 32 GB+ (with Fast Pipeline)        |
 | **CUDA**    | 13.0+                              |
 
 > **FLUX.3 Image Klein** (Black Forest Labs) is the newest FLUX image-editing
@@ -500,25 +500,29 @@ the paired split apply unchanged. Three things are FLUX.3's own:
 > them. A 401 with the licence instructions is what you get otherwise — see
 > [Troubleshooting](troubleshooting.md).
 >
-> **VRAM: Fast Pipeline is what brings it under 16 GB.** The four models are
-> **16.7 GB** staged in total (the field run on a 16 GB card measured 6411 MB
-> upsampler + 4632 MB text encoder + 5557 MB transformer + 160 MB VAE), so a
-> **single live call** — `colorize_frame_shm`, Fix Image, or the standard
-> (non-Fast) flow — needs all four at once: on 16 GB it still works, but the
-> server streams and re-stages, and that frame cost **31.9 s** (of which 23.8 s
-> the upsampler). The **Fast Pipeline separates the phases**, so neither one
-> needs the whole stack:
+> **VRAM: Fast Pipeline is what brings it to 12 GB.** The four models are
+> **16.7 GB** staged in total (the field run measured 6411 MB upsampler +
+> 4632 MB text encoder + 5557 MB transformer + 160 MB VAE), so a **single live
+> call** — `colorize_frame_shm`, Fix Image, or the standard (non-Fast) flow —
+> needs all four at once: on a 16 GB card it works but streams and re-stages,
+> and that frame cost **31.9 s** (23.8 of them the upsampler). The **Fast
+> Pipeline separates the phases**, so neither one needs the whole stack:
 >
 > | Phase | Resident | Staged |
 > | ----- | -------- | ------ |
 > | A — upsampler + text encoder + VAE | 6411 + 4632 + 160 | **~11.2 GB** |
 > | B — transformer + VAE | 5557 + 160 | **~5.7 GB** |
 >
-> Phase A is the heavy one and still leaves ~5 GB of headroom on a 16 GB card;
-> the transformer is not touched until phase B. The upsampler also stays
-> resident for the whole chunk (`first=True` only on the chunk's first frame),
-> instead of being re-staged per image as the live path does. So **16 GB is the
-> real requirement with Fast Pipeline**; more VRAM buys back the live path.
+> Phase A is the heavy one; on a 12 GB card it fits with ~0.8 GB to spare, so
+> the staging is tight but real — **12 GB VRAM / 32 GB RAM are field-confirmed
+> with Fast Pipeline**. The transformer is not touched until phase B (5.7 GB,
+> comfortable at that size). The upsampler also stays resident for the whole
+> chunk (`first=True` only on the chunk's first frame), instead of being
+> re-staged per image as the live path does.
+>
+> On 16 GB the same phases leave ~5 GB of headroom in phase A; the live path
+> also becomes usable there, at the streaming cost above. Below 12 GB the
+> family does not fit.
 >
 > **Steps**: the config ships **8**, and the GUI's *Colorization Steps* wins
 > (the reference workflow uses 16). Start at 8 and raise it only if a frame

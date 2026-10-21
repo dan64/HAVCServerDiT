@@ -443,6 +443,22 @@ fits a 16 GB card:
 
 ### flux3 : ~3.6 sec/frame paired (FLUX.3 Image Klein + Qwen3.5-9B prompt upsampler)
 
+<table>
+<tr>
+<td align="center"><img src="../assets/0_Flags_Ground_Truth.jpg" alt="Ground truth" width="220"><br><sub>Ground truth</sub></td>
+<td align="center"><img src="../assets/11_Flux3_klein-6b_int8.jpg" alt="FLUX.3 Klein 6B INT8 result" width="220"><br><sub>FLUX.3 Klein 6B (INT8)</sub></td>
+</tr>
+</table>
+
+> The author's field run of the shipped config, paired split.
+> **13 of the 20 flags come out with their real colors** — against 6-7 for the
+> two Flux.2 Klein configs on the same frame, and 18 of 20 for
+> `qwen-2509-nunchaku` / `qwen-2511_int8`. The upsampler does what it was
+> brought in for (it names the flags it recognizes instead of guessing
+> "natural" colors), but it does **not** close the gap with the Qwen-Image-Edit
+> family: use `flux3` when its FLUX look is what you want, not as a
+> higher-accuracy replacement for `qwen-2509-nunchaku`.
+
 | Requirement | Details                            |
 | ----------- | ---------------------------------- |
 | **GPU**     | NVIDIA RTX 30/40/50 (**12 GB+ with Fast Pipeline** — see the note below) |

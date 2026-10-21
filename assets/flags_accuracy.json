@@ -1,0 +1,72 @@
+{
+  "_comment": "Per-cell accuracy of each flag sample against assets/0_Flags_Ground_Truth.jpg: a 4x5 grid cell counts when the hue distribution of its colored pixels matches (36-bin intersection >= 0.40) and its mean CIELAB color does not drift (dE <= 25). Reference figures for regressions; regenerate with --update when a sample is intentionally replaced.",
+  "criterion": {"grid": [4, 5], "hue_min": 0.4, "de_max": 25.0, "hue_bins": 36},
+  "samples": {
+    "1_Flags_qwen-nunchaku.jpg": {
+      "correct": 18,
+      "of": 20,
+      "mean_hue": 0.788,
+      "mean_de": 9.0
+    },
+    "2_Flags_qwen2511_int8.jpg": {
+      "correct": 15,
+      "of": 20,
+      "mean_hue": 0.582,
+      "mean_de": 17.0
+    },
+    "3_Flags_qwen21-viggle.jpg": {
+      "correct": 10,
+      "of": 20,
+      "mean_hue": 0.515,
+      "mean_de": 23.3
+    },
+    "4_Flags_qwen21-turbo.jpg": {
+      "correct": 6,
+      "of": 20,
+      "mean_hue": 0.422,
+      "mean_de": 32.9
+    },
+    "5_Flags_longcat_q3.jpg": {
+      "correct": 12,
+      "of": 20,
+      "mean_hue": 0.511,
+      "mean_de": 22.0
+    },
+    "6_Flags_Flux2_dev.jpg": {
+      "correct": 6,
+      "of": 20,
+      "mean_hue": 0.358,
+      "mean_de": 28.7
+    },
+    "7_qwen-2509-nunchaku_fp4.jpg": {
+      "correct": 16,
+      "of": 20,
+      "mean_hue": 0.716,
+      "mean_de": 15.6
+    },
+    "8_qwen-2511-nunchaku_fp4.jpg": {
+      "correct": 18,
+      "of": 20,
+      "mean_hue": 0.696,
+      "mean_de": 12.8
+    },
+    "9_Flux2_klein-9b_int8.jpg": {
+      "correct": 8,
+      "of": 20,
+      "mean_hue": 0.438,
+      "mean_de": 24.4
+    },
+    "10_Flux2_klein-4b_int8.jpg": {
+      "correct": 7,
+      "of": 20,
+      "mean_hue": 0.383,
+      "mean_de": 29.2
+    },
+    "11_Flux3_klein-6b_int8.jpg": {
+      "correct": 13,
+      "of": 20,
+      "mean_hue": 0.525,
+      "mean_de": 26.7
+    }
+  }
+}

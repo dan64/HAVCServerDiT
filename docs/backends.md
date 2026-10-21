@@ -458,6 +458,13 @@ fits a 16 GB card:
 > "natural" colors), but it does **not** close the gap with the Qwen-Image-Edit
 > family: use `flux3` when its FLUX look is what you want, not as a
 > higher-accuracy replacement for `qwen-2509-nunchaku`.
+>
+> The counts are not an impression: each of the 20 cells is scored on a fixed
+> criterion — the hue distribution of its colored pixels must match the ground
+> truth (36-bin histogram, intersection >= 0.40) **and** its mean CIELAB color
+> must not drift (dE <= 25) — and a cell counts only when both hold. On this
+> frame the criterion reproduces the visual counts of `qwen-nunchaku` (18),
+> `qwen-2511-nunchaku` (18), `flux3` (13) and Flux.2 Klein 4B (7) exactly.
 
 | Requirement | Details                            |
 | ----------- | ---------------------------------- |

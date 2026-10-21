@@ -45,8 +45,7 @@ step count as "probably 2, unverified" unless the name says otherwise.
 
 | # | Config | s/image | Flow |
 | -: | ------ | ------: | ---- |
-| 1 | `
-klein_4b_int8` | **1.67** | paired split |
+| 1 | `klein_4b_int8` | **1.67** | paired split |
 | 2 | `qwen-2509-nunchaku-fast_fp4` | 2.07 | paired split |
 | 3 | `qwen-2511-nunchaku-fast_fp4` | 2.33 | paired split |
 | 4 | `qwen21_turbo-fast_int8` | 2.67 | paired split |

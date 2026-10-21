@@ -49,7 +49,7 @@ pip install comfy-kitchen==0.2.35
 if errorlevel 1 (
     echo [WARNING] Failed to pin comfy-kitchen. qwen21-viggle may not work correctly.
 )
-pip install comfy-aimdo==0.5.5
+pip install comfy-aimdo==0.5.6
 if errorlevel 1 (
     echo [WARNING] Failed to pin comfy-aimdo. qwen21-viggle may not work correctly.
 )

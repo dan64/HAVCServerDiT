@@ -277,7 +277,7 @@ pip install \
     av \
     torchsde \
     gguf \
-    comfy-aimdo==0.5.5 \
+    comfy-aimdo==0.5.6 \
     comfy-kitchen==0.2.35
 ```
 
@@ -324,13 +324,13 @@ python patch_nunchaku.py
 #    only sets these for a fresh install, an existing .venv needs this
 #    explicitly
 pip install comfy-kitchen==0.2.35
-pip install comfy-aimdo==0.5.5
+pip install comfy-aimdo==0.5.6
 
 # 7) Verify everything is up-to-date
 pip show torch          # Expected: 2.10.0+cu130
 pip show nunchaku       # Expected: 1.2.1+cu13.0torch2.10
 pip show comfy-kitchen  # Expected: 0.2.35
-pip show comfy-aimdo    # Expected: 0.5.5
+pip show comfy-aimdo    # Expected: 0.5.6
 ```
 
 > **Note**: steps 4–5 are only needed if `vscmnet2` or `patch_nunchaku.py`

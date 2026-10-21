@@ -265,7 +265,7 @@ with a plain and a `-fast` (paired split) variant:
 > than the previous GGUF+mmproj pair; see [What's New](whats-new.md)). The
 > GGUF pair (`Qwen3-VL-8B-Instruct-UD`) remains available by editing the
 > config's `clip_name`/`clip_mmproj`, see [Pipeline Configuration](configuration.md). Requires
-> `comfy-kitchen==0.2.35` and `comfy-aimdo==0.5.5` exactly (pinned, not a
+> `comfy-kitchen==0.2.35` and `comfy-aimdo==0.5.6` exactly (pinned, not a
 > minimum — both are compiled packages and an untested newer build is not
 > assumed safe). A fresh `install.cmd` run sets these; an **existing**
 > `.venv` needs an explicit upgrade, see [Quick Update](installation.md#-quick-update-existing-installation).

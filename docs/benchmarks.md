@@ -75,7 +75,7 @@ step count as "probably 2, unverified" unless the name says otherwise.
   buys more than any model choice: the same family moves from 3.67
   (`qwen-2509-nunchaku_fp4`) to 2.07 (`-fast`), a 1.8× jump.
 - **`flux2_klein_4b_int8` is the fastest config in the stack** at 1.67 s/image.
-  It needs 16 GB of VRAM, which is why it is the installer's pick for small
+  It needs 8 GB of VRAM, which is why it is the installer's pick for small
   machines but not the universal default.
 - **`qwen21-viggle` is the fastest option that fits 12 GB** (3.07 single split,
   2.80 with `fast_split_TE`), not the fastest overall.

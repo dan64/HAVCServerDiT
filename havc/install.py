@@ -77,11 +77,16 @@ NVENC = {
 # v0.37 (2026-10-20): the `guidance: 0` sentinel (no FluxGuidance node at all),
 # which the Flux.2 Klein configs need; every other family is unchanged.
 # Bucket: HAVC Assets v1.0.7.
+# v0.38 (2026-10-21): the FLUX.3 family — the backported flux3 DiT
+# (comfy/ldm/flux3/), the Flux3 text-encoder classes, CLIPType.FLUX3, the
+# model detection/registry entries, the LoRA qkv mapping and the "flux3"
+# CLIPLoader type — plus the paired split for it and the generation-graph
+# cleanup that fixed the upsampler crash. Bucket: HAVC Assets v1.0.8.
 COMFY_BRIDGE = {
-    "name": "comfy_bridge_v0.37.zip",
-    "url": "https://github.com/dan64/HAVCServerDiT/releases/download/v1.0.7/comfy_bridge_v0.37.zip",
-    "sha256": "67d17352d9a3b392a84e0a3d41fab6133cf3c53edb6ba7850d23c47afe1af906",
-    "size": 10740166,
+    "name": "comfy_bridge_v0.38.zip",
+    "url": "https://github.com/dan64/HAVCServerDiT/releases/download/v1.0.8/comfy_bridge_v0.38.zip",
+    "sha256": "c3211b577cdad48904252a1fdfdd0196ee2d5505498539401267e064a474bfd0",
+    "size": 10748963,
 }
 
 # cmnet2 assets (plugins + weights) — pinned; sha256 also verified against

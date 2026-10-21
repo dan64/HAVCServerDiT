@@ -1,17 +1,14 @@
 # What's New
 
-### 2026-10-21 — FLUX.3 Image Klein (`flux3`), with its prompt upsampler
+### 2026-10-21 (v2.9.0) — FLUX.3 Image Klein, and a new prompt for the nunchaku families
 
-**A new family: FLUX.3 Image Klein.** `flux3_klein_6b_int8` is the first
-backend whose prompt is written by a model that **looks at the frame first**:
-a Qwen3.5-9B encoder reads the reference image and expands your short request
-into the detailed instruction the transformer receives. That is what makes
-FLUX.3 recognize the conventionally-colored things the other models hedge
-about — a Santa suit comes out red, a uniform in its real color — which is why
-the family is here at all. The expansion runs **once per image** (once per
-pair canvas in the paired flow), and in the Fast Pipeline it runs in **phase
-A**, so a resumed run reuses the cached instruction instead of re-running the
-9B model. Without the encoder (or if it fails) your prompt is used verbatim.
+**A new backend: `flux3` (FLUX.3 Image Klein).** It is the only FLUX that
+recognizes what it is looking at — a Santa suit comes out red, a uniform in
+its real color — because a **Qwen3.5-9B encoder reads the frame** and expands
+your short request into the instruction the transformer receives. That
+expansion runs once per image (once per pair in the paired split) and, in the
+Fast Pipeline, inside phase A, so a resumed run reuses the cached instruction
+instead of re-running the 9B model.
 
 **The graph is FLUX.3's own.** It shares the Flux.2 conditioning shape — the
 B&W frame is a VAE reference latent, the small **Qwen3-VL-4B** encoder is
@@ -21,32 +18,28 @@ differs is a **constant timestep shift** (`ModelSamplingFlux` with
 `euler` / `simple` at cfg 1. The config ships **8 steps** (the reference
 workflow uses 16); the GUI's step count still wins.
 
-**Requirements, measured.** The four files — the 5.8 GB int8 ConvRot
-transformer, the two text encoders and the FLUX.2 VAE, 17.7 GB in total — come
-from `black-forest-labs/flux-3-image-klein-comfy`, a **gated** HuggingFace
-repo: accept the licence on its page with the account your token belongs to.
-With the **Fast Pipeline** the phases are separated, and that is what makes the
-family fit a modest card: phase A stages the upsampler, the text encoder and
-the VAE (**~11.2 GB**), phase B the transformer and the VAE (**~5.7 GB**) — so
-**12 GB VRAM / 32 GB RAM** are enough, field-confirmed. A single live call
-(Fix Image, or the standard flow) needs all four at once, 16.7 GB, and costs
-**31.9 s** per frame on a 16 GB card.
+**Requirements, measured.** On a 16 GB card: **12 GB VRAM / 32 GB RAM with the Fast Pipeline**
+(phase A stages the upsampler, the text encoder and the VAE, ~11.2 GB; phase B
+the transformer and the VAE, ~5.7 GB), and **~4.9-5.3 s per image** end to end
+in the paired split (the upsampler is 55-60% of it and does not scale with the
+step count). On the 20-flag sample frame it colors **13 of 20** correctly,
+against 6-7 for the two Flux.2 Klein configs and 18 for `qwen-2509-nunchaku` /
+`qwen-2511_int8`: more than Flux.2, still short of the Qwen-Image-Edit
+family. All four weights come from `black-forest-labs/flux-3-image-klein-comfy`,
+a **gated** HuggingFace repo — accept the licence there once.
 
-The **paired split** runs at **~3.6 s/frame** (5.8 s of upsampler + 1.4 s of
-inference per pair), the second-fastest backend in the stack: the upsampler,
-not the sampler, is what the time goes into, so the shipped 8 steps cost
-little. On the 20-flag sample frame it colors **13 of 20** correctly, against
-6-7 for the two Flux.2 Klein configs and 18 for `qwen-2509-nunchaku` /
-`qwen-2511_int8` — the upsampler roughly doubles Flux.2 by naming what it
-recognizes, but it does not close the gap with the Qwen-Image-Edit family.
+**The nunchaku families ship a new prompt — a visible change.** The eight
+configs (`qwen-2509-nunchaku*`, `qwen-2511-nunchaku*`, `qwen_nunchaku_*`) now
+use the detailed anti-hedging wording instead of the short sentence. It is the
+text `qwen21-viggle` has shipped since 2026-10-18, and those families color
+conventionally-known subjects more reliably with it. **Enable Prompt Config is
+on by default**, so an updated installation sends the new wording with no
+action from you; `qwen-2511_int8` and `qwen-2511_q3` keep the short one.
 
-**A second fix from the field runs.** The first colorization after a model
-swap could kill the server with a CUDA device assert in the upsampler's
-decode. The cause was ours: the vendored text-generation stack predates the
-`cleanup_prefetch_queues()` call that ComfyUI 0.42.3 runs after every
-`generate()`, so the allocator graph recorded by one call outlived the model
-and the next call replayed it against stale mappings. The graph is now dropped
-after each upsampler call.
+**`comfy-aimdo` 0.5.6.** The VRAM allocator moves to the build current ComfyUI
+ships (a null guard in the allocator's page-unref path). The Python API is
+unchanged — 41 definitions, byte-identical to 0.5.5 — and the full stack was
+re-run on it. `comfy-kitchen` stays at 0.2.35.
 
 **The new ComfyUI core pieces are vendored.** FLUX.3 needs a ComfyUI newer
 than the embedded core, so the diff was backported into `comfy_bridge`
@@ -55,20 +48,19 @@ than the embedded core, so the diff was backported into `comfy_bridge`
 replacing the core — every existing backend takes the same code path as
 before, and the regression suite is green.
 
-**The nunchaku families get a new prompt — a visible change.**
-`qwen-2509-nunchaku*`, `qwen-2511-nunchaku*` and `qwen_nunchaku_*` (eight
-configs) now ship the detailed anti-hedging wording instead of the short
-sentence: *"Add colors to this black-and-white image, not to hedge about what
-colors might be present. For any subject, garment, object, or setting whose
-color is a matter of common knowledge or strong convention, assign the
-expected color directly and confidently. Colorize this image using natural
-colors. Strictly preserve all shapes, edges and background details."* It is
-the wording `qwen21-viggle` has shipped since 2026-10-18, and those families
-color conventionally-known subjects more reliably with it. Since **Enable
-Prompt Config is on by default**, an updated installation sends the new text
-without any action — the reason this is called out here. `qwen-2511_int8` and
-`qwen-2511_q3` (the GGUF path) keep the short wording, and the prompt field
-stays read-only until the checkbox is cleared.
+**Fixed in the FLUX.3 work:** the first colorization after a model swap could
+kill the server with a CUDA device assert in the upsampler's decode (the
+vendored text-generation stack predated ComfyUI 0.42.3's
+`cleanup_prefetch_queues()` call, so the allocator graph outlived the model);
+and the paired split refused `flux3` with "requires a split-TE pipeline"
+because two hand-written family lists in the RPC server did not include it.
+
+**Corrected figure: the viggle Fast Pipeline is ~1.05-1.09×, not 2×.** The
+old 1.7 s/frame compared against a live path that still re-staged models
+between phases; DynamicVRAM removed that cost on 2026-10-14 and the split's
+advantage went with it. Measured today: live 2.88 s/frame at 2 steps vs split
+2.65 (1.09×), live 4.45 vs split 4.25 at 6 steps (1.05×). Fast Pipeline keeps
+its resume and chunked progress; it is no longer a speed-up on that family.
 
 ### 2026-10-20 (v2.8.0) — Two new Flux.2 Klein models, and a lighter default
 

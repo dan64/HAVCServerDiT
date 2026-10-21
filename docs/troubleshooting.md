@@ -11,7 +11,7 @@ python dit_rpc_server.py --module-dir /path/to/dit_colorize_main
 ```
 
 **`Model 'xxx' is not supported`**
-Supported values for `model_name` are `"nunchaku-qwen"` (FP4/INT4), `"gguf-qwen"` (Qwen-Image-Edit 2511: native int8 ConvRot or GGUF Q3_K_S), `"qwen25-nunchaku"` (Qwen-Image-Edit 2509/2511 on the ComfyUI-nunchaku node), `"longcat-gguf"`, `"qwen21-viggle"`, `"qwen21-turbo"` and `"flux2"` (FLUX.2-dev). For `"gguf-qwen"`, the checkpoint is selected by the `unet_gguf` file in the config (a `.safetensors` int8 ConvRot or a `.gguf` quant).
+Supported values for `model_name` are `"nunchaku-qwen"` (FP4/INT4), `"gguf-qwen"` (Qwen-Image-Edit 2511: native int8 ConvRot or GGUF Q3_K_S), `"qwen25-nunchaku"` (Qwen-Image-Edit 2509/2511 on the ComfyUI-nunchaku node), `"longcat-gguf"`, `"qwen21-viggle"`, `"qwen21-turbo"`, `"flux2"` (FLUX.2-dev and Flux.2 Klein) and `"flux3"` (FLUX.3 Image Klein). For `"gguf-qwen"`, the checkpoint is selected by the `unet_gguf` file in the config (a `.safetensors` int8 ConvRot or a `.gguf` quant).
 
 **Pipeline takes a long time to load**
 **Nunchaku**: on the first run the model weights (~15–30 GB) are downloaded from HuggingFace.
@@ -58,12 +58,14 @@ for the right value per VRAM size (12 GB and 24 GB+: `0`).
 
 **Downloading a model fails with 401 / "access is restricted"**
 That repository is **gated**: the file listing is public but the download needs
-the license accepted. `black-forest-labs/FLUX.2-klein-9b-fp8` is one of them.
+the license accepted. `black-forest-labs/FLUX.2-klein-9b-fp8` and
+`black-forest-labs/flux-3-image-klein-comfy` (all of `flux3`) are like that.
 Open `https://huggingface.co/<repo>` in a browser, accept the license with the
 account whose token this machine uses (`HF_TOKEN`, or `huggingface-cli login`),
 then retry — no reinstall needed. The engine names the repository in the error
-instead of failing later with a missing file. The shipped Klein configs,
-the text encoders and the Flux.2-dev checkpoints are **not** gated.
+instead of failing later with a missing file. The shipped Flux.2 Klein configs
+(the INT8 ConvRot files), their text encoders and the Flux.2-dev checkpoints
+are **not** gated.
 
 ---
 

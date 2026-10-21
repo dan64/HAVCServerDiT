@@ -489,6 +489,77 @@ It only pays off for the **int4 flux2 checkpoint**, so only
 > environment variable `HAVC_VRAM_HEADROOM` overrides the config (used for
 > A/B tests; `0` cancels the config's value).
 
+### FLUX.3 Klein Backend : `config/flux3_klein_6b_int8.json`
+
+**FLUX.3 Image Klein** has its own `model_name` (`"flux3"`) because the graph
+differs from every other FLUX family in the engine, not just in the weights.
+The key names are the FLUX.2 ones (`unet_name` / `clip_name` / `vae_name`,
+which the server normalizes into its generic slots) plus one key of its own:
+
+| Key                    | Meaning                                                                    |
+| ---------------------- | -------------------------------------------------------------------------- |
+| `upsampler_clip_name`  | the **Qwen3.5-9B** encoder that expands the prompt from the image. Empty (or absent) disables the upsampler: your prompt is then used verbatim |
+| `upsampler_hf_name`    | its remote filename, when it differs from `text_encoders/<basename>`        |
+| `steps`                | the sampling steps; the config ships **8** (the reference workflow uses 16) |
+| `fast_split_TE`        | on: the paired split (two frames per canvas, one upsampler pass)            |
+| `split_TE_resolution`  | the split-TE area budget, as for the other `te` families                    |
+
+Example (the shipped config, abridged):
+```json
+{
+    "model_name":          "flux3",
+    "unet_name":           "models/diffusion_models/flux3-image-klein-int8-convrot.safetensors",
+    "unet_hf_name":        "diffusion_models/flux3-image-klein-int8-convrot.safetensors",
+    "clip_name":           "models/text_encoders/qwen3vl_4b_int8_convrot.safetensors",
+    "clip_hf_name":        "text_encoders/qwen3vl_4b_int8_convrot.safetensors",
+    "upsampler_clip_name": "models/text_encoders/qwen3.5_9b_flux3_prompt_upsampler_w4a8.safetensors",
+    "upsampler_hf_name":   "text_encoders/qwen3.5_9b_flux3_prompt_upsampler_w4a8.safetensors",
+    "vae_name":            "flux2-vae.safetensors",
+    "vae_hf_name":         "vae/flux2-vae.safetensors",
+    "lora_path":           "",
+    "steps":               8,
+    "vram_headroom":       0,
+    "fast_split_TE":       true,
+    "split_TE_resolution": 1024,
+    "hf_unet":             "black-forest-labs/flux-3-image-klein-comfy",
+    "hf_clip":             "black-forest-labs/flux-3-image-klein-comfy",
+    "hf_vae":              "black-forest-labs/flux-3-image-klein-comfy"
+}
+```
+
+What the engine does with it, in the order it happens:
+
+1. **Prompt upsampling** (the reason the family exists). The 9B encoder runs
+   comfy's `TextGenerate` against the reference frame with BFL's image-edit
+   system prompt — sampling on, `temperature 1` / `top_k 1` / `top_p 0.95`,
+   no penalties, `thinking` off, `max_length 3584` — and returns the expanded
+   instruction. It runs **once per image**; in the Fast Pipeline it runs in
+   **phase A**, and both the expanded and the original prompt are stored in
+   the conditioning cache, so a resumed run reuses the expansion instead of
+   re-running the 9B model. If the encoder is missing or fails, the original
+   prompt is used and the frame is still colorized (a warning is logged).
+2. **Conditioning**: the expanded instruction goes through the small
+   Qwen3-VL-4B encoder; the B&W frame becomes the VAE reference latent. The
+   structure is the Flux.2 one, so the split flow, the paired geometry and the
+   conditioning cache are shared code.
+3. **Sampling**: `ModelSamplingFlux` patched with
+   `max_shift = base_shift = ln(16)` (a **constant** shift — the reference
+   workflow's `alpha = 16`), then `KSampler` with `euler` / `simple`, **cfg 1**
+   and the configured steps. At cfg 1 comfy skips the negative branch, so the
+   positive conditioning is passed as the negative and nothing is wasted.
+
+> **The three files come from one gated repo.**
+> `black-forest-labs/flux-3-image-klein-comfy` is `gated: auto`: accept the
+> licence on its page with the account your token belongs to. Without it the
+> download answers **HTTP 401** and HAVC stops with the licence instructions
+> (same diagnostic as the Flux.2 Klein 9B). The repo layout is
+> `diffusion_models/`, `text_encoders/`, `vae/`, which is what the
+> `*_hf_name` keys above mirror. `vram_headroom` stays `0`.
+
+> **No `guidance` key**: FLUX.3 samples at cfg 1 and has no guidance node —
+> `guidance` is accepted but ignored by this family (writing `0` there is
+> harmless and documents the intent).
+
 ### Key reference
 
 | Key                                       | Required | Description                                                                                  |

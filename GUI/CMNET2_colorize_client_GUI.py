@@ -1466,6 +1466,15 @@ def orchestrator(init_values, window):
                 log_message("ℹ️ flux2: prompt enhancement is not used "
                             "by this family.")
             enhance_prompt = False
+        elif model_type == "flux3":
+            # flux3 owns its prompt handling: the 9B upsampler reads the frame
+            # and expands the request, once per image (per pair canvas in the
+            # paired flow). The panel's own enhancer is not involved, and the
+            # step count is the panel's (config default 8).
+            if enhance_prompt:
+                log_message("ℹ️ flux3: the prompt is expanded by the model's own "
+                            "upsampler; the panel's enhancer is not used.")
+            enhance_prompt = False
 
         chunks = [image_files[i:i + chunk_size]
                   for i in range(0, tot_num_images, chunk_size)]
@@ -1725,6 +1734,13 @@ def orchestrator(init_values, window):
             if enhance_prompt:
                 log_message("ℹ️ flux2: prompt enhancement is not used "
                             "by this family.")
+            enhance_prompt = False
+        elif model_type == "flux3":
+            # flux3: the upsampler sees the merged canvas, so the pair shares
+            # one expanded instruction; the step count stays the panel's.
+            if enhance_prompt:
+                log_message("ℹ️ flux3: the prompt is expanded by the model's own "
+                            "upsampler; the panel's enhancer is not used.")
             enhance_prompt = False
 
         chunks = [todo[i:i + chunk_size] for i in range(0, len(todo), chunk_size)]
@@ -2218,6 +2234,16 @@ def orchestrator(init_values, window):
             # a single conditioning, so a pair costs one VAE encode + one
             # sampling pass instead of two — the two frames share the
             # split_TE_resolution area budget.
+            if fast_pair:
+                do_colorize_split_pair(values, window, "te")
+            else:
+                do_colorize_split(values, window)
+            return
+        if model_type == "flux3":
+            # Fast Pipeline on the flux3 family: same split flow as flux2 (the
+            # conditioning structure is the Flux.2 one), with the prompt
+            # upsampler running in phase A. In the paired flow it reads the
+            # merged canvas once for both frames.
             if fast_pair:
                 do_colorize_split_pair(values, window, "te")
             else:
@@ -3119,8 +3145,8 @@ tab3_layout = [
                               "output in the Server Log tab."),
           sg.Text("stopped", key="-SERVER_STATUS-", size=(45, 1), expand_x=True)],
         [sg.Text("Colorization Steps:"),
-         sg.Combo(steps_values, default_value=cfg["steps"], key="-STEPS-", tooltip="Colorization steps per frame (lower = faster). LongCat 8, Qwen 2, qwen21-viggle 6, flux2 2.", readonly=True, size=(6,1)),
-         sg.Checkbox("Fast Pipeline", key="-FAST_PIPE-", default=cfg["fast_pipe"], tooltip="qwen21-viggle / qwen21-turbo / qwen-2511 / qwen25-nunchaku / longcat-gguf / flux2: cached-TE split flow; qwen25-nunchaku pairs two frames per pass (1024px). A config with fast_split_TE pairs consecutive frames (merged before the TE, split after the transformer)"),
+         sg.Combo(steps_values, default_value=cfg["steps"], key="-STEPS-", tooltip="Colorization steps per frame (lower = faster). LongCat 8, Qwen 2, qwen21-viggle 6, flux2 2, flux3 8.", readonly=True, size=(6,1)),
+         sg.Checkbox("Fast Pipeline", key="-FAST_PIPE-", default=cfg["fast_pipe"], tooltip="qwen21-viggle / qwen21-turbo / qwen-2511 / qwen25-nunchaku / longcat-gguf / flux2 / flux3: cached-TE split flow; qwen25-nunchaku pairs two frames per pass (1024px). A config with fast_split_TE pairs consecutive frames (merged before the TE, split after the transformer)"),
          sg.Checkbox("Unsharp Mask", key="-USM-", default=cfg.get("usm", False),
                      tooltip="Pre-filter the input before colorization (unsharp mask: amount 0.50, "
                              "threshold 0). Removes the film grain that can stop the model from "

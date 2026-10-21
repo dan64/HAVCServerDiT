@@ -100,6 +100,7 @@ try:
         load_qwen21_turbo_pipeline,
         load_qwen25_nunchaku_pipeline,
         load_flux2_pipeline,
+        load_flux3_pipeline,
         process_image,
         process_image_pair,
         process_single_image,
@@ -121,6 +122,7 @@ except ImportError as _e:
     load_qwen21_turbo_pipeline = None
     load_qwen25_nunchaku_pipeline = None
     load_flux2_pipeline       = None
+    load_flux3_pipeline       = None
     process_image             = None
     process_image_pair        = None
     process_single_image      = None
@@ -274,6 +276,8 @@ class ColorizeService:
         clip_hf_name: str = "",
         vae_hf_name: str = "",
         lora_hf_name: str = "",
+        upsampler_clip: str = "",
+        upsampler_hf_name: str = "",
         vram_headroom: float = 0.0,
         cpu_offload: str = "auto",
         num_blocks_on_gpu: int = 1,
@@ -293,6 +297,9 @@ class ColorizeService:
         guidance / clip_hf_name / vae_hf_name / lora_hf_name are flux2-only:
         the FluxGuidance value of the pipeline and explicit overrides of the
         assumed HuggingFace download paths (see load_flux2_pipeline).
+        upsampler_clip / upsampler_hf_name are flux3-only: the optional
+        Qwen3.5 prompt-upsampler encoder and its remote filename (empty
+        upsampler_clip means the raw prompt is used verbatim).
 
         vram_headroom (GB, default 0) is the DynamicVRAM reservation forwarded
         to the aimdo-backed loaders (gguf-qwen, qwen21-viggle, qwen21-turbo,
@@ -422,6 +429,22 @@ class ColorizeService:
                         clip_hf_name=clip_hf_name,
                         vae_hf_name=vae_hf_name,
                         lora_hf_name=lora_hf_name,
+                        vram_headroom=vram_headroom,
+                    )
+                elif model_name == "flux3":
+                    pipe = load_flux3_pipeline(
+                        model_name=model_name,
+                        unet_path=model_precision,
+                        clip_path=model_rank,
+                        upsampler_clip_path=upsampler_clip,
+                        vae_name=vae_name,
+                        hf_unet=hf_unet,
+                        hf_clip=hf_clip,
+                        hf_vae=hf_vae,
+                        unet_hf_name=unet_hf_name,
+                        clip_hf_name=clip_hf_name,
+                        upsampler_hf_name=upsampler_hf_name,
+                        vae_hf_name=vae_hf_name,
                         vram_headroom=vram_headroom,
                     )
                 else:
@@ -1440,6 +1463,15 @@ def parse_pipeline_config(config_path: str) -> dict:
         (optional: unet_hf_name / clip_hf_name / vae_hf_name / lora_hf_name,
          which override the assumed HuggingFace paths of the auto-download)
 
+    New format (flux3, FLUX.3 Image Klein plus its prompt upsampler):
+        {"model_name": "flux3",
+         "unet_name": "models/diffusion_models/flux3-image-klein-int8-convrot.safetensors",
+         "clip_name": "models/text_encoders/qwen3vl_4b_int8_convrot.safetensors",
+         "upsampler_clip_name": "models/text_encoders/qwen3.5_9b_flux3_prompt_upsampler_w4a8.safetensors",
+         "vae_name": "flux2-vae.safetensors", "lora_path": "", "steps": 8}
+        (upsampler_clip_name may be empty: the raw prompt is then used;
+         optional upsampler_hf_name overrides its download path)
+
     Legacy format (Nunchaku models):
         {"model_name": "nunchaku-qwen", "model_precision": "...",
          "model_rank": "...", "model_inference_steps": "4",
@@ -1531,6 +1563,9 @@ def parse_pipeline_config(config_path: str) -> dict:
             "clip_hf_name": cfg.get("clip_hf_name", ""),
             "vae_hf_name": cfg.get("vae_hf_name", ""),
             "lora_hf_name": cfg.get("lora_hf_name", ""),
+            # flux3: the prompt upsampler encoder (empty disables it)
+            "upsampler_clip": cfg.get("upsampler_clip_name", ""),
+            "upsampler_hf_name": cfg.get("upsampler_hf_name", ""),
             "vram_headroom": vram_headroom,
             # qwen25-nunchaku: the Nunchaku loader's offload policy and the
             # LoRA weight (ignored by the other families).
@@ -1618,6 +1653,8 @@ def _load_pipeline_from_parsed(service: ColorizeService, cfg: dict,
         clip_hf_name=cfg.get("clip_hf_name", ""),
         vae_hf_name=cfg.get("vae_hf_name", ""),
         lora_hf_name=cfg.get("lora_hf_name", ""),
+        upsampler_clip=cfg.get("upsampler_clip", ""),
+        upsampler_hf_name=cfg.get("upsampler_hf_name", ""),
         vram_headroom=cfg.get("vram_headroom", 0),
         cpu_offload=cfg.get("cpu_offload", "auto"),
         num_blocks_on_gpu=cfg.get("num_blocks_on_gpu", 1),

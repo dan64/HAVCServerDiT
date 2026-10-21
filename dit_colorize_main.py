@@ -748,6 +748,72 @@ def load_flux2_pipeline(model_name: str, unet_path: str, clip_path: str,
         pipeline["_guidance"] = 4.0
     return pipeline
 
+
+def load_flux3_pipeline(model_name: str, unet_path: str, clip_path: str,
+                        upsampler_clip_path: str = "",
+                        vae_name: str = "flux2-vae.safetensors",
+                        hf_unet="black-forest-labs/flux-3-image-klein-comfy",
+                        hf_clip="black-forest-labs/flux-3-image-klein-comfy",
+                        hf_vae="black-forest-labs/flux-3-image-klein-comfy",
+                        unet_hf_name: str = "", clip_hf_name: str = "",
+                        upsampler_hf_name: str = "", vae_hf_name: str = "",
+                        vram_headroom: float = None):
+    """
+    Load the FLUX.3 pipeline (Flux.3 Klein transformer + Qwen3-VL-4B text
+    encoder + FLUX.2 VAE, plus the optional Qwen3.5-9B prompt upsampler).
+
+    The family is ComfyUI-native end to end: like flux2 there is no diffusers
+    pipeline and no mmproj. The B&W frame reaches the transformer as a VAE
+    reference latent; the small text encoder is prompt-only, while the
+    upsampler encoder reads the frame to expand the short request into the
+    instruction the transformer receives (see comfy_bridge.colorize_flux3).
+
+    unet_path / clip_path / upsampler_clip_path are local paths under
+    comfy_bridge (or absolute). An empty upsampler_clip_path disables prompt
+    enhancement: the raw prompt is then used as-is.
+
+    *_hf_name : optional overrides of the assumed HuggingFace paths. The
+    defaults follow the BFL comfy repo layout (diffusion_models/,
+    text_encoders/, vae/).
+    """
+    if model_name != "flux3":
+        return None
+
+    import torch
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cudnn.allow_tf32 = True
+
+    import os as _os
+    _bridge_dir = _os.path.join(_os.path.dirname(__file__), "comfy_bridge")
+    unet_path = _os.path.join(_bridge_dir, unet_path) if not _os.path.isabs(unet_path) else unet_path
+    clip_path = _os.path.join(_bridge_dir, clip_path) if not _os.path.isabs(clip_path) else clip_path
+    if upsampler_clip_path and not _os.path.isabs(upsampler_clip_path):
+        upsampler_clip_path = _os.path.join(_bridge_dir, upsampler_clip_path)
+
+    from comfy_bridge import (load_flux3_pipeline as _comfy_load_flux3,
+                              colorize_flux3 as _colorize_flux3)
+
+    _auto = _os.environ.get("COMFY_AUTO_DOWNLOAD", "1") == "1"
+    _vae_local = _os.path.join(_bridge_dir, "models", "vae", vae_name)
+    _files = {
+        "unet": (unet_path, hf_unet, unet_hf_name or ("diffusion_models/" + _os.path.basename(unet_path))),
+        "clip": (clip_path, hf_clip, clip_hf_name or ("text_encoders/" + _os.path.basename(clip_path))),
+        "vae":  (_vae_local, hf_vae, vae_hf_name or ("vae/" + vae_name)),
+        "upsampler": (upsampler_clip_path, hf_clip,
+                      upsampler_hf_name or ("text_encoders/" + _os.path.basename(upsampler_clip_path)))
+                     if upsampler_clip_path else None,
+    }
+    if _auto:
+        _ensure_models(_files)
+
+    pipeline = _comfy_load_flux3(unet_path, clip_path,
+                                 upsampler_clip_path=upsampler_clip_path,
+                                 vae_name=vae_name, vram_headroom=vram_headroom)
+    pipeline["_model_type"] = "flux3"
+    pipeline["_colorize_fn"] = _colorize_flux3
+    pipeline["_prompt_upsampler"] = bool(upsampler_clip_path)
+    return pipeline
+
 def upscale_with_lanczos(image, target_size):
     return image.resize(target_size, Image.Resampling.LANCZOS)
 
@@ -788,6 +854,13 @@ def colorize_image(pipe, img: Image, prompt:str, steps: int = 2, seed: int=42, e
 
     # FLUX.2 pipeline (dict with _model_type marker)
     if isinstance(pipe, dict) and pipe.get("_model_type") == "flux2":
+        _colorize_fn = pipe.get("_colorize_fn")
+        kwargs = {"resolution": resolution} if resolution is not None else {}
+        return _colorize_fn(pipe, img, prompt=prompt, steps=steps, seed=seed, **kwargs)
+
+    # FLUX.3 pipeline (dict with _model_type marker): the prompt upsampler runs
+    # inside the colorize function, on the frame that is being colorized
+    if isinstance(pipe, dict) and pipe.get("_model_type") == "flux3":
         _colorize_fn = pipe.get("_colorize_fn")
         kwargs = {"resolution": resolution} if resolution is not None else {}
         return _colorize_fn(pipe, img, prompt=prompt, steps=steps, seed=seed, **kwargs)
@@ -1095,6 +1168,12 @@ def encode_frame_te(pipe, img_path, te_dir, stem, prompt, resolution: int = 1024
         res = comfy_bridge.encode_flux2_conditioning(
             pipe, img_in, prompt, resolution=resolution)
         _save = comfy_bridge.save_flux2_conditioning
+    elif family == "flux3":
+        # flux3: the prompt upsampler runs here, on the full frame, so phase B
+        # samples exactly the instruction the cache was built from
+        res = comfy_bridge.encode_flux3_conditioning(
+            pipe, img_in, prompt, resolution=resolution)
+        _save = comfy_bridge.save_flux3_conditioning
     else:
         res = comfy_bridge.encode_viggle_conditioning(
             pipe, img_in, prompt, resolution=resolution,
@@ -1149,6 +1228,10 @@ def colorize_frame_from_te(pipe, te_dir, stem, out_path, steps: int = 2, seed: i
     if _split_family(pipe) == "flux2":
         loaded = comfy_bridge.load_flux2_conditioning(te_path)
         colorized_lowres = comfy_bridge.colorize_flux2_from_conditioning(
+            pipe, loaded["conditioning"], loaded["latent"], steps=steps, seed=seed)
+    elif _split_family(pipe) == "flux3":
+        loaded = comfy_bridge.load_flux3_conditioning(te_path)
+        colorized_lowres = comfy_bridge.colorize_flux3_from_conditioning(
             pipe, loaded["conditioning"], loaded["latent"], steps=steps, seed=seed)
     else:
         loaded = comfy_bridge.load_viggle_conditioning(te_path)
@@ -1554,6 +1637,12 @@ def encode_pair_te(pipe, in1_path, in2_path, te_dir, stem, prompt, resolution: i
         res = comfy_bridge.encode_flux2_conditioning(
             pipe, canvas["image"], prompt, resolution=resolution)
         _save = comfy_bridge.save_flux2_conditioning
+    elif _split_family(pipe) == "flux3":
+        # flux3: the upsampler reads the merged pair canvas -- one expanded
+        # instruction for both frames, i.e. the two halves share their wording
+        res = comfy_bridge.encode_flux3_conditioning(
+            pipe, canvas["image"], prompt, resolution=resolution)
+        _save = comfy_bridge.save_flux3_conditioning
     else:
         res = comfy_bridge.encode_viggle_conditioning(
             pipe, canvas["image"], prompt, resolution=resolution,
@@ -1616,6 +1705,10 @@ def colorize_pair_from_te(pipe, te_dir, stem, out1_path, out2_path="", steps: in
         if _split_family(pipe) == "flux2":
             loaded = comfy_bridge.load_flux2_conditioning(te_path)
             colorized_lowres = comfy_bridge.colorize_flux2_from_conditioning(
+                pipe, loaded["conditioning"], loaded["latent"], steps=steps, seed=seed)
+        elif _split_family(pipe) == "flux3":
+            loaded = comfy_bridge.load_flux3_conditioning(te_path)
+            colorized_lowres = comfy_bridge.colorize_flux3_from_conditioning(
                 pipe, loaded["conditioning"], loaded["latent"], steps=steps, seed=seed)
         else:
             loaded = comfy_bridge.load_viggle_conditioning(te_path)

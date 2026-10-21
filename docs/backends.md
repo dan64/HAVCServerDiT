@@ -1,12 +1,12 @@
 # Backends
 
-Seven backends, one API — pick the one that fits your hardware.
+Eight backends, one API — pick the one that fits your hardware.
 
 Each backend below shows a side-by-side comparison on the **same frame**: the ground-truth (color) source on the left, and that backend's colorization of it on the right — a quick way to judge how well each model colors known objects.
 
-> ¹ Measured with **Fast Pipeline** — for `qwen21-viggle`, `qwen21-turbo`, `gguf-qwen`, `qwen25-nunchaku`, `longcat-gguf` and `flux2` the cached text-encoder split (paired for `qwen21-turbo`'s fast variant, for `flux2`, for the `qwen25-nunchaku` `-fast` configs and for `longcat-gguf` with `fast_split_TE`), for `nunchaku-qwen` paired inference (two frames per forward pass) — at the backend's fastest recommended step count, warm-up excluded. ² `longcat-gguf`'s figure is its single-image live time: with Fast Pipeline it drops to ~12 s/frame (and ~7.5 paired, see its section).
+> ¹ Measured with **Fast Pipeline** — for `qwen21-viggle`, `qwen21-turbo`, `gguf-qwen`, `qwen25-nunchaku`, `longcat-gguf`, `flux2` and `flux3` the cached text-encoder split (paired for `qwen21-turbo`'s fast variant, for `flux2` and `flux3`, for the `qwen25-nunchaku` `-fast` configs and for `longcat-gguf` with `fast_split_TE`), for `nunchaku-qwen` paired inference (two frames per forward pass) — at the backend's fastest recommended step count, warm-up excluded. ² `longcat-gguf`'s figure is its single-image live time: with Fast Pipeline it drops to ~12 s/frame (and ~7.5 paired, see its section).
 
-> **Recommended**: **qwen21-viggle** and **nunchaku-qwen** are both recommended for production use. Thanks to recent code optimizations — Dynamic VRAM and the text-encoder (TE) split — **qwen21-viggle** is now the fastest backend: **1.7 sec/frame** with _Fast Pipeline_ (~3.5 sec/frame at the fastest usable step count, `steps=2`, without it; see the `⚠️ Fast Pipeline` note below) — and has the **lowest minimum requirements of the backends that run at a usable speed**: **12 GB VRAM / 32 GB RAM** (14GB+ VRAM on the standard path). The other backends that also fit a 12 GB card are far slower — `qwen-2511_q3` at ~7 sec/frame, `longcat-gguf` at ~12 sec/frame — so at that VRAM class viggle is not just the fastest, it is in a different league. Only `longcat-gguf` goes lower (8 GB / 16 GB — see its section), at a much higher per-frame cost; it is what the installer picks when the machine cannot run the Qwen families (see its section). `nunchaku-qwen` runs at about **4 sec/frame** using its paired _Fast Pipeline_ (`steps=2`) and needs 16GB+ VRAM / 64GB+ RAM. **`gguf-qwen`** (Qwen-Image-Edit 2511) now also supports the cached-TE split: **~7.3 sec/frame** against ~10.5 sec/frame for the standard path (~1.4×, 17-frame test at 2 steps), on a 16 GB+ GPU / 48 GB+ RAM for the recommended `qwen-2511_int8` config (12 GB+ with `qwen-2511_q3`). **`qwen21-turbo`** is the rendition-maximizing option — **~4.5 sec/frame** on the single split, **~2.3** with the paired `fast_split_TE` one — richer colors than the viggle family, but noticeably less stable between similar frames (see the field verdict below). `longcat-gguf` remain the choice for VRAM-constrained setups where neither of the above fits, at a real speed cost (see the `⚠️ Experimental` note under GGUF below). **`flux2`** (2.6.0) adds the FLUX.2-dev family: 16 GB+ VRAM / 64 GB+ RAM, **~4.0 s/frame** on the int4 config with `"vram_headroom": 3` (~5.5 on fp8 mixed) — see its section below. **`qwen25-nunchaku`** (2.7.0) runs the same Qwen-Image-Edit models through the **ComfyUI-nunchaku node**: **~4.1–4.4 s/frame** on the paired `-fast` configs and ~7.4–9.2 on the single-frame ones, on an RTX 50 card with 16 GB+ VRAM — its **2509** config is the pick of the family, while for 2511 the reference stays `qwen-2511_int8` (see the field verdict in its section).
+> **Recommended**: **qwen21-viggle** and **nunchaku-qwen** are both recommended for production use. Thanks to recent code optimizations — Dynamic VRAM and the text-encoder (TE) split — **qwen21-viggle** is now the fastest backend: **1.7 sec/frame** with _Fast Pipeline_ (~3.5 sec/frame at the fastest usable step count, `steps=2`, without it; see the `⚠️ Fast Pipeline` note below) — and has the **lowest minimum requirements of the backends that run at a usable speed**: **12 GB VRAM / 32 GB RAM** (14GB+ VRAM on the standard path). The other backends that also fit a 12 GB card are far slower — `qwen-2511_q3` at ~7 sec/frame, `longcat-gguf` at ~12 sec/frame — so at that VRAM class viggle is not just the fastest, it is in a different league. Only `longcat-gguf` goes lower (8 GB / 16 GB — see its section), at a much higher per-frame cost; it is what the installer picks when the machine cannot run the Qwen families (see its section). `nunchaku-qwen` runs at about **4 sec/frame** using its paired _Fast Pipeline_ (`steps=2`) and needs 16GB+ VRAM / 64GB+ RAM. **`gguf-qwen`** (Qwen-Image-Edit 2511) now also supports the cached-TE split: **~7.3 sec/frame** against ~10.5 sec/frame for the standard path (~1.4×, 17-frame test at 2 steps), on a 16 GB+ GPU / 48 GB+ RAM for the recommended `qwen-2511_int8` config (12 GB+ with `qwen-2511_q3`). **`qwen21-turbo`** is the rendition-maximizing option — **~4.5 sec/frame** on the single split, **~2.3** with the paired `fast_split_TE` one — richer colors than the viggle family, but noticeably less stable between similar frames (see the field verdict below). `longcat-gguf` remain the choice for VRAM-constrained setups where neither of the above fits, at a real speed cost (see the `⚠️ Experimental` note under GGUF below). **`flux2`** (2.6.0) adds the FLUX.2-dev family: 16 GB+ VRAM / 64 GB+ RAM, **~4.0 s/frame** on the int4 config with `"vram_headroom": 3` (~5.5 on fp8 mixed) — see its section below. **`qwen25-nunchaku`** (2.7.0) runs the same Qwen-Image-Edit models through the **ComfyUI-nunchaku node**: **~4.1–4.4 s/frame** on the paired `-fast` configs and ~7.4–9.2 on the single-frame ones, on an RTX 50 card with 16 GB+ VRAM — its **2509** config is the pick of the family, while for 2511 the reference stays `qwen-2511_int8` (see the field verdict in its section). **`flux3`** (2026-10-21) adds **FLUX.3 Image Klein** with its **Qwen3.5-9B prompt upsampler** — the encoder reads the frame and expands the request, which is what makes the family recognize conventionally-colored subjects (a Santa suit is red, not "natural"); the speed figure is **pending the field test** (see its section).
 >
 > ⚠️ **Fast Pipeline + `qwen21-viggle`** (2.4.0): this backend no longer uses paired inference — _Fast Pipeline_ runs a **cached text-encoder split**: each frame's text-encoder conditioning is computed once and cached, then the sampling runs with the UNet resident, in chunks of 200 frames (~**1.7 sec/frame**, roughly 2× the standard path). (The paired `fast_split_TE` flows chunk by *pairs* instead: 100 pairs for the `te` families, 50 for the edit ones — see [GUI usage](gui_usage.md#step-3-colorize-frames-ai).) There is no merge boundary, nor the paired-mode resolution trade-off it required. A chunk's cache is deleted once its frames are colorized, and a cancelled run resumes from the first missing frame. In standard (non-Fast) mode the single-frame path runs at about **3.5 sec/frame**. On secondary, color-ambiguous details (e.g. a flower's petals) a run can still land on a noticeably different but plausible hue — the color-hedging behavior described above, not a defect. The [Viggle-Turbo](https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo) LoRA is still an experimental release: spot-check the output before a long batch run.
 >
@@ -440,6 +440,67 @@ fits a 16 GB card:
 
 > Launch with `start_server.cmd flux2_dev_int4` (or any of the four config
 > names) — see [Server Usage](server_usage.md).
+
+### flux3 : FLUX.3 Image Klein + prompt upsampler (speed pending the field test)
+
+| Requirement | Details                            |
+| ----------- | ---------------------------------- |
+| **GPU**     | NVIDIA RTX 30/40/50 (16 GB+ VRAM)  |
+| **RAM**     | 64 GB+                             |
+| **CUDA**    | 13.0+                              |
+
+> **FLUX.3 Image Klein** (Black Forest Labs) is the newest FLUX image-editing
+> model, and the reason it is here is specific: it is the only FLUX that
+> **recognizes what it is looking at** — a Santa suit comes out red, a police
+> uniform blue, a tomato red — instead of hedging towards "natural" colors.
+> It gets that from a second, much larger text encoder that reads the frame
+> before the diffusion model runs.
+
+The family is ComfyUI-native end to end, like `flux2`, and shares that
+family's graph: the B&W frame reaches the transformer as a VAE **reference
+latent** (the small text encoder is prompt-only), so the cached-TE split and
+the paired split apply unchanged. Three things are FLUX.3's own:
+
+* **the prompt upsampler** — a **Qwen3.5-9B w4a8** encoder runs
+  `TextGenerate` against the reference image(s) with BFL's image-edit system
+  prompt and expands your request into the detailed instruction the
+  transformer receives. It runs **once per image** (once per merged canvas in
+  the paired flow) and, in the Fast Pipeline, **inside phase A**, so the
+  expanded instruction is what gets cached: phase B reproduces the same
+  sampling without re-running the 9B model.
+* **a constant timestep shift** — the reference workflow patches
+  `ModelSamplingFlux` with `max_shift = base_shift = ln(16)`, which is a
+  plain shift (the resolution term cancels), unlike the Flux.2 schedule.
+* **cfg 1 with no guidance node** — like Klein, the negative branch is never
+  evaluated, so the sampler reuses the positive conditioning.
+
+| Config                     | UNet                              | Size   | Text encoders                                   | Steps |
+| -------------------------- | --------------------------------- | ------ | ----------------------------------------------- | ----- |
+| `flux3_klein_6b_int8.json` | `flux3-image-klein` INT8 ConvRot  | 5.8 GB | Qwen3-VL-4B int8 (6B: 4.9 GB) + Qwen3.5-9B upsampler (6.7 GB) | 8 |
+
+> **Weights: 17.7 GB in total** (5.8 UNet + 4.9 text encoder + 6.7 upsampler
+> + 0.3 VAE), all from one repo,
+> [`black-forest-labs/flux-3-image-klein-comfy`](https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy),
+> which is **gated** (`gated: auto`): accept the licence on its page with the
+> account your HuggingFace token belongs to, then the first run downloads
+> them. A 401 with the licence instructions is what you get otherwise — see
+> [Troubleshooting](troubleshooting.md).
+>
+> **RAM/VRAM**: where `flux2` streams the transformer from RAM, here the
+> upsampler adds a second large resident model. The 16 GB / 64 GB figures are
+> the `flux2` class, **not yet measured for this family** — the first field
+> run will confirm them (the upsampler is loaded and dropped inside phase A,
+> the same separator the other split families use).
+>
+> **Steps**: the config ships **8**, and the GUI's *Colorization Steps* wins
+> (the reference workflow uses 16). Start at 8 and raise it only if a frame
+> comes out flat.
+>
+> **Upsampler cost**: the 9B encoder is what buys the recognition, and it is
+> not free — one extra pass per image. In the paired flow it is amortized over
+> two frames, which is where this family gains the most.
+
+> Launch with `start_server.cmd flux3_klein_6b_int8`.
 
 ### All backends
 

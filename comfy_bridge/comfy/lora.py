@@ -278,6 +278,15 @@ def model_lora_keys_unet(model, key_map={}):
             if k.endswith(".weight") and ".linear1." in k:
                 key_map["{}".format(k.replace(".linear1.weight", ".linear1_qkv"))] = (k, (0, 0, hidden_size * 3))
 
+    if isinstance(model, comfy.model_base.Flux3):
+        for k in sdk:
+            if k.endswith(".qkv.weight"):  # fused q/k/v files; LoRAs address the separate projections
+                third = sd[k].shape[0] // 3
+                for i, proj in enumerate(("q_proj", "k_proj", "v_proj")):
+                    key_lora = "{}.{}".format(k[:-len(".qkv.weight")], proj)
+                    key_map[key_lora] = (k, (0, i * third, third))
+                    key_map["lora_unet_{}".format(key_lora[len("diffusion_model."):].replace(".", "_"))] = (k, (0, i * third, third))
+
     if isinstance(model, comfy.model_base.GenmoMochi):
         for k in sdk:
             if k.startswith("diffusion_model.") and k.endswith(".weight"): #Official Mochi lora format

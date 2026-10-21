@@ -16,6 +16,7 @@ from . import _dynamic_vram
 _dynamic_vram.init_process()
 
 import torch, logging, json, math, numpy as np
+import time
 from PIL import Image
 
 # Opt-in per-image profiler for the Qwen-Image-Edit path (HAVC_EDIT_PROFILE=1)
@@ -1179,6 +1180,9 @@ def load_viggle_conditioning(path):
     if meta.get("kind") == "flux2-conditioning":
         raise ValueError(
             "load_viggle_conditioning: this is a flux2 conditioning file")
+    if meta.get("kind") == "flux3-conditioning":
+        raise ValueError(
+            "load_viggle_conditioning: this is a flux3 conditioning file")
 
     device = comfy.model_management.get_torch_device()
     context = tensors["context"].to(device)
@@ -1449,7 +1453,8 @@ def colorize_flux2_from_conditioning(pipeline, conditioning, latent_dict, steps=
         return _flux2_sample_decode(pipeline, conditioning, latent_dict, steps, seed)
 
 
-def save_flux2_conditioning(path, conditioning, latent_dict, prompt="", prompt_original="", meta=None):
+def save_flux2_conditioning(path, conditioning, latent_dict, prompt="", prompt_original="", meta=None,
+                            kind=_FLUX2_COND_KIND):
     """Save a flux2 conditioning as one .safetensors file.
 
     Generic over the conditioning's option dict (the Mistral-3 encoder returns
@@ -1491,7 +1496,7 @@ def save_flux2_conditioning(path, conditioning, latent_dict, prompt="", prompt_o
 
     metadata = {
         "format": "1",
-        "kind": _FLUX2_COND_KIND,
+        "kind": kind,
         "prompt": str(prompt),
         "prompt_original": str(prompt_original),
         "values": json.dumps(values),
@@ -1503,7 +1508,7 @@ def save_flux2_conditioning(path, conditioning, latent_dict, prompt="", prompt_o
     return metadata
 
 
-def load_flux2_conditioning(path):
+def load_flux2_conditioning(path, kind=_FLUX2_COND_KIND):
     """Load a conditioning saved by save_flux2_conditioning().
 
     Returns {"conditioning", "latent", "meta"} in the same structure the live
@@ -1517,9 +1522,10 @@ def load_flux2_conditioning(path):
 
     with safe_open(path, framework="pt", device="cpu") as f:
         meta = dict(f.metadata() or {})
-        if meta.get("kind") != _FLUX2_COND_KIND:
+        if meta.get("kind") != kind:
+            family = kind[:-len("-conditioning")] if kind.endswith("-conditioning") else kind
             raise ValueError(
-                "load_flux2_conditioning: not a flux2 conditioning file")
+                f"load_flux2_conditioning: not a {family} conditioning file")
         tensors = {k: f.get_tensor(k) for k in f.keys()}
 
     device = comfy.model_management.get_torch_device()
@@ -1544,3 +1550,255 @@ def load_flux2_conditioning(path):
     latent_dict = {"samples": torch.zeros_like(reference_latents[0])}
 
     return {"conditioning": conditioning, "latent": latent_dict, "meta": meta}
+
+# ---------------------------------------------------------------------------
+# FLUX.3 family (config model_name "flux3")
+#
+# FLUX.3 Image Klein is ComfyUI's newest edit model (ComfyUI >= 0.42.x). Its
+# graph is the Flux.2 Klein one -- Qwen3-VL text encoder, FLUX.2 VAE, the frame
+# as a reference latent via the same conditioning structure -- plus two things
+# of its own:
+#
+#  * the **timestep shift** is patched explicitly: ModelSamplingFlux with
+#    max_shift = base_shift = ln(16) (alpha = 16 in the reference workflow),
+#    which is a constant shift, not the resolution-derived schedule Flux.2 uses;
+#  * the prompt is **upsampled per image** before the text encoder: a second,
+#    much larger text encoder (Qwen3.5-9B, w4a8) reads the reference image(s)
+#    and expands the short user request into a detailed instruction. This is
+#    what lets the family name what it sees (a Santa suit is red, not a
+#    generically "natural" garment), which is the reason the family exists
+#    here. The upsampler is optional at the config level: without it the raw
+#    prompt is used.
+#
+# Reference graph (black-forest-labs/flux-3-image-klein-comfy):
+#
+#   CLIPLoader(flux3, qwen3vl_4b)     -> CLIPTextEncode -> ReferenceMultiLatent
+#   CLIPLoader(flux3, qwen3.5-9b)     -> TextGenerate (system prompt, 3584 tok)
+#   UNETLoader(flux3-image-klein) -> ModelSamplingFlux(ln 16) -> KSampler
+#       (euler / simple, cfg 1, 16 steps) -> VAEDecode
+#
+# Everything except the shift patch, the upsampler and the 8-step default is
+# shared with the Flux.2 path: _flux2_prepare() builds the conditioning and
+# the empty latent, and the cached-conditioning split flow works unchanged.
+# ---------------------------------------------------------------------------
+
+_FLUX3_COND_KIND = "flux3-conditioning"
+
+# The reference workflow's "alpha": ModelSamplingFlux(max_shift=base_shift=
+# ln(alpha)) is a constant shift of ln(alpha) (the mm term cancels out), which
+# is what the distilled Klein checkpoint was trained with.
+FLUX3_TIMESTEP_ALPHA = 16.0
+FLUX3_TIMESTEP_SHIFT = math.log(FLUX3_TIMESTEP_ALPHA)
+
+# TextGenerate settings of the reference workflow (nodes_textgen.py): sampling
+# on, greedy-ish (temperature 1 / top_k 1), 3584 tokens, thinking off.
+FLUX3_UPSAMPLER_MAX_LENGTH = 3584
+
+# System prompt of the reference i2i workflow ("System prompt: image edit").
+# It instructs the upsampler to turn the short request into one instruction for
+# the editing model, grounded in the attached reference image(s).
+FLUX3_UPSAMPLER_SYSTEM_PROMPT = """You are the prompt upsampler of an image-editing model. You see the reference image(s), attached in order (the first image, the second image, ...), and the user's short request. Expand it into ONE detailed, self-contained instruction: the caption the editing model receives together with the same images. Output only the instruction as one continuous English prose block, with no greetings, explanations, Markdown, JSON, coordinates, ids or angle-bracket tokens. Read a vague or conversational request as the most plausible edit of the supplied images.
+
+Pick the voice by task shape. When one reference stays and gets bounded changes, write an imperative editing instruction on it ("Remove the ...", "Change the ... to ...", "Zoom in on ..."); a whole-image transformation opens with its scope ("Convert the entire image into ...", "Apply a ... filter over the entire scene", "Horizontally flip the entire image so that ...", "Shift the camera viewpoint to ...", then where the major elements should now be). When the references are drawn into a newly composed frame (combining subjects, a new scene, a garment, object or style donor), write a generation request ("Create a photograph of ...", "Create an anime-style illustration of ...", "Generate a new image featuring ...") that says what to take from each image, by ordinal, and what is newly generated.
+
+Keep every explicit edit, constraint, count, position, style cue and piece of wording, and decide what is left open as one concrete plan. Ground everything in what is actually visible: identify each referent unambiguously by its real appearance, never mention content that is not there, and use every image the user attached. State every end state concretely (which color, how large, which pose, which material) and give new content enough appearance to be generated. Cover the knock-on effects of the change (shadows, reflections, occlusion, perspective, scale, lighting) and say what fills a removed region. A zoom-in names what stays in frame and which neighbors are cropped out; an outpainting continues the scene in the same medium. Describe the change, not the whole scene, and close an editing instruction with one compact clause naming what stays unchanged; transferred people keep their identity, face and accessories unless asked otherwise. Transcribe on-image text verbatim in its original language inside double quotes, with line breaks as \\n, and match the original font, size and color when replacing it. Name recognizable public figures, brands and landmarks you can see. Directions are frame-relative; use no evaluative or quality words. Typical length is 50 to 150 words.
+
+Output only the instruction."""
+
+
+def load_flux3_pipeline(unet_path, clip_path, upsampler_clip_path="", vae_name="flux2-vae.safetensors",
+                        vram_headroom=None):
+    """Load the FLUX.3 pipeline: transformer + Qwen3-VL text encoder + FLUX.2
+    VAE, plus the optional Qwen3.5-9B prompt upsampler.
+
+    unet_path must be a safetensors checkpoint (the BFL / community int8
+    ConvRot repacks); there is no GGUF recipe for this architecture in the
+    vendored loaders, so a .gguf is rejected with an explicit message.
+    clip_path is the small Qwen3-VL-4B encoder (CLIPLoader type="flux3"),
+    upsampler_clip_path the Qwen3.5-9B upsampler (same loader type; the
+    tokenizer comes from the checkpoint itself). An empty upsampler path
+    disables prompt enhancement.
+
+    vram_headroom: the config's GB of VRAM aimdo must leave free (see
+    _dynamic_vram.enable / _resolve_headroom); None -> the default.
+    """
+    _dynamic_vram.enable(vram_headroom=vram_headroom)  # DynamicVRAM before the first model load (see _dynamic_vram)
+    import nodes as cn
+
+    unet_name = os.path.basename(unet_path)
+    clip_name = os.path.basename(clip_path)
+
+    if unet_name.lower().endswith(".gguf"):
+        raise ValueError(
+            "load_flux3_pipeline: GGUF checkpoints are not supported for flux3 "
+            "(no flux3 recipe in the vendored GGUF loaders); use the int8 "
+            "ConvRot or bf16 safetensors checkpoint")
+
+    logger.info("Loading Flux3 UNet: %s", unet_name)
+    model = get_value_at_index(cn.UNETLoader().load_unet(unet_name=unet_name, weight_dtype="default"), 0)
+
+    if clip_name.lower().endswith(".gguf"):
+        raise ValueError(
+            "load_flux3_pipeline: GGUF text encoders are not supported for flux3")
+    logger.info("Loading CLIP: %s", clip_name)
+    clip = get_value_at_index(cn.CLIPLoader().load_clip(clip_name=clip_name, type="flux3", device="default"), 0)
+
+    upsampler = None
+    if upsampler_clip_path:
+        upsampler_name = os.path.basename(upsampler_clip_path)
+        logger.info("Loading Flux3 prompt upsampler: %s", upsampler_name)
+        upsampler = get_value_at_index(
+            cn.CLIPLoader().load_clip(clip_name=upsampler_name, type="flux3", device="default"), 0)
+
+    logger.info("Loading VAE: %s", vae_name)
+    vae = get_value_at_index(cn.VAELoader().load_vae(vae_name=vae_name), 0)
+
+    return {"model": model, "clip": clip, "upsampler": upsampler, "vae": vae}
+
+
+def flux3_enhance_prompt(pipeline, img_tensor, prompt, seed=42,
+                         max_length=FLUX3_UPSAMPLER_MAX_LENGTH):
+    """Expand a short colorization request into the instruction FLUX.3 receives.
+
+    Mirrors the reference graph's TextGenerate node (qwen3.5-9b upsampler with
+    the i2i system prompt, sampling on, temperature 1 / top_k 1 / top_p 0.95 /
+    no penalties, thinking off, 3584 tokens) and hands it the reference image,
+    so the instruction names what is actually in the frame. Returns the
+    original prompt unchanged when the pipeline has no upsampler; a failed
+    generation also falls back to it instead of aborting the frame.
+    """
+    clip = pipeline.get("upsampler") if isinstance(pipeline, dict) else None
+    if clip is None:
+        return prompt
+    t0 = time.perf_counter()
+    try:
+        tokens = clip.tokenize(prompt, image=img_tensor, skip_template=False, min_length=1,
+                               thinking=False, system_prompt=FLUX3_UPSAMPLER_SYSTEM_PROMPT)
+        ids = clip.generate(tokens, do_sample=True, max_length=int(max_length),
+                            temperature=1.0, top_k=1, top_p=0.95, min_p=0.0,
+                            repetition_penalty=1.0, presence_penalty=0.0,
+                            seed=int(seed), mtp=False)
+        text = clip.decode(ids)
+    except Exception as exc:  # noqa: BLE001 - the frame must still be colorized
+        logger.warning("flux3 prompt upsampler failed (%s); using the raw prompt", exc)
+        return prompt
+
+    # TextGenerate's </think> handling: keep what follows the closing tag, and
+    # drop an unterminated reasoning block
+    reasoning, sep, rest = text.partition("</think>")
+    if sep:
+        text = rest
+    elif reasoning.lstrip().startswith("<think>"):
+        text = ""
+    text = text.strip() or prompt
+    logger.debug("flux3 upsampler: %s", text)
+    logger.info("flux3 upsampler: %d -> %d chars in %.2fs",
+                len(prompt), len(text), time.perf_counter() - t0)
+    return text
+
+
+def _flux3_prepare(pipeline, img_tensor, prompt, resolution):
+    """Conditioning + empty latent of one frame (the Flux.2 structure: the frame
+    is a VAE reference latent, the DiT starts from an empty latent at the same
+    working size; the area budget is `resolution`, 1 MP by default)."""
+    return _flux2_prepare(pipeline, img_tensor, prompt, resolution, None)
+
+
+def _flux3_sample_decode(pipeline, conditioning, latent_dict, steps, seed):
+    """Sampler + decode tail of the flux3 path: the reference graph's
+    ModelSamplingFlux patch (max_shift = base_shift = ln 16, a constant shift),
+    KSampler with euler / simple and cfg 1 (comfy's cfg==1 fast path skips the
+    negative branch entirely, so passing the positive as negative costs
+    nothing), then the VAE decode.
+
+    Returns the colorized PIL image.
+    """
+    import nodes as cn
+    from comfy_extras.nodes_model_advanced import ModelSamplingFlux
+
+    height = latent_dict["samples"].shape[-2] * 16
+    width = latent_dict["samples"].shape[-1] * 16
+
+    shifted_model = get_value_at_index(
+        ModelSamplingFlux().patch(max_shift=FLUX3_TIMESTEP_SHIFT,
+                                  base_shift=FLUX3_TIMESTEP_SHIFT,
+                                  width=width, height=height,
+                                  model=pipeline["model"]), 0)
+
+    sampled = cn.KSampler().sample(
+        model=shifted_model, seed=int(seed), steps=int(steps), cfg=1.0,
+        sampler_name="euler", scheduler="simple",
+        positive=conditioning, negative=conditioning,
+        latent_image=latent_dict, denoise=1.0)
+    latent_samples = get_value_at_index(sampled, 0)
+    _dynamic_vram.probe_residency(pipeline.get("model"), "flux3 after-sample")
+
+    img_decoded = cn.VAEDecode().decode(samples=latent_samples, vae=pipeline["vae"])
+    img_t = get_value_at_index(img_decoded, 0)
+    _dynamic_vram.probe_residency(pipeline.get("model"), "flux3 after-decode")
+
+    if img_t.ndim == 4:
+        img_np = img_t[0].cpu().float().numpy()
+    else:
+        img_np = img_t.cpu().float().numpy()
+    img_np = np.clip(img_np, 0, 1)
+    if img_np.shape[-1] > 3:
+        img_np = img_np[..., :3]  # keep RGB if the VAE decode carries extra channels
+    return Image.fromarray((img_np * 255).astype(np.uint8))
+
+
+def colorize_flux3(pipeline, image, prompt, steps=8, seed=42, resolution=1024):
+    """FLUX.3 colorization of one image (the reference i2i graph).
+
+    The prompt upsampler runs on the full-size reference frame first (that is
+    the whole point of the family: the instruction is grounded in what the
+    frame shows), then the small text encoder builds the conditioning and the
+    transformer samples at the `resolution` area budget (1 MP by default).
+    `steps` defaults to the family's 8; the reference workflow uses 16.
+    """
+    with torch.inference_mode():
+        img_np = np.array(image.convert("RGB")).astype(np.float32) / 255.0
+        img_tensor = torch.from_numpy(img_np).unsqueeze(0)
+        enhanced = flux3_enhance_prompt(pipeline, img_tensor, prompt, seed=seed)
+        positive, latent_dict = _flux3_prepare(pipeline, img_tensor, enhanced, resolution)
+        result = _flux3_sample_decode(pipeline, positive, latent_dict, steps, seed)
+    return result
+
+
+def encode_flux3_conditioning(pipeline, image, prompt, resolution=1024, seed=42):
+    """Phase A of the split colorize flow for flux3: run the prompt upsampler,
+    then cache the text-encoder conditioning + reference latent of one frame.
+
+    Returns {"conditioning", "latent", "prompt", "prompt_original"}: `prompt` is
+    the **upsampled** instruction (what phase B's cache was built from), so a
+    resumed run reproduces exactly the same sampling without re-running the
+    9B upsampler.
+    """
+    with torch.inference_mode():
+        img_np = np.array(image.convert("RGB")).astype(np.float32) / 255.0
+        img_tensor = torch.from_numpy(img_np).unsqueeze(0)
+        enhanced = flux3_enhance_prompt(pipeline, img_tensor, prompt, seed=seed)
+        positive, latent_dict = _flux3_prepare(pipeline, img_tensor, enhanced, resolution)
+    return {"conditioning": positive, "latent": latent_dict,
+            "prompt": enhanced, "prompt_original": prompt}
+
+
+def colorize_flux3_from_conditioning(pipeline, conditioning, latent_dict, steps=8, seed=42):
+    """Phase B of the split-colorize flow for flux3: sample + decode one cached
+    conditioning (the upsampler already ran in phase A)."""
+    with torch.inference_mode():
+        return _flux3_sample_decode(pipeline, conditioning, latent_dict, steps, seed)
+
+
+def save_flux3_conditioning(path, conditioning, latent_dict, prompt="", prompt_original="", meta=None):
+    """Save a flux3 conditioning (own kind, so a flux2 cache is never mistaken
+    for one: the structure is the same, the semantics of `prompt` are not --
+    it is the upsampled instruction)."""
+    return save_flux2_conditioning(
+        path, conditioning, latent_dict, prompt=prompt,
+        prompt_original=prompt_original, meta=meta, kind=_FLUX3_COND_KIND)
+
+
+def load_flux3_conditioning(path):
+    """Load a conditioning saved by save_flux3_conditioning()."""
+    return load_flux2_conditioning(path, kind=_FLUX3_COND_KIND)

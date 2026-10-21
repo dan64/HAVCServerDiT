@@ -1,5 +1,41 @@
 # What's New
 
+### 2026-10-21 — FLUX.3 Image Klein (`flux3`), with its prompt upsampler
+
+**A new family: FLUX.3 Image Klein.** `flux3_klein_6b_int8` is the first
+backend whose prompt is written by a model that **looks at the frame first**:
+a Qwen3.5-9B encoder reads the reference image and expands your short request
+into the detailed instruction the transformer receives. That is what makes
+FLUX.3 recognize the conventionally-colored things the other models hedge
+about — a Santa suit comes out red, a uniform in its real color — which is why
+the family is here at all. The expansion runs **once per image** (once per
+pair canvas in the paired flow), and in the Fast Pipeline it runs in **phase
+A**, so a resumed run reuses the cached instruction instead of re-running the
+9B model. Without the encoder (or if it fails) your prompt is used verbatim.
+
+**The graph is FLUX.3's own.** It shares the Flux.2 conditioning shape — the
+B&W frame is a VAE reference latent, the small **Qwen3-VL-4B** encoder is
+prompt-only — so the split flow and the paired split work unchanged. What
+differs is a **constant timestep shift** (`ModelSamplingFlux` with
+`max_shift = base_shift = ln(16)`) and **no guidance node**: the sampler runs
+`euler` / `simple` at cfg 1. The config ships **8 steps** (the reference
+workflow uses 16); the GUI's step count still wins.
+
+**Requirements, and one caveat.** All four files — the 5.8 GB int8 ConvRot
+transformer, the two text encoders and the FLUX.2 VAE, 17.7 GB in total — come
+from `black-forest-labs/flux-3-image-klein-comfy`, a **gated** HuggingFace
+repo: accept the licence on its page with the account your token belongs to.
+The 16 GB VRAM / 64 GB RAM figures are the `flux2` class, **not yet measured
+for this family** — the first field run will settle both the requirements and
+the per-frame speed.
+
+**The new ComfyUI core pieces are vendored.** FLUX.3 needs a ComfyUI newer
+than the embedded core, so the diff was backported into `comfy_bridge`
+(`comfy/ldm/flux3/`, the Qwen3-VL tap in `text_encoders/flux.py`,
+`CLIPType.FLUX3`, the model detection and the registry entry) rather than
+replacing the core — every existing backend takes the same code path as
+before, and the regression suite is green.
+
 ### 2026-10-20 (v2.8.0) — Two new Flux.2 Klein models, and a lighter default
 
 **Flux.2 Klein 9B and 4B, in INT8 ConvRot.** Two new configs join the `flux2`

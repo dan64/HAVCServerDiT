@@ -755,21 +755,22 @@ class ColorizeService:
                        prompt: str, resolution: int = 1024, img_size: int = 0,
                        enhance_prompt: bool = False, first: bool = False,
                        usm_radius: float = 0.0) -> dict:
-        """Phase A (one pair), qwen21-viggle / qwen21-turbo / flux2 families:
-        cache the conditioning of the merged canvas under
+        """Phase A (one pair), qwen21-viggle / qwen21-turbo / flux2 / flux3
+        families: cache the conditioning of the merged canvas under
         te_dir/<stem>.safetensors, the pair geometry included. in2_path=""
         (odd trailing frame) degrades the pair to a single-frame conditioning;
         first=True drops the loaded models so the TE + VAE start clean.
         Already-cached pairs are skipped (resume). For flux2 the canvas is the
         VAE reference latent of a prompt-only conditioning (the enhancer flag
-        does not apply).
+        does not apply); for flux3 the prompt upsampler reads the merged canvas
+        once, so both frames share the expanded instruction.
         """
         if self._pipeline is None:
             return {"ok": False, "skipped": False, "elapsed": 0.0, "msg": "Pipeline not loaded"}
-        if self._pipeline_model_name not in ("qwen21-viggle", "qwen21-turbo", "flux2"):
+        if self._pipeline_model_name not in ("qwen21-viggle", "qwen21-turbo", "flux2", "flux3"):
             return {"ok": False, "skipped": False, "elapsed": 0.0,
                     "msg": "encode_pair_te requires a split-TE pipeline "
-                           "(qwen21-viggle / qwen21-turbo / flux2)"}
+                           "(qwen21-viggle / qwen21-turbo / flux2 / flux3)"}
         try:
             from dit_colorize_main import encode_pair_te as _encode_pair_te
             res = _encode_pair_te(
@@ -788,19 +789,19 @@ class ColorizeService:
     def colorize_pair_from_te(self, te_dir: str, stem: str, out1_path: str,
                               out2_path: str = "", steps: int = 2, seed: int = 42,
                               first: bool = False) -> dict:
-        """Phase B (one pair), qwen21-viggle / qwen21-turbo / flux2 families:
-        sample + decode the cached pair canvas and split it back into the
-        frames (one output for a degraded pair); first=True drops the loaded
-        models so the UNet + VAE start clean. Pairs whose expected outputs all
-        exist are skipped (resume).
+        """Phase B (one pair), qwen21-viggle / qwen21-turbo / flux2 / flux3
+        families: sample + decode the cached pair canvas and split it back into
+        the frames (one output for a degraded pair); first=True drops the
+        loaded models so the UNet + VAE start clean. Pairs whose expected
+        outputs all exist are skipped (resume).
         """
         if self._pipeline is None:
             return {"ok": False, "skipped": False, "elapsed": 0.0, "written": [],
                     "msg": "Pipeline not loaded"}
-        if self._pipeline_model_name not in ("qwen21-viggle", "qwen21-turbo", "flux2"):
+        if self._pipeline_model_name not in ("qwen21-viggle", "qwen21-turbo", "flux2", "flux3"):
             return {"ok": False, "skipped": False, "elapsed": 0.0, "written": [],
                     "msg": "colorize_pair_from_te requires a split-TE pipeline "
-                           "(qwen21-viggle / qwen21-turbo / flux2)"}
+                           "(qwen21-viggle / qwen21-turbo / flux2 / flux3)"}
         try:
             from dit_colorize_main import colorize_pair_from_te as _colorize_pair_from_te
             res = _colorize_pair_from_te(

@@ -8,6 +8,7 @@ reproduced, instead of being quoted from memory.
 > other on a 15-frame piece of footage at 0.62 Mpx. They are not a promise about
 > your material: a config that looks quick here can lose on a different scene,
 > and the per-backend notes in [Backends](backends.md) quote a larger workload.
+> **The step count differs between rows and is not logged** — see below.
 
 ## The dataset
 
@@ -17,7 +18,7 @@ reproduced, instead of being quoted from memory.
 | Frame size | **920 × 672 (0.62 Mpx)** |
 | Source | the GUI's own *Colorize* runs, one session per config |
 | Seed | fixed (42), set by the client |
-| Steps | each config's **shipped default** (not re-measured per row) |
+| Steps | **the GUI panel's value — not recorded per run** (see the caveat below) |
 | Era | **2026-10-15 → 2026-10-21**, i.e. every session on the same stack (DynamicVRAM included) |
 | GPU | RTX 5070 Ti, 16 GB, driver 617.42 |
 | Timing | **end to end**: phase A + phase B, wall clock, first frame included |
@@ -27,6 +28,18 @@ and that figure is **phase B only** when a split ran: it leaves out the text
 encoder, which is exactly the expensive part of the split. The wall clock from
 the phase-A marker to the `Done!` line is what a user actually waits for, and
 that is what this table reports.
+
+**The step count is recorded only when it was typed into the task name.** The
+GUI logs the config and the times, not the *Colorization Steps* value — that is
+one panel setting applied to every run, not a per-config default. The two `flux3`
+rows carry it because the run was labelled `flux3_klein_6b_int8 (6 steps)` and
+`(8 steps)`, and the data agrees (phase B 25 s vs 32 s with phase A identical at
+48 s both times). Every other row ran at whatever the panel held that day, and
+the log cannot tell us which. It was very likely the shipped default of **2** —
+the figures line up with independent 2-step measurements (`qwen21_viggle-soft_int8`
+3.07 here against 2.88 measured directly, `flux2_klein_4b_int8` 1.67 against the
+author's 2-step field runs) — but that is inference, not evidence. Treat a row's
+step count as "probably 2, unverified" unless the name says otherwise.
 
 ## Results
 
@@ -48,7 +61,7 @@ that is what this table reports.
 | 14 | `flux2_dev_int4` | 4.80 | paired split |
 | 15 | `flux3_klein_6b_int8` (6 steps) | 4.87 | paired split |
 | 16 | `qwen21_viggle-soft_q4` | 4.93 | single split |
-| 17 | `flux3_klein_6b_int8` (8 steps, shipped) | 5.33 | paired split |
+| 17 | `flux3_klein_6b_int8` (8 steps) | 5.33 | paired split |
 | 18 | `qwen-2511_int8` | 5.93 | single split |
 | 19 | `qwen-2511-fast_q3` | 5.93 | paired split |
 | 20 | `flux2_dev_fp8` | 6.67 | paired split |

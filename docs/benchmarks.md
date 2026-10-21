@@ -2,7 +2,7 @@
 
 Every config the project ships, timed on **one clip**, with the same procedure.
 This page exists so a speed figure can be traced back to a measurement and
-reproduced, instead of being quoted from memory.
+reproduced.
 
 > **One clip is not the stack.** These numbers rank the configs against each
 > other on a 15-frame piece of footage at 0.62 Mpx. They are not a promise about
@@ -45,7 +45,8 @@ step count as "probably 2, unverified" unless the name says otherwise.
 
 | # | Config | s/image | Flow |
 | -: | ------ | ------: | ---- |
-| 1 | `flux2_klein_4b_int8` | **1.67** | paired split |
+| 1 | `
+klein_4b_int8` | **1.67** | paired split |
 | 2 | `qwen-2509-nunchaku-fast_fp4` | 2.07 | paired split |
 | 3 | `qwen-2511-nunchaku-fast_fp4` | 2.33 | paired split |
 | 4 | `qwen21_turbo-fast_int8` | 2.67 | paired split |

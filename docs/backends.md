@@ -501,19 +501,20 @@ the paired split apply unchanged. Three things are FLUX.3's own:
 | -------------------------- | --------------------------------- | ------ | ----------------------------------------------- | ----- |
 | `flux3_klein_6b_int8.json` | `flux3-image-klein` INT8 ConvRot  | 5.8 GB | Qwen3-VL-4B int8 (6B: 4.9 GB) + Qwen3.5-9B upsampler (6.7 GB) | 8 |
 
-> **Measured** (author's field run, RTX 5070 Ti 16 GB, paired split, 4-6
-> steps): **5.8 s of upsampler + 1.4 s of inference per pair** — i.e.
-> **~3.6 s/frame** at steady state, with the upsampler accounting for ~80% of
-> the cost. That puts the family second only to `qwen21-viggle` on speed, and
-> ahead of `flux2` (~4.0) and `qwen25-nunchaku` (~4.1-4.4). The split is what
+> **Measured** (author's field run, RTX 5070 Ti 16 GB, paired split). At
+> **4-6 steps**: **5.8 s of upsampler + 1.4 s of inference per pair** — i.e.
+> **~3.6 s/frame**. At the **8 steps the config ships**: phase A 5.1-5.8 s and
+> phase B 3.5 s per pair over 24 pairs — i.e. **~4.6 s/frame** (the sampler is
+> what grows with the step count; the upsampler does not). Either way the
+> upsampler is ~60-80% of the pair, which is why the step count matters less
+> here than in every other family, and why 4-6 steps is the setting to try
+> first if the run feels slow.
+>
+> That puts the family second only to `qwen21-viggle` on speed, and ahead of
+> `flux2` (~4.0) and `qwen25-nunchaku` (~4.1-4.4). The split is what
 > makes those numbers possible: one upsampler pass per *pair* instead of two,
 > and the 9B stays resident for the whole chunk instead of being re-staged per
 > image (the live path measured **23.8 s** of upsampler for a single frame).
->
-> The step count matters less than usual here: the transformer is only 1.4 s
-> of the 7.2 s pair, so **4-6 steps** (field-verified) shave little off the
-> total. The upsampler, not the sampler, is what to tune if the run is too
-> slow.
 
 > **Weights: 17.7 GB in total** (5.8 UNet + 4.9 text encoder + 6.7 upsampler
 > + 0.3 VAE), all from one repo,

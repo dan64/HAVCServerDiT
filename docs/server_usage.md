@@ -174,9 +174,13 @@ argument it starts `int4`.
 > **Prompt tip (qwen-2511)**: keep it short and direct — the opposite of the
 > detail-heavy wording `qwen21-viggle` likes. A good default: *"Colorize
 > this image, natural colors. Strictly preserve all shapes, edges and
-> background details."* — the wording every Qwen-Image-Edit and FLUX.2 config
-> ships, and the GUI's protected preset #1, so Tab 2's **Enable Prompt
-> Config** sends it as-is. Longer or more emphatic prompts
+> background details."* — the wording the `qwen-2511_int8` / `qwen-2511_q3` and
+> the FLUX.2 configs ship, and the GUI's protected preset #1, so Tab 2's
+> **Enable Prompt Config** sends it as-is. The nunchaku families
+> (`qwen-2509-nunchaku*`, `qwen-2511-nunchaku*`, `qwen_nunchaku_*`) and
+> `qwen21-viggle` / `qwen21-turbo` ship the longer anti-hedging text: with
+> **Enable Prompt Config** that is what those runs send, and the field is
+> read-only until you uncheck it. Longer or more emphatic prompts
 > can steer it the wrong way (a "vibrant colors" variant colored some
 > subjects noticeably wrong in a side-by-side test), so start simple and only
 > add words when the output calls for it. The sensitivity is per-wording and

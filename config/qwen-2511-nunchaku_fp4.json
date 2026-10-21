@@ -1,6 +1,6 @@
 {
     "model_name":          "qwen25-nunchaku",
-    "prompt":              "Colorize this image, natural colors. Strictly preserve all shapes, edges and background details.",
+    "prompt":              "Add colors to this black-and-white image, not to hedge about what colors might be present. For any subject, garment, object, or setting whose color is a matter of common knowledge or strong convention, assign the expected color directly and confidently. Colorize this image using natural colors. Strictly preserve all shapes, edges and background details.",
     "unet_name":           "models/diffusion_models/nunchaku_qwen_image_edit_2511_balance_fp4.safetensors",
     "unet_hf_name":        "nunchaku_qwen_image_edit_2511_balance_fp4.safetensors",
     "clip_name":           "models/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors",

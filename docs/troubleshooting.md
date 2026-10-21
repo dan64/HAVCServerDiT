@@ -36,9 +36,13 @@ The sensitivity is per-wording and not monotonic: long emphatic prompts can colo
 
 > Colorize this image, natural skin tones, vibrant environment. Maintain consistency and details.
 
-The shipped default is *"Colorize this image, natural colors. Strictly preserve
-all shapes, edges and background details."* — GUI protected preset #1 and the
-`prompt` of every Qwen-Image-Edit and FLUX.2 config. With **Enable Prompt
+The shipped default of the **Qwen-Image-Edit 2511** configs (`qwen-2511_int8`,
+`qwen-2511_q3`) and of the **FLUX.2** ones is *"Colorize this image, natural
+colors. Strictly preserve all shapes, edges and background details."* — GUI
+protected preset #1. The **nunchaku families** (`qwen-2509-nunchaku*`,
+`qwen-2511-nunchaku*`, `qwen_nunchaku_*`) and `qwen21-viggle` / `qwen21-turbo`
+ship the longer anti-hedging wording instead (`config/*.json`), because it
+colors conventionally-known subjects more reliably. With **Enable Prompt
 Config** the field and the preset list are not what a run sends: the config's
 `prompt` is. If it misbehaves on your frames, the two prompts above are the
 ones with side-by-side evidence — try them before changing other settings.

@@ -2758,7 +2758,7 @@ def color_prompt_label(index, prompt, width=43):
     return f"{index + 1}. {text}"
 
 
-def color_prompt_labels(prompts, width=43):
+def color_prompt_labels(prompts, width=67):
     """Listbox entries for a preset list ("1. preview" .. "n. preview")."""
     return [color_prompt_label(i, p, width) for i, p in enumerate(prompts)]
 
@@ -3175,7 +3175,7 @@ tab3_layout = [
     [sg.Text("Preset #:"),
      sg.Combo(_color_prompt_labels,
               default_value=_color_prompt_labels[_color_prompt_init],
-              key="-PROMPT_IDX-", size=(43, 12), readonly=True, enable_events=True,
+              key="-PROMPT_IDX-", size=(60, 12), readonly=True, enable_events=True,
               tooltip="Browse the internal prompt list: pick an entry to show that\nprompt in full in the field above (entries carry a shortened preview).\nAdd / Update / Delete / Clear manage the list; preset #1 is the\nprotected default. A prompt used in a run is added automatically\n(up to Max)."),
      sg.Button("Add", key="-PROMPT_ADD-", tooltip="Append the text in the Prompt field as a new preset."),
      sg.Button("Update", key="-PROMPT_UPDATE-", tooltip="Overwrite the selected preset with the text in the Prompt field."),
@@ -3279,7 +3279,7 @@ tab5_layout = [
     [sg.Text("Preset #:"),
      sg.Combo(_fix_prompt_labels,
               default_value=_fix_prompt_labels[0],
-              key="-FIX_PROMPT_IDX-", size=(43, 12), readonly=True, enable_events=True,
+              key="-FIX_PROMPT_IDX-", size=(60, 12), readonly=True, enable_events=True,
               tooltip="Browse the internal prompt list: pick an entry to show that\nprompt in full in the field above (entries carry a shortened preview).\nAdd / Update / Delete / Clear manage the list; preset #1 is the\nprotected default. A prompt used in a run is added automatically\n(up to Max)."),
      sg.Button("Add", key="-FIX_PROMPT_ADD-", tooltip="Append the text in the Prompt field as a new preset."),
      sg.Button("Update", key="-FIX_PROMPT_UPDATE-", tooltip="Overwrite the selected preset with the text in the Prompt field."),

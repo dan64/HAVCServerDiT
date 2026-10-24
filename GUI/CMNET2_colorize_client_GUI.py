@@ -1135,7 +1135,7 @@ def orchestrator(init_values, window):
         log_message("----------------------------------------------------------------")
         proc = subprocess.Popen(
             full_cmd, shell=True,
-            stderr=subprocess.PIPE, text=True, bufsize=1,
+            stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace", bufsize=1,
             universal_newlines=True,
             creationflags=(subprocess.CREATE_NEW_PROCESS_GROUP
                            if os.name == 'nt' else 0),

@@ -749,6 +749,118 @@ def _count_encoded_frames(ffprobe, raw, expected):
     return count("frames")
 
 
+def _source_timings(ffprobe, source, log_fn=print):
+    """Decide whether the source is VFR, cheaply.
+
+    The frame rate comparison answers from the container header (0.02 s on a
+    two-hour feature): `r_frame_rate` is the stream's nominal rate while
+    `avg_frame_rate` is the average over the file, so a constant-rate source
+    reports the same fraction twice and a genuinely variable one does not.
+    Only a suspect source pays for the timestamps, and those come from
+    `-show_packets` (demux, 0.7 s on a 2.3 GB feature) instead of
+    `-show_frames` (full decode, 121 s on the same file: measured
+    2026-10-25).  Packet PTS are in decode order with B-frames, so they are
+    sorted before use; the result is bit-identical to the frame PTS
+    (verified on a synthetic VFR clip and on an MP4 with an edit list:
+    max difference 0.000 ms).
+
+    Returns `(is_vfr, pts)`; `pts` is None when the source is CFR or when
+    the timestamps cannot be used (the caller then muxes at constant fps).
+    """
+    header = subprocess.run(
+        [ffprobe, "-v", "error", "-select_streams", "v:0",
+         "-show_entries", "stream=r_frame_rate,avg_frame_rate,nb_frames,duration",
+         "-show_entries", "stream_tags",
+         "-show_entries", "format=duration",
+         "-of", "default=noprint_wrappers=1", str(source)],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+    )
+    if header.returncode != 0:
+        log_fn("⚠️ MKV: ffprobe could not read the source rates; muxing at "
+               "constant fps: " + (header.stderr or "").strip()[-300:])
+        return False, None
+
+    fields = {}
+    for line in (header.stdout or "").splitlines():
+        if "=" in line:
+            key, value = line.split("=", 1)
+            fields[key.strip()] = value.strip()
+    nominal = _fraction_to_float(fields.get("r_frame_rate", ""))
+    average = _fraction_to_float(fields.get("avg_frame_rate", ""))
+    if nominal is None:
+        log_fn("⚠️ MKV: source frame rate unknown; muxing at constant fps")
+        return False, None
+
+    # Two cheap signals, both from the header:
+    #  1. nominal vs average rate — differs on a source whose frame rate moves;
+    #  2. declared frame count vs duration x rate — differs when the source
+    #     does not have `duration * rate` frames (a 526-frame clip playing at
+    #     an average of 12.5 fps for 34 s only has 426 by that reckoning).
+    # (1) alone misses Matroska files, where mkvmerge writes the average into
+    # both fields; (2) alone is noisy on sources with a start offset.
+    suspects = []
+    if average is not None and abs(average - nominal) > nominal * 0.001:
+        suspects.append(f"rate {fields.get('r_frame_rate')} vs "
+                        f"average {fields.get('avg_frame_rate')}")
+    declared = _as_int(fields.get("nb_frames")) or _tag_frame_count(fields)
+    duration = (fields.get("duration")
+                or fields.get("TAG:DURATION")
+                or fields.get("duration"))
+    if declared:
+        try:
+            expected = float(duration) * nominal
+        except (TypeError, ValueError):
+            expected = None
+        if expected and abs(declared - expected) > max(2.0, declared * 0.001):
+            suspects.append(f"{declared} frames vs {expected:.0f} from the "
+                            f"duration")
+
+    if not suspects:
+        # Constant frame rate: no timestamps to read.  Reading 110k packet
+        # timestamps to confirm it would cost ~0.7 s on every mux (and a full
+        # decode, 121 s, before 2026-10-25) for nothing.
+        log_fn(f"[TIMING] Source rate {fields.get('r_frame_rate')} (constant)")
+        return False, None
+    log_fn("[TIMING] Checking timestamps: " + "; ".join(suspects))
+
+    probe = subprocess.run(
+        [ffprobe, "-v", "error", "-select_streams", "v:0",
+         "-show_entries", "packet=pts_time", "-of", "csv=p=0",
+         str(source)],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+    )
+    if probe.returncode != 0:
+        log_fn("⚠️ MKV: ffprobe could not read the source timestamps; "
+               "muxing at constant fps: " + (probe.stderr or "").strip()[-300:])
+        return False, None
+
+    pts = []
+    for line in (probe.stdout or "").splitlines():
+        value = line.strip().split(",")[0]
+        try:
+            pts.append(float(value))
+        except ValueError:
+            continue
+    if len(pts) < 2:
+        log_fn("⚠️ MKV: not enough source timestamps; muxing at constant fps")
+        return False, None
+
+    pts.sort()
+    if any(b <= a for a, b in zip(pts, pts[1:])):
+        # Duplicate timestamps: not a usable presentation order.
+        log_fn("⚠️ MKV: duplicate source timestamps; muxing at constant fps")
+        return False, None
+
+    intervals = [b - a for a, b in zip(pts, pts[1:])]
+    typical = sorted(intervals)[len(intervals) // 2]
+    # Ignore normal millisecond rounding in CFR sources.
+    tolerance = max(0.0015, typical * 0.04)
+    is_vfr = any(abs(delta - typical) > tolerance for delta in intervals)
+    log_fn(f"[TIMING] Source frames: {len(pts)}; "
+           f"mode: {'VFR' if is_vfr else 'CFR'}")
+    return (is_vfr, pts) if is_vfr else (False, None)
+
+
 def create_video_mkv(mkv_exe, video_h265_path, fps: str, log_fn=print,
                      source_video=None, mux_all_streams=False):
     """Mux the encoded elementary stream into an MKV file.
@@ -789,42 +901,7 @@ def create_video_mkv(mkv_exe, video_h265_path, fps: str, log_fn=print,
                        "or PATH); muxing at constant fps (VFR timing not "
                        "preserved)")
             else:
-                # Extract timestamps in original decoded-frame order.
-                probe = subprocess.run(
-                    [ffprobe, "-v", "error", "-select_streams", "v:0",
-                     "-show_entries", "frame=best_effort_timestamp_time",
-                     "-of", "csv=p=0", str(source)],
-                    capture_output=True, text=True,
-                    encoding="utf-8", errors="replace",
-                )
-                if probe.returncode != 0:
-                    log_fn("⚠️ MKV: ffprobe could not read the source "
-                           "timestamps; muxing at constant fps: "
-                           + probe.stderr[-300:].strip())
-                else:
-                    pts = []
-                    for line in probe.stdout.splitlines():
-                        value = line.strip().split(",")[0]
-                        try:
-                            pts.append(float(value))
-                        except ValueError:
-                            continue
-                    if len(pts) < 2:
-                        log_fn("⚠️ MKV: not enough source timestamps; "
-                               "muxing at constant fps")
-                    else:
-                        if any(b <= a for a, b in zip(pts, pts[1:])):
-                            raise RuntimeError(
-                                "MKV: source timestamps not strictly "
-                                "increasing")
-                        intervals = [b - a for a, b in zip(pts, pts[1:])]
-                        typical = sorted(intervals)[len(intervals) // 2]
-                        # Ignore normal millisecond rounding in CFR sources.
-                        tolerance = max(0.0015, typical * 0.04)
-                        is_vfr = any(abs(delta - typical) > tolerance
-                                     for delta in intervals)
-                        log_fn(f"[TIMING] Source frames: {len(pts)}; "
-                               f"mode: {'VFR' if is_vfr else 'CFR'}")
+                is_vfr, pts = _source_timings(ffprobe, source, log_fn)
 
         if is_vfr:
             encoded_count = _count_encoded_frames(ffprobe, raw, len(pts))

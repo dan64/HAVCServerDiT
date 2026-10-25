@@ -577,6 +577,15 @@ def _as_int(value):
         return None
 
 
+def _as_float(value):
+    """Float from an ffprobe field, or None when it is missing/`N/A`."""
+    try:
+        number = float(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+    return number if number >= 0 else None
+
+
 def _fraction_to_float(text):
     """ffprobe rates are fractions (`25/1`, `24000/1001`); None if invalid."""
     try:
@@ -708,6 +717,7 @@ def get_video_info(video_path, log_fn=print, mkv_exe=None, script_dir_path=None)
         "frames": frames,
         "width": fields["width"],
         "height": fields["height"],
+        "duration": _as_float(fields.get("duration")),
         "format": fields.get("pix_fmt", ""),
         "codec": fields.get("codec_name", ""),
     }
@@ -934,11 +944,30 @@ def create_video_mkv(mkv_exe, video_h265_path, fps: str, log_fn=print,
             log_fn(f"[MKV] Temporary output cleanup warning: {exc}")
 
 
+def format_duration(seconds):
+    """Seconds -> `hh:mm:ss` for the Video Technical Details panel.
+
+    Accepts the float from `get_video_info` or the raw ffprobe string; returns
+    "?" for anything unusable (`N/A`, missing, negative), so the panel never
+    shows a misleading zero.
+    """
+    try:
+        total = int(round(float(seconds)))
+    except (TypeError, ValueError):
+        return "?"
+    if total < 0:
+        return "?"
+    hours, rest = divmod(total, 3600)
+    minutes, secs = divmod(rest, 60)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+
+
 def update_video_info(window, info):
     window["-INF_RES-"].update(
         f"{info.get('width', '?')} x {info.get('height', '?')}")
     window["-INF_FPS-"].update(info.get('fps', '?'))
     window["-INF_FRAMES-"].update(info.get('frames', '?'))
+    window["-INF_DURATION-"].update(format_duration(info.get("duration")))
     window["-INF_FORMAT-"].update(info.get('format', '?'))
     window["-FPS-"].update(info.get('fps', '24000/1001'))
 
@@ -3493,6 +3522,8 @@ tab2_layout = [
              sg.Text("-", key="-INF_FPS-",    text_color="yellow", font=("Any", 10, "bold"))],
             [sg.Text("Total Frames:", size=(12, 1)),
              sg.Text("-", key="-INF_FRAMES-", text_color="yellow", font=("Any", 10, "bold"))],
+            [sg.Text("Duration:",     size=(12, 1)),
+             sg.Text("-", key="-INF_DURATION-", text_color="yellow", font=("Any", 10, "bold"))],
             [sg.Text("Video Format:", size=(12, 1)),
              sg.Text("-", key="-INF_FORMAT-", text_color="yellow", font=("Any", 10, "bold"))],
         ], expand_x=True)],

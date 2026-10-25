@@ -182,7 +182,8 @@ pip install https://github.com/dan64/HAVCServerDiT/releases/download/v1.0.0/spat
 **FFprobe: video details and timestamp-preserving muxing.** The GUI uses
 `ffprobe` for two things:
 
-- **Video Technical Details** (resolution, FPS, total frames, format) — it
+- **Video Technical Details** (resolution, FPS, total frames, duration as
+  `hh:mm:ss`, format) — it
   reads the container header plus the track statistics tags, so it answers in
   ~0.02 s even on a two-hour 1080p feature (measured: 0.026 s against 1.1 s
   for the old VapourSynth probe) and needs no decoder or index;
@@ -358,7 +359,7 @@ The GUI has seven tabs plus a persistent status bar at the bottom.
 | **Select Video**                               | Dropdown populated from the video directory — selecting an entry here fills the Dashboard's **Input Video** field back |
 
 After selecting a video, the **Video Technical Details** panel shows
-resolution, FPS, frame count, and pixel format.
+resolution, FPS, frame count, duration (`hh:mm:ss`) and pixel format.
 
 **Selection Settings** frame (used by Dashboard task **2. Select Reference
 Frames**):

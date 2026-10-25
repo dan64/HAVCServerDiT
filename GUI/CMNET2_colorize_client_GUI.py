@@ -542,22 +542,151 @@ def get_eta_string(current_step, total_steps, start_time):
         return f"{h}h {m}m {s}s"
 
 
-def resolve_ffprobe_exe(mkv_exe):
-    """Locate `ffprobe.exe` for the timestamp-preserving mux.
+def resolve_ffprobe_exe(mkv_exe, script_dir=None):
+    """Locate `ffprobe.exe` for the timestamp-preserving mux and video probe.
 
     The installer ships it as `tools\\ffmpeg\\ffprobe.exe` (inside
     `tools.zip` since 2026-10-25), i.e. next to `MKVToolNix\\mkvmerge.exe`;
-    a manual install can instead put FFmpeg on `PATH`.  Returns `None` when
-    neither is available: the caller then falls back to constant-frame-rate
-    muxing, which is the historical behaviour.
+    a manual install keeps the same layout under `GUI/tools/`.  A stock
+    FFmpeg on `PATH` is the last resort.  Returns `None` when none is found:
+    the mux then falls back to constant-frame-rate and `get_video_info`
+    reports that it cannot read the file.
     """
+    candidates = []
     if mkv_exe:
         mkv = Path(mkv_exe)
-        for candidate in (mkv.parent / "ffprobe.exe",
-                          mkv.parent.parent / "ffmpeg" / "ffprobe.exe"):
-            if candidate.is_file():
-                return str(candidate)
+        candidates += [mkv.parent / "ffprobe.exe",
+                       mkv.parent.parent / "ffmpeg" / "ffprobe.exe"]
+    if script_dir:
+        scripts = Path(script_dir)
+        # repo: GUI/scripts -> GUI/tools ; install: <install>/gui/scripts ->
+        # <install>/tools
+        candidates += [scripts.parent / "tools" / "ffmpeg" / "ffprobe.exe",
+                       scripts.parent.parent / "tools" / "ffmpeg" / "ffprobe.exe"]
+    for candidate in candidates:
+        if candidate.is_file():
+            return str(candidate)
     return shutil.which("ffprobe")
+
+
+def _as_int(value):
+    """Integer from an ffprobe field, or None when it is missing/`N/A`."""
+    try:
+        return int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def _fraction_to_float(text):
+    """ffprobe rates are fractions (`25/1`, `24000/1001`); None if invalid."""
+    try:
+        numerator, _, denominator = str(text).partition("/")
+        value = float(numerator) / float(denominator or 1)
+        return value if value > 0 else None
+    except (TypeError, ValueError, ZeroDivisionError):
+        return None
+
+
+def _count_video_frames(ffprobe, video_path, log_fn=print):
+    """Exact frame count for containers that do not declare one.
+
+    `-count_packets` demuxes without decoding (measured: 0.23 s for a 647 MB
+    file with 10520 frames, against 0.61 s for the old VapourSynth probe on
+    the same file); for a video stream one packet is one frame.  MP4/MOV
+    declare `nb_frames` and never get here.
+    """
+    try:
+        result = subprocess.run(
+            [ffprobe, "-v", "error", "-select_streams", "v:0",
+             "-count_packets", "-show_entries", "stream=nb_read_packets",
+             "-of", "default=noprint_wrappers=1:nokey=1", str(video_path)],
+            capture_output=True, text=True, timeout=600,
+            encoding="utf-8", errors="replace",
+        )
+    except Exception as exc:  # noqa: BLE001 - the probe must never be fatal
+        log_fn(f"⚠️ Frame count failed: {exc}")
+        return None
+    if result.returncode != 0:
+        return None
+    lines = [line for line in (result.stdout or "").splitlines() if line.strip()]
+    return _as_int(lines[0]) if lines else None
+
+
+def get_video_info(video_path, log_fn=print, mkv_exe=None, script_dir_path=None):
+    """Read the source video's technical details with **ffprobe**.
+
+    Replaces the VapourSynth probe (`vs_info.vpy`, removed 2026-10-25):
+    ffprobe answers from the container header, so it needs no decoder and no
+    index — 0.02 s against 0.61 s for a 647 MB source — and it reports the
+    coded geometry, exactly the values the VapourSynth probe returned
+    (verified on a 90°-rotated MP4: LSMASH does not apply the rotation
+    matrix either, so both say 920x672).
+
+    Keys: `fps` (fraction, as the encoders want it), `frames`, `width`,
+    `height`, `format` (the source pixel format, e.g. `yuv420p`) and `codec`.
+    Returns None when ffprobe is missing, the file cannot be read or it has
+    no video stream.
+    """
+    ffprobe = resolve_ffprobe_exe(mkv_exe, script_dir_path)
+    if not ffprobe:
+        log_fn("⚠️ ffprobe not found (tools\\ffmpeg\\ffprobe.exe or PATH): "
+               "video details unavailable")
+        return None
+    try:
+        result = subprocess.run(
+            [ffprobe, "-v", "error", "-select_streams", "v:0",
+             "-show_entries",
+             "stream=width,height,r_frame_rate,avg_frame_rate,nb_frames,"
+             "codec_name,pix_fmt",
+             "-show_entries", "format=duration",
+             "-of", "default=noprint_wrappers=1", str(video_path)],
+            capture_output=True, text=True, timeout=90,
+            encoding="utf-8", errors="replace",
+        )
+    except Exception as exc:  # noqa: BLE001 - callers treat None as "unknown"
+        log_fn(f"⚠️ Error getting video info: {exc}")
+        return None
+    if result.returncode != 0:
+        log_fn("⚠️ Error getting video info: "
+               + (result.stderr or "").strip()[-500:])
+        return None
+
+    fields = {}
+    for line in (result.stdout or "").splitlines():
+        if "=" in line:
+            key, value = line.split("=", 1)
+            fields[key.strip()] = value.strip()
+
+    if not fields.get("width") or not fields.get("height"):
+        log_fn(f"⚠️ No video stream found in: {video_path}")
+        return None
+
+    fps = fields.get("r_frame_rate", "")
+    if fps in ("", "0/0"):
+        fps = fields.get("avg_frame_rate", "")
+    if fps == "0/0":
+        fps = ""
+
+    frames = _as_int(fields.get("nb_frames"))
+    if frames is None:
+        frames = _count_video_frames(ffprobe, video_path, log_fn)
+    if frames is None:
+        # Last resort: container duration x frame rate (approximate, and only
+        # for constant-frame-rate sources).
+        rate = _fraction_to_float(fps)
+        try:
+            frames = int(round(float(fields.get("duration", "")) * rate))
+        except (TypeError, ValueError):
+            frames = -1
+
+    return {
+        "fps": fps,
+        "frames": frames,
+        "width": fields["width"],
+        "height": fields["height"],
+        "format": fields.get("pix_fmt", ""),
+        "codec": fields.get("codec_name", ""),
+    }
 
 
 def _count_encoded_frames(ffprobe, raw, expected):
@@ -744,37 +873,6 @@ def create_video_mkv(mkv_exe, video_h265_path, fps: str, log_fn=print,
             log_fn(f"[MKV] Temporary output cleanup warning: {exc}")
 
 
-def get_video_info(vspipe_exe, video_path, script_dir_path, log_fn=print):
-    info_vpy = os.path.join(script_dir_path, "vs_info.vpy")
-    if not os.path.isfile(info_vpy):
-        return None
-    try:
-        cmd = [vspipe_exe, "--info", info_vpy,
-               "-a", f"VideoPath={video_path}"]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=90)
-        if result.returncode != 0:
-            log_fn(f"⚠️ Error getting video info: {result}")
-            return None
-        info = {}
-        full_output = result.stderr + result.stdout
-        for line in full_output.splitlines():
-            l = line.strip().lower()
-            if "fps:" in l:
-                info["fps"] = l.split(":", 1)[1].strip().split(" ", 1)[0].strip()
-            if "frames:" in l:
-                info["frames"] = int(l.split(":", 1)[1].strip())
-            if "width:" in l:
-                info["width"] = l.split(":", 1)[1].strip()
-            if "height:" in l:
-                info["height"] = l.split(":", 1)[1].strip()
-            if "format name:" in l:
-                info["format"] = l.split(":", 1)[1].strip()
-        return info
-    except Exception as e:
-        log_fn(f"⚠️ Error getting video info: {e}")
-        return None
-
-
 def update_video_info(window, info):
     window["-INF_RES-"].update(
         f"{info.get('width', '?')} x {info.get('height', '?')}")
@@ -798,7 +896,7 @@ def _apply_input_video(window, values, path):
     window["-BASE_DIR-"].update(folder)
     window["-VIDEO_DROPDOWN-"].update(values=scan_videos(folder), value=name)
     info = get_video_info(
-        values["-VSPIPE-"], path, values["-SCRIPT_DIR-"], log_gui_only)
+        path, log_gui_only, mkv_exe=values.get("-MKV_PATH-"), script_dir_path=values["-SCRIPT_DIR-"])
     if info:
         state["total_frames"] = info["frames"]
         update_video_info(window, info)
@@ -958,7 +1056,7 @@ def update_status(window, message, type="info"):
         "success": "#005500",
     }
     # Worker threads must not touch Tk widgets directly: while the main thread
-    # is busy outside tkinter's event loop (e.g. the vs_info probe running
+    # is busy outside tkinter's event loop (e.g. the ffprobe video probe running
     # inside an event handler), a direct widget call raises
     # RuntimeError("main thread is not in main loop") and kills the worker
     # (seen in the recolor thread).  Route thread updates through the
@@ -1357,7 +1455,7 @@ def orchestrator(init_values, window):
         ret = run_vspipe_task(cmd, window, "EXTRACT", log_message)
 
         info = get_video_info(
-            values["-VSPIPE-"], orig_video_path, values["-SCRIPT_DIR-"], log_message)
+            orig_video_path, log_message, mkv_exe=values.get("-MKV_PATH-"), script_dir_path=values["-SCRIPT_DIR-"])
         if info:
             out_dir = Path(ref_dir)
             total_frames = info["frames"]
@@ -2640,8 +2738,7 @@ def orchestrator(init_values, window):
         total_frames = state.get("total_frames", -1)
         if total_frames <= 0:
             info = get_video_info(
-                values["-VSPIPE-"], orig_video_path,
-                values["-SCRIPT_DIR-"], log_message)
+                orig_video_path, log_message, mkv_exe=values.get("-MKV_PATH-"), script_dir_path=values["-SCRIPT_DIR-"])
             if info:
                 total_frames = info["frames"]
                 window.write_event_value("-FPS-", info["fps"])
@@ -2725,8 +2822,7 @@ def orchestrator(init_values, window):
         total_frames = state.get("total_frames", -1)
         if total_frames <= 0:
             info = get_video_info(
-                values["-VSPIPE-"], orig_video_path,
-                values["-SCRIPT_DIR-"], log_message)
+                orig_video_path, log_message, mkv_exe=values.get("-MKV_PATH-"), script_dir_path=values["-SCRIPT_DIR-"])
             if info:
                 total_frames = info["frames"]
                 window.write_event_value("-FPS-", info["fps"])
@@ -2783,8 +2879,7 @@ def orchestrator(init_values, window):
     def do_encode_Nvenc(values, window, orig_video_path):
         total_frames = state.get("total_frames", -1)
         info = get_video_info(
-            values["-VSPIPE-"], orig_video_path,
-            values["-SCRIPT_DIR-"], log_message)
+            orig_video_path, log_message, mkv_exe=values.get("-MKV_PATH-"), script_dir_path=values["-SCRIPT_DIR-"])
         if info and total_frames <= 0:
             total_frames = info["frames"]
             window.write_event_value("-FPS-", info["fps"])
@@ -2865,8 +2960,7 @@ def orchestrator(init_values, window):
             return
 
         info = get_video_info(
-            values["-VSPIPE-"], orig_video_path,
-            values["-SCRIPT_DIR-"], log_message)
+            orig_video_path, log_message, mkv_exe=values.get("-MKV_PATH-"), script_dir_path=values["-SCRIPT_DIR-"])
         total_frames = info["frames"] if info else -1
         out_merge = str(
             Path(last_encoded_file).with_name(
@@ -2905,8 +2999,7 @@ def orchestrator(init_values, window):
         orig_video_path = os.path.join(
             init_values["-BASE_DIR-"], init_values["-VIDEO_DROPDOWN-"])
         info = get_video_info(
-            init_values["-VSPIPE-"], orig_video_path,
-            init_values["-SCRIPT_DIR-"], log_fn=log_message)
+            orig_video_path, log_fn=log_message, mkv_exe=init_values.get("-MKV_PATH-"), script_dir_path=init_values["-SCRIPT_DIR-"])
         total_frames = info["frames"] if info else -1
         state["total_frames"] = total_frames
         last_encoded_file = None
@@ -4026,8 +4119,9 @@ def _fixv_recolor_thread(values, window):
             return
 
         # Get video info
-        info = get_video_info(values["-VSPIPE-"], orig_video_path,
-                              values["-SCRIPT_DIR-"], _log)
+        info = get_video_info(orig_video_path, _log,
+                              mkv_exe=values.get("-MKV_PATH-"),
+                              script_dir_path=values["-SCRIPT_DIR-"])
         if not info:
             _log("Failed to get video info.")
             return
@@ -5060,7 +5154,7 @@ while True:
         if vids:
             video_path = os.path.join(values["-BASE_DIR-"], selected_video)
             info = get_video_info(
-                values["-VSPIPE-"], video_path, values["-SCRIPT_DIR-"], log_gui_only)
+                video_path, log_gui_only, mkv_exe=values.get("-MKV_PATH-"), script_dir_path=values["-SCRIPT_DIR-"])
             if info:
                 state["total_frames"] = info["frames"]
                 update_video_info(window, info)
@@ -5069,7 +5163,7 @@ while True:
         video_path = os.path.join(values["-BASE_DIR-"], values["-VIDEO_DROPDOWN-"])
         _mirror_input_video(window, values["-BASE_DIR-"], values["-VIDEO_DROPDOWN-"])
         info = get_video_info(
-            values["-VSPIPE-"], video_path, values["-SCRIPT_DIR-"], log_gui_only)
+            video_path, log_gui_only, mkv_exe=values.get("-MKV_PATH-"), script_dir_path=values["-SCRIPT_DIR-"])
         if info:
             state["total_frames"] = info["frames"]
             update_video_info(window, info)

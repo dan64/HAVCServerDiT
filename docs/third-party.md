@@ -36,11 +36,12 @@ source is available from the
 in the tarballs published on [ffmpeg.org/download.html](https://ffmpeg.org/download.html).
 The exact build configuration is printed by `ffprobe -version`.
 
-`ffprobe` is used for one thing only: reading the source video's frame
-timestamps before muxing, so a variable-frame-rate source keeps its duration.
-It runs as a separate process — no FFmpeg library is linked into HAVC — and
-when it is missing or fails the GUI logs a warning and falls back to
-constant-frame-rate muxing.
+`ffprobe` is used for two things only: reading the source video's technical
+details (resolution, frame rate, frame count, pixel format) for the GUI's
+**Video Technical Details** panel, and reading the frame timestamps before
+muxing so a variable-frame-rate source keeps its duration. It runs as a
+separate process — no FFmpeg library is linked into HAVC — and when it is
+missing the GUI logs a warning and falls back to constant-frame-rate muxing.
 
 ## A note on the other binaries
 

@@ -179,13 +179,20 @@ pip install https://github.com/dan64/HAVCServerDiT/releases/download/v1.0.0/spat
 
 ### 5. Install external tools
 
-**FFprobe for timestamp-preserving muxing:** the GUI uses `ffprobe` to read
-the source frame timestamps before muxing, so VFR (variable frame rate)
-sources keep their original duration instead of being forced to a constant
-frame rate. The installer ships it as `tools\ffmpeg\ffprobe.exe` (inside
-`tools.zip` since 2026-10-25); a manual install can instead put FFmpeg on
-`PATH`. When FFprobe is missing the GUI logs a warning and falls back to
-constant-frame-rate muxing.
+**FFprobe: video details and timestamp-preserving muxing.** The GUI uses
+`ffprobe` for two things:
+
+- **Video Technical Details** (resolution, FPS, total frames, format) — it
+  reads the container header, so it answers in ~0.02 s even on a large file
+  and needs no decoder or index;
+- **the source frame timestamps before muxing**, so VFR (variable frame rate)
+  sources keep their original duration instead of being forced to a constant
+  frame rate.
+
+The installer ships it as `tools\ffmpeg\ffprobe.exe` (inside `tools.zip`
+since 2026-10-25); a manual install can instead put FFmpeg on `PATH`. Without
+FFprobe the GUI cannot show the video details and falls back to
+constant-frame-rate muxing, logging a warning in both cases.
 
 The GUI relies on external command-line tools that must be present on disk
 (they are **not** Python packages):
@@ -197,7 +204,7 @@ The GUI relies on external command-line tools that must be present on disk
 | **x264**        | H.264 software encoder  | `GUI/tools/x264/x264.exe`           | [x264 downloads](https://www.videolan.org/developers/x264.html) |
 | **NVEncC**      | NVIDIA GPU encoder      | `GUI/tools/NVEncC/NVEncC64.exe`     | [rigaya/NVEnc](https://github.com/rigaya/NVEnc/releases)        |
 | **MKVToolNix**  | `.h265`/`.h264` → `.mkv` muxing | `GUI/tools/MKVToolNix/mkvmerge.exe` | [MKVToolNix](https://mkvtoolnix.download/)              |
-| **FFprobe**     | Source timestamps (CFR/VFR detection) | `GUI/tools/ffmpeg/ffprobe.exe` | [FFmpeg builds](https://www.gyan.dev/ffmpeg/builds/) |
+| **FFprobe**     | Video details + source timestamps (CFR/VFR) | `GUI/tools/ffmpeg/ffprobe.exe` | [FFmpeg builds](https://www.gyan.dev/ffmpeg/builds/) |
 
 The bundled FFmpeg is a **GPL-3.0** binary, shipped unmodified with its
 `LICENSE.txt` next to `ffprobe.exe` — see

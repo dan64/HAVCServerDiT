@@ -1,5 +1,48 @@
 # What's New
 
+### 2026-10-25 (v2.9.1) — faster video probe, VFR-safe muxing, and an explicit temp-folder cleanup
+
+**Variable-frame-rate sources keep their duration.** The MKV mux read the
+source frame timestamps with `ffprobe -show_frames`, which **decodes the whole
+video**: on a two-hour feature that was 121 s at the end of every encode, even
+for constant-rate sources. The timestamps now come from `-show_packets`
+(demux, under a second on the same file), and the classification is exact:
+a source with three 81 ms frames in 110 489 — reported by MediaInfo as
+"Frame rate mode: Variable" and invisible to any header-only test — is now
+detected and muxed with its own timestamps. Frame counts still have to match;
+a mismatch keeps the encoded stream instead of writing a broken MKV, and
+duplicate timestamps fall back to constant-rate muxing with a warning.
+
+**The video details panel is instant.** Resolution, FPS, frame count and the
+new **Duration** (`hh:mm:ss`) come from ffprobe: 0.02–0.05 s even on a 2 GB
+feature, against ~1.1 s for the VapourSynth probe it replaces
+(`vs_info.vpy` is gone). The frame count is read from the container tags
+(`NUMBER_OF_FRAMES`, exact) and only demuxed when the container does not
+declare it.
+
+**`ffprobe` ships with the tools.** `tools.zip` now contains
+`tools/ffmpeg/ffprobe.exe` together with its **GPL-3.0 license text**, so a
+fresh install gets the probe without installing FFmpeg separately; the
+bootstrap re-extracts the archive once on existing installs. A missing
+ffprobe is a warning, never a failure: the GUI falls back to
+constant-frame-rate muxing.
+
+**Select Reference Frames no longer deletes your candidates on its own.**
+`ref_tht10_temp` is the backup of every extracted candidate (with *Move
+Files* off, the only one), so removing it is now an explicit choice: the new
+**Del tht10_temp** checkbox in *1. Extraction → Selection Settings*, off by
+default. Dry Run and Stop never delete it, the selected frames are checked
+before anything is removed, and an unexpected folder layout is skipped with a
+warning.
+
+**Third-party licenses are documented.** New page
+`docs/third-party.md`: every bundled binary, its license and, for FFmpeg, the
+source commit of the shipped build.
+
+Notes: incremental update, no environment rebuild. `main` also carries the
+community fix for VFR muxing (PR #13) and the SELECT cleanup (PR #12, now
+gated by the checkbox above).
+
 ### 2026-10-21 (v2.9.0) — FLUX.3 Image Klein, and a new prompt for the nunchaku families
 
 **A new backend: `flux3` (FLUX.3 Image Klein).** It is the only FLUX that

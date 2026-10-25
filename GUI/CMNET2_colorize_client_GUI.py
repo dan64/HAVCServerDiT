@@ -612,15 +612,36 @@ def _count_video_frames(ffprobe, video_path, log_fn=print):
     return _as_int(lines[0]) if lines else None
 
 
+def _tag_frame_count(fields):
+    """Frame count declared by the container's own statistics tags.
+
+    mkvmerge writes `NUMBER_OF_FRAMES` per track (and MP4ToolNix/other muxers
+    may put it on the format), so a Matroska file usually carries the exact
+    count in its header — no demuxing needed.  The key can arrive with a
+    language suffix (`TAG:NUMBER_OF_FRAMES-eng`), hence the prefix match.
+    """
+    for key, value in fields.items():
+        if key.upper().startswith("TAG:NUMBER_OF_FRAMES"):
+            number = _as_int(value)
+            if number and number > 0:
+                return number
+    return None
+
+
 def get_video_info(video_path, log_fn=print, mkv_exe=None, script_dir_path=None):
     """Read the source video's technical details with **ffprobe**.
 
     Replaces the VapourSynth probe (`vs_info.vpy`, removed 2026-10-25):
     ffprobe answers from the container header, so it needs no decoder and no
-    index — 0.02 s against 0.61 s for a 647 MB source — and it reports the
+    index — 0.02 s against 1.1 s for a 1080p feature — and it reports the
     coded geometry, exactly the values the VapourSynth probe returned
     (verified on a 90°-rotated MP4: LSMASH does not apply the rotation
     matrix either, so both say 920x672).
+
+    The frame count comes from, in order: the stream's `nb_frames` (MP4/MOV),
+    the container's `NUMBER_OF_FRAMES` statistics tag (Matroska written by
+    mkvmerge — including every file this GUI produces), and only if neither
+    exists from `-count_packets`, which has to demux the whole file.
 
     Keys: `fps` (fraction, as the encoders want it), `frames`, `width`,
     `height`, `format` (the source pixel format, e.g. `yuv420p`) and `codec`.
@@ -638,6 +659,7 @@ def get_video_info(video_path, log_fn=print, mkv_exe=None, script_dir_path=None)
              "-show_entries",
              "stream=width,height,r_frame_rate,avg_frame_rate,nb_frames,"
              "codec_name,pix_fmt",
+             "-show_entries", "stream_tags",
              "-show_entries", "format=duration",
              "-of", "default=noprint_wrappers=1", str(video_path)],
             capture_output=True, text=True, timeout=90,
@@ -669,10 +691,12 @@ def get_video_info(video_path, log_fn=print, mkv_exe=None, script_dir_path=None)
 
     frames = _as_int(fields.get("nb_frames"))
     if frames is None:
+        frames = _tag_frame_count(fields)
+    if frames is None:
         frames = _count_video_frames(ffprobe, video_path, log_fn)
     if frames is None:
-        # Last resort: container duration x frame rate (approximate, and only
-        # for constant-frame-rate sources).
+        # Last resort: container duration x frame rate — approximate, so it is
+        # only used when even the packet count failed.
         rate = _fraction_to_float(fps)
         try:
             frames = int(round(float(fields.get("duration", "")) * rate))

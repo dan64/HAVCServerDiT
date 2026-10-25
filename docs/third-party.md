@@ -18,22 +18,23 @@ whose sha256 the bootstrap verifies, and each remains under its own license.
 
 ## FFmpeg / FFprobe
 
-The bundled `ffprobe.exe` is a **GPL-3.0** FFmpeg build: it is compiled with
-`--enable-gpl --enable-version3`, which is required by the GPL-only libraries
-it links (`libx264`, `libx265`, `libxvid`, …). Its license text and build
-notice ship next to the binary, inside the same `tools.zip`:
+The bundled `ffprobe.exe` is a **GPL-3.0** FFmpeg build (`--enable-gpl
+--enable-version3`, required by the GPL-only libraries it links such as
+`libx264`/`libx265`). It is redistributed unmodified, and its license text
+ships next to the binary in the same archive:
 
 ```
 tools/ffmpeg/
-├── ffprobe.exe
-├── LICENSE.txt     GNU General Public License v3
-└── README.txt      build identification, configuration and bundled libraries
+├── ffprobe.exe     FFmpeg N-128094-g31855b2a70, built 2026-10-25
+└── LICENSE.txt     GNU General Public License v3
 ```
 
-The FFmpeg project is the upstream source of that build; its source code is
-available from <https://ffmpeg.org/download.html> and the
-[FFmpeg Git repository](https://git.ffmpeg.org/ffmpeg.git) (see `README.txt`
-for the exact snapshot). HAVC does not modify FFmpeg.
+**Corresponding source.** The binary is an unmodified build of the FFmpeg
+commit named in its version string (`31855b2a70`, snapshot `2026-10-25`). The
+source is available from the
+[FFmpeg Git repository](https://git.ffmpeg.org/ffmpeg.git) at that commit and
+in the tarballs published on [ffmpeg.org/download.html](https://ffmpeg.org/download.html).
+The exact build configuration is printed by `ffprobe -version`.
 
 `ffprobe` is used for one thing only: reading the source video's frame
 timestamps before muxing, so a variable-frame-rate source keeps its duration.

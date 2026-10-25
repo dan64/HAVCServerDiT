@@ -33,13 +33,15 @@ PIP_MIN = (24, 0)  # below this threshold the `pip` step upgrades pip
 
 # External tools (x265/x264/mkvmerge/ffprobe) — archive pinned to Release
 # v1.0.0; sha256 also verified against the official GitHub `digest`. The asset
-# was replaced in place on 2026-10-25 to add tools\ffmpeg\ffprobe.exe (used by
-# the timestamp-preserving mux): the URL stays the same, only the hash below
-# changes.
+# was replaced in place twice on 2026-10-25: first to add
+# tools\ffmpeg\ffprobe.exe (used by the timestamp-preserving mux), then to add
+# the license text that FFmpeg (GPL-3.0) must travel with
+# (tools\ffmpeg\LICENSE.txt + README.txt). The URL stays the same, only the
+# hash below changes.
 TOOLS = {
     "name": "tools.zip",
     "url": "https://github.com/dan64/HAVCServerDiT/releases/download/v1.0.0/tools.zip",
-    "sha256": "8df33f64f9b85b24765ca908e663295703db1097719bf2f490dd0b09e6daffbe",
+    "sha256": "41986dd2556c0ea7bbe35fc779f82f4d305ec9f7653df2ae8b56df18d5baf670",
 }
 
 # NVEncC (rigaya's GPU encoder) — "flat" package (NVEncC64.exe + DLLs in the

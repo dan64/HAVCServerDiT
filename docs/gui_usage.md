@@ -179,6 +179,10 @@ pip install https://github.com/dan64/HAVCServerDiT/releases/download/v1.0.0/spat
 
 ### 5. Install external tools
 
+**FFprobe requirement for timestamp-preserving muxing:** Install FFmpeg with `ffprobe` available on `PATH`. The GUI uses FFprobe to inspect source frame timestamps before muxing, including to distinguish CFR from VFR. The existing `tools.zip` does not provide FFprobe.
+
+
+
 The GUI relies on three command-line tools that must be present on disk
 (they are **not** Python packages):
 

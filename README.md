@@ -64,6 +64,7 @@ CLI arguments, the full launch-script reference and the suggested inference step
 - [RPC API](docs/rpc-api.md) — XML-RPC API, example clients, shared-memory transport
 - [GUI usage](docs/gui_usage.md) — the desktop client
 - [Troubleshooting](docs/troubleshooting.md)
+- [Third-party components](docs/third-party.md) — bundled binaries and their licenses
 - [What's New](docs/whats-new.md) — changelog
 
 ## 🔗 Credits

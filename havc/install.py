@@ -1280,10 +1280,14 @@ def build_steps() -> list[Step]:
     # -- 20. tools ---------------------------------------------------------
     def tools_check(c: Ctx) -> Optional[str]:
         tools = c.install_dir / "tools"
+        # ffprobe ships with its GPL-3.0 license text (FFmpeg is redistributed as
+        # an unmodified binary): both land on disk together and both are
+        # required, so an install extracted before 2026-10-25 fetches them.
         complete = (
             (tools / "x265" / "x265.exe").is_file()
             and (tools / "NVEncC" / "NVEncC64.exe").is_file()
             and (tools / "ffmpeg" / "ffprobe.exe").is_file()
+            and (tools / "ffmpeg" / "LICENSE.txt").is_file()
         )
         if complete:
             return "external tools already present"
@@ -1293,20 +1297,27 @@ def build_steps() -> list[Step]:
         if c.dry_run:
             c.progress.event("log", level="dry-run",
                              message=f"[dry-run] tools -> {c.install_dir / 'tools'} "
-                                     "(x265/x264/mkvmerge/ffprobe + NVEncC)")
+                                     "(x265/x264/mkvmerge/ffprobe + licenses + NVEncC)")
             return "dry-run"
         done = []
         tools = c.install_dir / "tools"
         # ffprobe joined tools.zip on 2026-10-25: an install created before it
         # re-extracts the archive even though x265 is already present.
         if (not (tools / "x265" / "x265.exe").is_file()
-                or not (tools / "ffmpeg" / "ffprobe.exe").is_file()):
+                or not (tools / "ffmpeg" / "ffprobe.exe").is_file()
+                or not (tools / "ffmpeg" / "LICENSE.txt").is_file()):
             archive = cached_download(c, TOOLS, local=c.tools_zip)
             extract_archive(archive, c.install_dir, required_root="tools")
             if not (tools / "ffmpeg" / "ffprobe.exe").is_file():
                 raise BootstrapError(
                     "ffprobe.exe missing after extraction",
                     "tools.zip may have an unexpected layout")
+            if not (tools / "ffmpeg" / "LICENSE.txt").is_file():
+                c.progress.event(
+                    "log", level="warn",
+                    message="tools.zip does not carry tools/ffmpeg/LICENSE.txt "
+                            "(FFmpeg is GPL-3.0): the build is usable but the "
+                            "license notice is missing from <install>\\tools")
             done.append("x265, x264, mkvmerge, ffprobe")
         nvenc_exe = c.install_dir / "tools" / "NVEncC" / "NVEncC64.exe"
         if not nvenc_exe.is_file():

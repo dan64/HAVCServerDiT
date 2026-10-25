@@ -199,11 +199,16 @@ The GUI relies on external command-line tools that must be present on disk
 | **MKVToolNix**  | `.h265`/`.h264` → `.mkv` muxing | `GUI/tools/MKVToolNix/mkvmerge.exe` | [MKVToolNix](https://mkvtoolnix.download/)              |
 | **FFprobe**     | Source timestamps (CFR/VFR detection) | `GUI/tools/ffmpeg/ffprobe.exe` | [FFmpeg builds](https://www.gyan.dev/ffmpeg/builds/) |
 
+The bundled FFmpeg is a **GPL-3.0** binary, shipped unmodified with its
+`LICENSE.txt` and `README.txt` next to `ffprobe.exe` — see
+[Third-party components](third-party.md) for the licenses of every bundled
+tool and the source pointer.
+
 > **Quick setup with Release 1.0.0**: the project's [Release 1.0.0](https://github.com/dan64/HAVCServerDiT/releases/tag/v1.0.0)
 > includes a `tools.zip` archive containing `x265.exe`, `x264.exe`,
-> `mkvmerge.exe` and `ffprobe.exe`. Download it and extract its contents
-> directly into `GUI/tools/` so that the default paths match without any
-> additional configuration:
+> `mkvmerge.exe` and `ffprobe.exe` (with its `LICENSE.txt`/`README.txt`).
+> Download it and extract its contents directly into `GUI/tools/` so that the
+> default paths match without any additional configuration:
 > 
 > ```
 > GUI/tools/
@@ -214,7 +219,9 @@ The GUI relies on external command-line tools that must be present on disk
 > ├── MKVToolNix/
 > │   └── mkvmerge.exe
 > ├── ffmpeg/
-> │   └── ffprobe.exe
+> │   ├── ffprobe.exe
+> │   ├── LICENSE.txt     (GPL-3.0)
+> │   └── README.txt      (build identification)
 > ├── NVEncC/        (download separately)
 > └── ...
 > ```

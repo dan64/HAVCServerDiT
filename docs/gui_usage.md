@@ -75,7 +75,7 @@ Steps 2–5.
 | **OS**      | Windows 10 / 11 (64-bit)                                              |
 | **Python**  | 3.12                                                                  |
 | **GPU**     | RTX 30 / 40 / 50 (same as the DiT server)                             |
-| **Tools**   | VapourSynth R74, x265, NVEncC, MKVToolNix                             |
+| **Tools**   | VapourSynth R74, x265, NVEncC, MKVToolNix, FFprobe                     |
 | **Server**  | `dit_rpc_server.py` must be running (see [main README](../README.md)) |
 
 The GUI and the server can run on the **same machine** (localhost) or on
@@ -179,11 +179,15 @@ pip install https://github.com/dan64/HAVCServerDiT/releases/download/v1.0.0/spat
 
 ### 5. Install external tools
 
-**FFprobe requirement for timestamp-preserving muxing:** Install FFmpeg with `ffprobe` available on `PATH`. The GUI uses FFprobe to inspect source frame timestamps before muxing, including to distinguish CFR from VFR. The existing `tools.zip` does not provide FFprobe.
+**FFprobe for timestamp-preserving muxing:** the GUI uses `ffprobe` to read
+the source frame timestamps before muxing, so VFR (variable frame rate)
+sources keep their original duration instead of being forced to a constant
+frame rate. The installer ships it as `tools\ffmpeg\ffprobe.exe` (inside
+`tools.zip` since 2026-10-25); a manual install can instead put FFmpeg on
+`PATH`. When FFprobe is missing the GUI logs a warning and falls back to
+constant-frame-rate muxing.
 
-
-
-The GUI relies on three command-line tools that must be present on disk
+The GUI relies on external command-line tools that must be present on disk
 (they are **not** Python packages):
 
 | Tool            | Purpose                 | Default location                    | Download                                                        |
@@ -193,12 +197,13 @@ The GUI relies on three command-line tools that must be present on disk
 | **x264**        | H.264 software encoder  | `GUI/tools/x264/x264.exe`           | [x264 downloads](https://www.videolan.org/developers/x264.html) |
 | **NVEncC**      | NVIDIA GPU encoder      | `GUI/tools/NVEncC/NVEncC64.exe`     | [rigaya/NVEnc](https://github.com/rigaya/NVEnc/releases)        |
 | **MKVToolNix**  | `.h265`/`.h264` → `.mkv` muxing | `GUI/tools/MKVToolNix/mkvmerge.exe` | [MKVToolNix](https://mkvtoolnix.download/)              |
+| **FFprobe**     | Source timestamps (CFR/VFR detection) | `GUI/tools/ffmpeg/ffprobe.exe` | [FFmpeg builds](https://www.gyan.dev/ffmpeg/builds/) |
 
 > **Quick setup with Release 1.0.0**: the project's [Release 1.0.0](https://github.com/dan64/HAVCServerDiT/releases/tag/v1.0.0)
-> includes a `tools.zip` archive containing `x265.exe`, `x264.exe` and
-> `mkvmerge.exe`. Download it and extract its contents directly into
-> `GUI/tools/` so that the default paths match without any additional
-> configuration:
+> includes a `tools.zip` archive containing `x265.exe`, `x264.exe`,
+> `mkvmerge.exe` and `ffprobe.exe`. Download it and extract its contents
+> directly into `GUI/tools/` so that the default paths match without any
+> additional configuration:
 > 
 > ```
 > GUI/tools/
@@ -208,12 +213,15 @@ The GUI relies on three command-line tools that must be present on disk
 > │   └── x264.exe
 > ├── MKVToolNix/
 > │   └── mkvmerge.exe
+> ├── ffmpeg/
+> │   └── ffprobe.exe
 > ├── NVEncC/        (download separately)
 > └── ...
 > ```
 >
 > `x264.exe` is located as a sibling of `x265.exe` (same convention as
-> `NVEncC/`) — no separate path field is exposed in the GUI for it.
+> `NVEncC/`) and `ffprobe.exe` next to `MKVToolNix/` (under `ffmpeg/`) — no
+> separate path fields are exposed in the GUI for them.
 > 
 > You can also place these tools anywhere — just point the GUI to their paths
 > in the **Encode/Merge** tab.

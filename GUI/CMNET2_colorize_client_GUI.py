@@ -25,6 +25,7 @@ import json
 import signal
 import sys
 import io
+import tempfile
 import time
 import shutil
 import xmlrpc.client
@@ -541,181 +542,194 @@ def get_eta_string(current_step, total_steps, start_time):
         return f"{h}h {m}m {s}s"
 
 
+def resolve_ffprobe_exe(mkv_exe):
+    """Locate `ffprobe.exe` for the timestamp-preserving mux.
+
+    The installer ships it as `tools\\ffmpeg\\ffprobe.exe` (inside
+    `tools.zip` since 2026-10-25), i.e. next to `MKVToolNix\\mkvmerge.exe`;
+    a manual install can instead put FFmpeg on `PATH`.  Returns `None` when
+    neither is available: the caller then falls back to constant-frame-rate
+    muxing, which is the historical behaviour.
+    """
+    if mkv_exe:
+        mkv = Path(mkv_exe)
+        for candidate in (mkv.parent / "ffprobe.exe",
+                          mkv.parent.parent / "ffmpeg" / "ffprobe.exe"):
+            if candidate.is_file():
+                return str(candidate)
+    return shutil.which("ffprobe")
+
+
+def _count_encoded_frames(ffprobe, raw, expected):
+    """Number of frames in the encoded elementary stream.
+
+    `-count_packets` is much faster than `-count_frames` (it does not decode
+    the stream) and for raw HEVC/H.264 each access unit is one packet, so the
+    two agree.  If the packet count differs from the source, the slower frame
+    count confirms before the mux is rejected.
+    """
+    input_format = "h264" if raw.suffix.lower() == ".h264" else "hevc"
+
+    def count(kind):
+        entry = ("nb_read_packets" if kind == "packets"
+                 else "nb_read_frames")
+        result = subprocess.run(
+            [ffprobe, "-v", "error", "-f", input_format,
+             "-count_" + kind, "-select_streams", "v:0",
+             "-show_entries", "stream=" + entry,
+             "-of", "default=noprint_wrappers=1:nokey=1", str(raw)],
+            capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
+        )
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"MKV: encoded {kind} count failed: " + result.stderr[-1000:])
+        try:
+            return int(result.stdout.strip())
+        except ValueError:
+            raise RuntimeError(
+                f"MKV: unable to determine encoded {kind} count")
+
+    packets = count("packets")
+    if packets == expected:
+        return packets
+    return count("frames")
+
+
 def create_video_mkv(mkv_exe, video_h265_path, fps: str, log_fn=print,
                      source_video=None, mux_all_streams=False):
-    """Mux encoded video, preserving source VFR timestamps when needed."""
-    import tempfile
+    """Mux the encoded elementary stream into an MKV file.
 
+    VFR sources are detected with ffprobe and their original frame timestamps
+    are handed to mkvmerge (`# timestamp format v2`), so the output keeps the
+    source duration instead of being forced to a constant frame rate.  CFR
+    sources keep the `--default-duration` path.
+
+    The encoded stream is deleted only after a successful mux; the MKV is
+    written to a temporary sibling and moved into place, so a re-run is
+    allowed and a failed mux cannot damage a previous file.  Returns the
+    output path and raises RuntimeError on failure.
+    """
     raw = Path(video_h265_path)
     output = raw.with_suffix(".mkv")
+    temp_output = raw.with_name(raw.stem + ".tmp.mkv")
 
     if not raw.is_file() or raw.stat().st_size == 0:
         raise RuntimeError("MKV: missing or empty encoded input")
 
-    if output.exists():
-        raise RuntimeError(
-            "MKV: output already exists: " + str(output))
+    source = Path(source_video) if source_video else None
+    if source is not None and not source.is_file():
+        source = None
 
-    if not source_video or not Path(source_video).is_file():
-        raise RuntimeError("MKV: original source video not found")
-
-    ffprobe = shutil.which("ffprobe")
-    if not ffprobe:
-        raise RuntimeError("MKV: FFprobe is required for source timestamp detection. ""Install FFmpeg (including ffprobe.exe) and add its bin directory ""to PATH.")
-
-    # Extract timestamps in original decoded-frame order.
-    pts_cmd = [
-        ffprobe, "-v", "error",
-        "-select_streams", "v:0",
-        "-show_entries", "frame=best_effort_timestamp_time",
-        "-of", "csv=p=0",
-        str(source_video)
-    ]
-
-    result = subprocess.run(
-        pts_cmd, capture_output=True, text=True,
-        encoding="utf-8", errors="replace"
-    )
-
-    if result.returncode != 0:
-        raise RuntimeError(
-            "MKV: ffprobe source PTS failed: " + result.stderr[-1000:])
-
-    pts = []
-    for line in result.stdout.splitlines():
-        value = line.strip().split(",")[0]
-        try:
-            pts.append(float(value))
-        except ValueError:
-            continue
-
-    if len(pts) < 2:
-        raise RuntimeError("MKV: insufficient source timestamps")
-
-    if any(b <= a for a, b in zip(pts, pts[1:])):
-        raise RuntimeError("MKV: source timestamps not strictly increasing")
-
-    intervals = [
-        b - a for a, b in zip(pts, pts[1:])
-    ]
-    typical = sorted(intervals)[len(intervals) // 2]
-
-    # Ignore normal millisecond timestamp rounding in CFR sources.
-    tolerance = max(0.0015, typical * 0.04)
-    is_vfr = any(
-        abs(delta - typical) > tolerance
-        for delta in intervals
-    )
-
-    log_fn(
-        f"[TIMING] Source frames: {len(pts)}; "
-        f"mode: {'VFR' if is_vfr else 'CFR'}"
-    )
-
+    ffprobe = None
+    is_vfr = False
     timestamp_path = None
 
     try:
+        if source is None:
+            log_fn(f"⚠️ MKV: source video not found; muxing at constant "
+                   f"{fps} fps (VFR timing not preserved)")
+        else:
+            ffprobe = resolve_ffprobe_exe(mkv_exe)
+            if not ffprobe:
+                log_fn("⚠️ MKV: ffprobe not found (tools\\ffmpeg\\ffprobe.exe "
+                       "or PATH); muxing at constant fps (VFR timing not "
+                       "preserved)")
+            else:
+                # Extract timestamps in original decoded-frame order.
+                probe = subprocess.run(
+                    [ffprobe, "-v", "error", "-select_streams", "v:0",
+                     "-show_entries", "frame=best_effort_timestamp_time",
+                     "-of", "csv=p=0", str(source)],
+                    capture_output=True, text=True,
+                    encoding="utf-8", errors="replace",
+                )
+                if probe.returncode != 0:
+                    log_fn("⚠️ MKV: ffprobe could not read the source "
+                           "timestamps; muxing at constant fps: "
+                           + probe.stderr[-300:].strip())
+                else:
+                    pts = []
+                    for line in probe.stdout.splitlines():
+                        value = line.strip().split(",")[0]
+                        try:
+                            pts.append(float(value))
+                        except ValueError:
+                            continue
+                    if len(pts) < 2:
+                        log_fn("⚠️ MKV: not enough source timestamps; "
+                               "muxing at constant fps")
+                    else:
+                        if any(b <= a for a, b in zip(pts, pts[1:])):
+                            raise RuntimeError(
+                                "MKV: source timestamps not strictly "
+                                "increasing")
+                        intervals = [b - a for a, b in zip(pts, pts[1:])]
+                        typical = sorted(intervals)[len(intervals) // 2]
+                        # Ignore normal millisecond rounding in CFR sources.
+                        tolerance = max(0.0015, typical * 0.04)
+                        is_vfr = any(abs(delta - typical) > tolerance
+                                     for delta in intervals)
+                        log_fn(f"[TIMING] Source frames: {len(pts)}; "
+                               f"mode: {'VFR' if is_vfr else 'CFR'}")
+
         if is_vfr:
-            input_format = (
-                "h264" if raw.suffix.lower() == ".h264" else "hevc"
-            )
-
-            count_cmd = [
-                ffprobe, "-v", "error",
-                "-f", input_format,
-                "-count_frames",
-                "-select_streams", "v:0",
-                "-show_entries", "stream=nb_read_frames",
-                "-of", "default=noprint_wrappers=1:nokey=1",
-                str(raw)
-            ]
-
-            count_result = subprocess.run(
-                count_cmd, capture_output=True, text=True,
-                encoding="utf-8", errors="replace"
-            )
-
-            if count_result.returncode != 0:
-                raise RuntimeError(
-                    "MKV: encoded frame count failed: " +
-                    count_result.stderr[-1000:])
-
-            try:
-                encoded_count = int(count_result.stdout.strip())
-            except ValueError:
-                raise RuntimeError(
-                    "MKV: unable to determine encoded frame count")
-
+            encoded_count = _count_encoded_frames(ffprobe, raw, len(pts))
             if encoded_count != len(pts):
                 raise RuntimeError(
                     f"MKV: frame count mismatch: "
-                    f"source={len(pts)}, encoded={encoded_count}"
-                )
+                    f"source={len(pts)}, encoded={encoded_count}")
 
             with tempfile.NamedTemporaryFile(
                 mode="w", encoding="utf-8",
                 suffix=".timestamps.txt",
                 prefix=raw.stem + "_",
                 dir=str(raw.parent),
-                delete=False
+                delete=False,
             ) as stamp_file:
                 timestamp_path = Path(stamp_file.name)
                 stamp_file.write("# timestamp format v2\n")
                 for value in pts:
                     stamp_file.write(f"{value * 1000:.3f}\n")
 
-            log_fn(
-                f"[TIMING] VFR timestamps prepared: "
-                f"{encoded_count} frames"
-            )
+            log_fn(f"[TIMING] VFR timestamps prepared: "
+                   f"{encoded_count} frames")
 
-        cmd = [str(mkv_exe), "-o", str(output)]
-
+        if temp_output.exists():
+            temp_output.unlink()
+        cmd = [str(mkv_exe), "-o", str(temp_output)]
         if is_vfr:
-            cmd.extend([
-                "--timestamps", "0:" + str(timestamp_path)
-            ])
+            cmd.extend(["--timestamps", "0:" + str(timestamp_path)])
         else:
-            cmd.extend([
-                "--default-duration", f"0:{fps}fps"
-            ])
-
+            cmd.extend(["--default-duration", f"0:{fps}fps"])
         cmd.append(str(raw))
 
-        if mux_all_streams:
-            cmd.extend([
-                "--no-video", "--no-buttons",
-                "--no-global-tags", str(source_video)
-            ])
+        if mux_all_streams and source is not None:
+            cmd.extend(["--no-video", "--no-buttons",
+                        "--no-global-tags", str(source)])
 
         log_fn("[MKV] " + subprocess.list2cmdline(cmd))
-
         result = subprocess.run(
             cmd, capture_output=True, text=True,
-            encoding="utf-8", errors="replace"
+            encoding="utf-8", errors="replace",
         )
-
         if result.stdout:
             log_fn(result.stdout)
         if result.stderr:
             log_fn(result.stderr)
-
         if result.returncode != 0:
             raise RuntimeError(
-                f"mkvmerge failed: exit code {result.returncode}"
-            )
-
-        if not output.is_file() or output.stat().st_size == 0:
+                f"mkvmerge failed: exit code {result.returncode}")
+        if not temp_output.is_file() or temp_output.stat().st_size == 0:
             raise RuntimeError("MKV: output missing or empty")
 
+        os.replace(temp_output, output)
         log_fn(f"[MKV] Created successfully: {output}")
-
 
         try:
             send2trash(str(raw))
         except OSError as exc:
             log_fn(f"[MKV] Raw file cleanup warning: {exc}")
-
         return str(output)
     finally:
         if timestamp_path is not None:
@@ -723,6 +737,11 @@ def create_video_mkv(mkv_exe, video_h265_path, fps: str, log_fn=print,
                 timestamp_path.unlink(missing_ok=True)
             except OSError as exc:
                 log_fn(f"[TIMING] Timestamp cleanup warning: {exc}")
+        try:
+            if temp_output.exists():
+                temp_output.unlink()
+        except OSError as exc:
+            log_fn(f"[MKV] Temporary output cleanup warning: {exc}")
 
 
 def get_video_info(vspipe_exe, video_path, script_dir_path, log_fn=print):

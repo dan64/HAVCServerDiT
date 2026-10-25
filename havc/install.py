@@ -31,12 +31,15 @@ from .runtime import (RUNTIME, download_archive, extract_archive, probe_version,
 TORCH_INDEX = "https://download.pytorch.org/whl/cu130"
 PIP_MIN = (24, 0)  # below this threshold the `pip` step upgrades pip
 
-# External tools (x265/x264/mkvmerge) — archive pinned to Release v1.0.0;
-# sha256 also verified against the official GitHub `digest` (2026-10-04).
+# External tools (x265/x264/mkvmerge/ffprobe) — archive pinned to Release
+# v1.0.0; sha256 also verified against the official GitHub `digest`. The asset
+# was replaced in place on 2026-10-25 to add tools\ffmpeg\ffprobe.exe (used by
+# the timestamp-preserving mux): the URL stays the same, only the hash below
+# changes.
 TOOLS = {
     "name": "tools.zip",
     "url": "https://github.com/dan64/HAVCServerDiT/releases/download/v1.0.0/tools.zip",
-    "sha256": "0a17002e1bb8964d81ab892fdcf250c760764a71b3d5990d3f7865b38765aef5",
+    "sha256": "8df33f64f9b85b24765ca908e663295703db1097719bf2f490dd0b09e6daffbe",
 }
 
 # NVEncC (rigaya's GPU encoder) — "flat" package (NVEncC64.exe + DLLs in the
@@ -1276,9 +1279,13 @@ def build_steps() -> list[Step]:
 
     # -- 20. tools ---------------------------------------------------------
     def tools_check(c: Ctx) -> Optional[str]:
-        x265 = (c.install_dir / "tools" / "x265" / "x265.exe").is_file()
-        nvenc = (c.install_dir / "tools" / "NVEncC" / "NVEncC64.exe").is_file()
-        if x265 and nvenc:
+        tools = c.install_dir / "tools"
+        complete = (
+            (tools / "x265" / "x265.exe").is_file()
+            and (tools / "NVEncC" / "NVEncC64.exe").is_file()
+            and (tools / "ffmpeg" / "ffprobe.exe").is_file()
+        )
+        if complete:
             return "external tools already present"
         return None
 
@@ -1286,13 +1293,21 @@ def build_steps() -> list[Step]:
         if c.dry_run:
             c.progress.event("log", level="dry-run",
                              message=f"[dry-run] tools -> {c.install_dir / 'tools'} "
-                                     "(x265/x264/mkvmerge + NVEncC)")
+                                     "(x265/x264/mkvmerge/ffprobe + NVEncC)")
             return "dry-run"
         done = []
-        if not (c.install_dir / "tools" / "x265" / "x265.exe").is_file():
+        tools = c.install_dir / "tools"
+        # ffprobe joined tools.zip on 2026-10-25: an install created before it
+        # re-extracts the archive even though x265 is already present.
+        if (not (tools / "x265" / "x265.exe").is_file()
+                or not (tools / "ffmpeg" / "ffprobe.exe").is_file()):
             archive = cached_download(c, TOOLS, local=c.tools_zip)
             extract_archive(archive, c.install_dir, required_root="tools")
-            done.append("x265, x264, mkvmerge")
+            if not (tools / "ffmpeg" / "ffprobe.exe").is_file():
+                raise BootstrapError(
+                    "ffprobe.exe missing after extraction",
+                    "tools.zip may have an unexpected layout")
+            done.append("x265, x264, mkvmerge, ffprobe")
         nvenc_exe = c.install_dir / "tools" / "NVEncC" / "NVEncC64.exe"
         if not nvenc_exe.is_file():
             archive = cached_download(c, NVENC)
@@ -1472,7 +1487,8 @@ def build_steps() -> list[Step]:
              "only with --with-dinov2",
              cmnet2_dinov2_check, cmnet2_dinov2_run),
         Step("tools", "External tools in <install>/tools",
-             "tools.zip + NVEncC_9.17_x64.zip (Release v1.0.0) or --tools-zip",
+             "tools.zip (x265/x264/mkvmerge/ffprobe) + NVEncC_9.17_x64.zip "
+             "(Release v1.0.0) or --tools-zip",
              tools_check, tools_run),
         Step("gui-settings", "GUI settings (seeded from the packaged template)",
              "gui_cmnet2_settings.json: seed from the packaged template; empty "

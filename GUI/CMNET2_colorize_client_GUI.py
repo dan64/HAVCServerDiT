@@ -1411,10 +1411,78 @@ def orchestrator(init_values, window):
         num_selected  = len(list(ref_dir.glob("*.jpg"))) if ref_dir.is_dir() else 0
         reduction_pct = (
             (1 - num_selected / num_candidates) * 100 if num_candidates > 0 else 0.0)
+        if num_selected == 0:
+            raise RuntimeError(
+                "SELECT finished without any selected reference frames. "
+                "Original candidate folder was preserved."
+            )
+
         log_message(
             f"✅ [SELECT] Selected {num_selected} representative reference "
             f"frames out of {num_candidates} candidates "
             f"({reduction_pct:.1f}% reduction).")
+
+        # Cleanup only after verified successful SELECT.
+        # The original candidates are kept if SELECT fails or is stopped.
+        if values.get("-SEL_DRY_RUN-", False):
+            log_message(
+                "[SELECT] Dry Run: candidate folder preserved."
+            )
+        elif state.get("stop_requested", False):
+            log_message(
+                "[SELECT] Stop requested: candidate folder preserved."
+            )
+        elif ref_dir_temp.is_dir():
+            try:
+                # Refuse cleanup of symlinks or unexpected directory contents.
+                if ref_dir_temp.name != "ref_tht10_temp":
+                    raise OSError(
+                        "Unexpected temporary folder name; refusing cleanup"
+                    )
+
+                if ref_dir_temp.is_symlink():
+                    raise OSError(
+                        "Temporary folder is a symlink; refusing cleanup"
+                    )
+
+                if any(
+                    entry.is_symlink() or entry.is_dir()
+                    for entry in ref_dir_temp.iterdir()
+                ):
+                    raise OSError(
+                        "Temporary folder contains links or subdirectories; "
+                        "refusing cleanup"
+                    )
+
+                if ref_dir.is_symlink():
+                    raise OSError(
+                        "Selected reference folder is a symlink; refusing cleanup"
+                    )
+
+                selected_files = list(ref_dir.glob("*.jpg"))
+                if not ref_dir.is_dir() or not selected_files:
+                    raise OSError(
+                        "Selected reference frames are missing; refusing cleanup"
+                    )
+
+                if any(path.is_symlink() for path in selected_files):
+                    raise OSError(
+                        "Selected reference frames contain symlinks; refusing cleanup"
+                    )
+
+                shutil.rmtree(ref_dir_temp)
+                log_message(
+                    "[SELECT] Temporary candidate folder removed "
+                    "after successful selection."
+                )
+
+            except OSError as exc:
+                log_message(
+                    "[SELECT] WARNING: selection succeeded, but "
+                    "temporary folder cleanup failed: "
+                    f"{exc}. Remove the folder manually before "
+                    "running SELECT again."
+                )
 
     # ---- STEP 2a: COLORIZE (standard, one image at a time) ----
     def do_colorize(values, window):

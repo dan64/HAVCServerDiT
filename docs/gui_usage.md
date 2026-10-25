@@ -371,6 +371,7 @@ Frames**):
 | **Dry Run**               | Write the cluster map without copying any representative file to the output folder                     |
 | **Debug HTML**            | Also write a `cluster_debug.html` report to the output folder                                           |
 | **Move Files**            | Move representative files instead of copying them (off by default — keeps `ref_tht10_temp/` as a full backup of all extracted candidates) |
+| **Del tht10_temp**        | Delete `ref_tht10_temp/` once Select Reference Frames succeeded (off by default). Dry Run and Stop never delete it, and cleanup is skipped — with a warning — if the folder holds sub-folders or links, or if the selected frames are missing; the selected frames are never touched |
 
 If `Debug HTML` is checked, in the output folder is written the file cluster_debug.html. This files contains all the reference clusters as shown in the image below
 

@@ -440,6 +440,10 @@ def load_all_configs():
         "sel_dry_run":    False,
         "sel_debug_html": False,
         "sel_move_files": False,
+        # Delete `ref_tht10_temp` once the selection succeeded.  Off by
+        # default: with Move Files off that folder is the backup of every
+        # candidate frame, so removal is an explicit choice.
+        "sel_del_temp":   False,
         "frames_memory":  "20",
         "render_speed":   "auto",
         "backbone":       "dinov3",
@@ -1572,6 +1576,42 @@ def orchestrator(init_values, window):
                 log_message("⚠️ Fewer than 2 frames found — skipping duplication.")
 
     # ---- STEP 2: SELECT REFERENCE FRAMES ----
+    def remove_candidate_folder(ref_dir_temp, ref_dir):
+        """Delete `ref_tht10_temp` after a successful selection, with guards.
+
+        The selected frames are the only copy of the result once the candidates
+        are gone, so the removal only happens when both folders look exactly as
+        expected: the temporary folder must carry its usual name, must not be a
+        symlink, and must hold plain files only; the selected folder must exist,
+        be non-empty, not be a symlink and contain no links either.  Anything
+        unexpected raises OSError with a message the caller logs as a warning.
+
+        Returns True when the folder was removed, False when there was nothing
+        to remove.
+        """
+        temp = Path(ref_dir_temp)
+        selected = Path(ref_dir)
+        if not temp.is_dir():
+            return False
+        if temp.name != "ref_tht10_temp":
+            raise OSError("unexpected temporary folder name; refusing cleanup")
+        if temp.is_symlink():
+            raise OSError("temporary folder is a symlink; refusing cleanup")
+        if any(entry.is_symlink() or entry.is_dir() for entry in temp.iterdir()):
+            raise OSError("temporary folder contains links or sub-directories; "
+                          "refusing cleanup")
+        if selected.is_symlink():
+            raise OSError("selected folder is a symlink; refusing cleanup")
+        if not selected.is_dir():
+            raise OSError("selected folder is missing; refusing cleanup")
+        selected_files = list(selected.glob("*.jpg"))
+        if not selected_files:
+            raise OSError("selected frames are missing; refusing cleanup")
+        if any(path.is_symlink() for path in selected_files):
+            raise OSError("selected frames contain symlinks; refusing cleanup")
+        shutil.rmtree(temp)
+        return True
+
     def do_select_references(values, window, orig_video_path):
         ref_dir      = Path(values["-BASE_DIR-"]) / "ref_tht10"
         ref_dir_temp = Path(values["-BASE_DIR-"]) / "ref_tht10_temp"
@@ -1618,78 +1658,49 @@ def orchestrator(init_values, window):
         num_selected  = len(list(ref_dir.glob("*.jpg"))) if ref_dir.is_dir() else 0
         reduction_pct = (
             (1 - num_selected / num_candidates) * 100 if num_candidates > 0 else 0.0)
-        if num_selected == 0:
+
+        # Dry Run writes the cluster map only: zero representative frames is
+        # the expected outcome, not a failure.
+        dry_run = bool(values.get("-SEL_DRY_RUN-", False))
+        stopped = bool(state.get("stop_requested", False))
+
+        if dry_run:
+            log_message(
+                f"[SELECT] Dry Run: {num_candidates} candidates left in "
+                f'"{ref_dir_temp.name}"; no reference frames written.')
+        elif num_selected == 0:
             raise RuntimeError(
-                "SELECT finished without any selected reference frames. "
-                "Original candidate folder was preserved."
-            )
-
-        log_message(
-            f"✅ [SELECT] Selected {num_selected} representative reference "
-            f"frames out of {num_candidates} candidates "
-            f"({reduction_pct:.1f}% reduction).")
-
-        # Cleanup only after verified successful SELECT.
-        # The original candidates are kept if SELECT fails or is stopped.
-        if values.get("-SEL_DRY_RUN-", False):
+                f'[SELECT] No representative frames were written to "{ref_dir.name}" '
+                f'— the candidate folder "{ref_dir_temp.name}" was preserved.')
+        else:
             log_message(
-                "[SELECT] Dry Run: candidate folder preserved."
-            )
-        elif state.get("stop_requested", False):
+                f"✅ [SELECT] Selected {num_selected} representative reference "
+                f"frames out of {num_candidates} candidates "
+                f"({reduction_pct:.1f}% reduction).")
+
+        # The candidate folder is deleted only when the checkbox in
+        # "1. Extraction" > "Selection Settings" asks for it, and never after
+        # a Dry Run or a stop: with "Move Files" off it is the only backup of
+        # the candidate frames.
+        if dry_run or stopped:
             log_message(
-                "[SELECT] Stop requested: candidate folder preserved."
-            )
-        elif ref_dir_temp.is_dir():
+                f'[SELECT] Candidate folder "{ref_dir_temp.name}" preserved '
+                f'{"(Dry Run)" if dry_run else "(stop requested)"}.')
+        elif not values.get("-SEL_DEL_TEMP-", False):
+            log_message(
+                f'[SELECT] Candidate folder "{ref_dir_temp.name}" preserved: '
+                f'enable "Del tht10_temp" to remove it automatically.')
+        else:
             try:
-                # Refuse cleanup of symlinks or unexpected directory contents.
-                if ref_dir_temp.name != "ref_tht10_temp":
-                    raise OSError(
-                        "Unexpected temporary folder name; refusing cleanup"
-                    )
-
-                if ref_dir_temp.is_symlink():
-                    raise OSError(
-                        "Temporary folder is a symlink; refusing cleanup"
-                    )
-
-                if any(
-                    entry.is_symlink() or entry.is_dir()
-                    for entry in ref_dir_temp.iterdir()
-                ):
-                    raise OSError(
-                        "Temporary folder contains links or subdirectories; "
-                        "refusing cleanup"
-                    )
-
-                if ref_dir.is_symlink():
-                    raise OSError(
-                        "Selected reference folder is a symlink; refusing cleanup"
-                    )
-
-                selected_files = list(ref_dir.glob("*.jpg"))
-                if not ref_dir.is_dir() or not selected_files:
-                    raise OSError(
-                        "Selected reference frames are missing; refusing cleanup"
-                    )
-
-                if any(path.is_symlink() for path in selected_files):
-                    raise OSError(
-                        "Selected reference frames contain symlinks; refusing cleanup"
-                    )
-
-                shutil.rmtree(ref_dir_temp)
-                log_message(
-                    "[SELECT] Temporary candidate folder removed "
-                    "after successful selection."
-                )
-
+                if remove_candidate_folder(ref_dir_temp, ref_dir):
+                    log_message(
+                        f'[SELECT] Candidate folder "{ref_dir_temp.name}" removed '
+                        f'after a successful selection.')
             except OSError as exc:
                 log_message(
-                    "[SELECT] WARNING: selection succeeded, but "
-                    "temporary folder cleanup failed: "
-                    f"{exc}. Remove the folder manually before "
-                    "running SELECT again."
-                )
+                    f"[SELECT] WARNING: selection succeeded, but the candidate "
+                    f'folder "{ref_dir_temp.name}" was not removed: {exc}. '
+                    f"Remove it manually before running SELECT again.")
 
     # ---- STEP 2a: COLORIZE (standard, one image at a time) ----
     def do_colorize(values, window):
@@ -3503,6 +3514,7 @@ tab2_layout = [
          sg.Checkbox("Dry Run", key="-SEL_DRY_RUN-", tooltip="Write the cluster map without copying any representative file to the output folder.", default=cfg.get("sel_dry_run", False)),
          sg.Checkbox("Debug HTML", key="-SEL_DEBUG_HTML-", tooltip="Also write cluster_debug.html to the output folder: every cluster with the frame chosen to represent it.", default=cfg.get("sel_debug_html", False)),
          sg.Checkbox("Move Files", key="-SEL_MOVE_FILES-", tooltip="Move the representative files instead of copying them. Off by default, which keeps ref_tht10_temp/ as a full backup of all candidates.", default=cfg.get("sel_move_files", False))],
+        [sg.Checkbox("Del tht10_temp", key="-SEL_DEL_TEMP-", tooltip="Delete ref_tht10_temp/ after a successful Select Reference Frames run. Off by default: that folder is the backup of all candidate frames. Dry Run and Stop never delete it, and cleanup is skipped when the folder holds sub-folders or links.", default=cfg.get("sel_del_temp", False))],
     ], expand_x=True)],
     [sg.HorizontalSeparator()],
     [sg.Checkbox("Create ref_000000.jpg from second frame",
@@ -5330,6 +5342,7 @@ while True:
             "sel_dry_run":           values["-SEL_DRY_RUN-"],
             "sel_debug_html":        values["-SEL_DEBUG_HTML-"],
             "sel_move_files":        values["-SEL_MOVE_FILES-"],
+            "sel_del_temp":          values["-SEL_DEL_TEMP-"],
             "crf":                   values["-CRF-"],
             "encoder":               values["-ENCODER-"],
             "frames_memory":         values["-MEMORY_FRAMES-"],

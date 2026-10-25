@@ -49,7 +49,7 @@
     "mux_all_streams": false,
     "hf_cache": "",
     "prompt": "Add colors to this black-and-white image, not to hedge about what colors might be present. For any subject, garment, object, or setting whose color is a matter of common knowledge or strong convention, assign the expected color directly and confidently. Colorize this image using natural colors. Strictly preserve all shapes, edges and background details.",
-    "prompt_from_config": false,
+    "prompt_from_config": true,
     "color_prompt_max": "20",
     "color_prompts": [
         "Add colors to this black-and-white image, not to hedge about what colors might be present. For any subject, garment, object, or setting whose color is a matter of common knowledge or strong convention, assign the expected color directly and confidently. Colorize this image using natural colors. Strictly preserve all shapes, edges and background details.",
